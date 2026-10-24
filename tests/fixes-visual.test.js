@@ -37,3 +37,9 @@ test('the parade backdrop is a sunset street: a sun, lit houses and triangle bun
 test('index.html leaves the live region to app.js', () => {
   assert.equal((read('index.html').match(/id="announcements"/g) ?? []).length, 0);
 });
+
+test('the item-get card draws box-style creations large, not at their easel size', () => {
+  const body = rulesFor(css(['src/ui/screens/encounter.css']), '.item-get__art > span.creation');
+  const zoom = Number(body.match(/zoom:\s*([\d.]+)/)?.[1]);
+  assert.ok(zoom >= 2, `zoom ${zoom}`);
+});

@@ -44,6 +44,10 @@
 .item-get__row { display: flex; align-items: flex-end; justify-content: center; gap: 24px; }
 .item-get__art { width: 264px; height: 188px; padding: 8px; display: grid; place-items: center; }
 .item-get__art > * { max-width: 100%; max-height: 100%; width: 100%; height: 100%; }
+/* SVG creations scale on their own. The box-and-text ones are drawn for the 64×40 stall easel, so the card
+   zooms that same drawing; signs and books get room to wrap so every word shows. */
+.item-get__art > span.creation { width: auto; height: auto; max-width: 64px; max-height: none; zoom: 3.5; }
+.item-get__art > span.world-sign, .item-get__art > span.world-book { max-width: 120px; zoom: 2; }
 .item-get__figure { line-height: 0; }
 .item-get__go { font-family: var(--font-read); }
 .item-get__spark { position: absolute; width: 12px; height: 12px; background: var(--lantern); box-shadow: 0 0 0 4px var(--ink); animation: item-get-spark 900ms steps(3) infinite; }

@@ -96,3 +96,13 @@ test('saved creations render safely', () => {
   assert.match(creationMarkup('reading', { title: '<b>' }), /&lt;b&gt;/);
   for (const { id } of CHARACTERS) assert.equal(typeof creationMarkup(id, {}), 'string');
 });
+
+test('a welcome map draws the square with each saved item where it was put', () => {
+  const placements = [{ item: 'quiet', x: 30, y: 10 }, { item: 'bench', x: 70, y: 30 }, { item: 'sign', x: 50, y: 70 }];
+  const html = creationMarkup('community', { placements });
+  assert.match(html, /^<svg class="creation creation--community" viewBox="0 0 100 100"/);
+  assert.match(html, /aria-label="Your welcoming village plan"/);
+  for (const { item, x, y } of placements) assert.match(html, new RegExp(`class="map-item map-item--${item}" x="${x - 8}" y="${y - 8}"`), item);
+  const junk = creationMarkup('community', { placements: [{ item: 'bench', x: 'x"><script>', y: 400 }] });
+  assert.doesNotMatch(junk, /script|NaN/);
+});

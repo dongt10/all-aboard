@@ -1,9 +1,10 @@
 // A saved creation drawn small for its stall, the parade, and the item-get card.
 // Every saved value is either validated (colors, numbers, shapes) or escaped (text) before it is written.
-import { INK, PAPER, PAPER_SHADE, WOOD, LANTERN, FINISH, SUBJECT_THEME } from './palette.js';
+import { INK, PAPER, PAPER_SHADE, WOOD, LANTERN, FINISH, SKY, GRASS, GRASS_DARK, PATH, SUBJECT_THEME } from './palette.js';
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const color = (v, fallback) => /^#[0-9a-f]{3,8}$/i.test(v) ? v : fallback;
+const MAP_ITEMS = { bench: LANTERN, sign: SKY, quiet: GRASS };   // the same tile colors as Hana's square
 
 function stampShape(shape) {
   if (shape === 'circle') return '<circle r="6"/>';
@@ -38,6 +39,10 @@ export function creationMarkup(id, s = {}) {
     return `<span class="creation creation--science world-ices" aria-label="Your ice experiment, shade on ${esc(s.canopy || 'none')}"><i${shade('left')}></i><i${shade('right')}></i></span>`;
   }
   if (id === 'reading') return `<span class="creation creation--reading world-book">${esc(s.title || (s.found?.length ? `${s.found.length} things packed` : 'Festival story'))}</span>`;
-  const placements = Array.isArray(s.placements) ? s.placements : [{ item: 'sign' }, { item: 'bench' }, { item: 'quiet' }];
-  return `<span class="creation creation--community world-mini-map" aria-label="Your welcoming village plan">${placements.map(p => `<i>${p?.item === 'bench' ? '▰' : p?.item === 'quiet' ? '❋' : '↗'}</i>`).join('')}</span>`;
+  // Hana's square as a little map: grass, the path across the middle, the quiet corner top left, and each
+  // bench, sign and garden where it was put (x and y run 10–90 on the 100×100 square, as in the activity).
+  const at = v => Math.max(10, Math.min(90, Math.round(Number(v)) || 50));
+  const items = (Array.isArray(s.placements) ? s.placements : []).slice(0, 12).filter(p => MAP_ITEMS[p?.item]).map(p =>
+    `<rect class="map-item map-item--${p.item}" x="${at(p.x) - 8}" y="${at(p.y) - 8}" width="16" height="16" fill="${MAP_ITEMS[p.item]}" stroke="${INK}" stroke-width="2"/>`).join('');
+  return `<svg class="creation creation--community" viewBox="0 0 100 100" aria-label="Your welcoming village plan"><rect width="100" height="100" fill="${GRASS}"/><rect width="40" height="40" fill="${GRASS_DARK}"/><rect y="40" width="100" height="20" fill="${PATH}"/><rect x="1.5" y="1.5" width="97" height="97" fill="none" stroke="${INK}" stroke-width="3"/>${items}</svg>`;
 }
