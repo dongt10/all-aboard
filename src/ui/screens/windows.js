@@ -131,9 +131,9 @@ export const guideCreation = (id, state) => { const made = getCreations(state)[i
 function guidePage(entry, state) {
   const theme = entry.subject ? SUBJECT_THEME[entry.subject] : null;
   const earned = Boolean(entry.stamp?.earned);
+  const made = earned ? guideCreation(entry.id, state) : '';
   const stamp = !entry.stamp ? '' : earned
-    ? `<div class="guide-stamp guide-stamp--earned"><span class="guide-stamp__seal" aria-hidden="true">${icon(theme.icon)}</span><p><strong>Learned:</strong> ${esc(entry.stamp.learned)}</p></div>
-       <div class="guide-creation" data-id="${entry.id}">${guideCreation(entry.id, state)}</div>`
+    ? `<div class="guide-stamp guide-stamp--earned"><span class="guide-stamp__seal" aria-hidden="true">${icon(theme.icon)}</span><p><strong>Learned:</strong> ${esc(entry.stamp.learned)}</p></div>`
     : `<div class="guide-stamp"><span class="guide-stamp__seal" aria-hidden="true"></span><p><strong>You’ll learn:</strong> ${esc(entry.stamp.learned)}</p></div>`;
   const buttons = [
     entry.canFind ? `<button type="button" class="px-button" data-action="find">${icon('map')}<span>Find</span></button>` : '',
@@ -142,6 +142,7 @@ function guidePage(entry, state) {
   return `<div class="guide-page__who">
       <span class="guide-page__figure">${figureMarkup(entry.id, { scale: 2, pose: earned ? 'joy' : 'idle' })}</span>
       <div><h3 class="px-name">${esc(entry.name)}</h3><p class="guide-page__meta">${esc(entry.species)} · ${esc(entry.role)}</p></div>
+      ${made ? `<div class="guide-creation" data-id="${entry.id}">${made}</div>` : ''}
     </div>
     <p class="guide-page__bio">${esc(entry.bio)}</p>${stamp}
     ${buttons ? `<div class="guide-page__actions">${buttons}</div>` : ''}`;
