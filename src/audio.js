@@ -1,0 +1,185 @@
+// Original Meadow Band score and synthesis. No recordings or borrowed melodies.
+export const TRACK_IDS = ['bass', 'voice', 'melody', 'percussion'];
+export const PATTERNS = {
+  bass: [[0,null,null,2,0,null,3,null],[0,null,2,null,3,null,2,null]],
+  voice: [[2,null,3,null,2,null,0,null],[3,null,4,3,2,null,0,null]],
+  melody: [[null,4,null,3,null,2,null,3],[null,2,3,null,4,null,3,2]],
+  percussion: [[0,null,1,null,0,1,1,null],[0,1,null,1,0,null,1,1]],
+};
+const clamp = (value, fallback) => Number.isFinite(value) ? Math.max(0,Math.min(1,value)) : fallback;
+export function createDefaultBand() {
+  return {kind:'music',tempo:90,masterVolume:.65,tracks:TRACK_IDS.map((id,i)=>({id,enabled:true,pattern:0,notes:[...PATTERNS[id][0]],volume:[.8,.65,.55,.6][i]}))};
+}
+export function sanitizeBandSnapshot(value) {
+  const band = createDefaultBand();
+  if(!value || typeof value!=='object') return band;
+  band.masterVolume=clamp(value.masterVolume,band.masterVolume);
+  band.tracks=band.tracks.map(base=>{
+    const track=Array.isArray(value.tracks)?value.tracks.find(t=>t?.id===base.id):null;
+    if(!track) return base;
+    const pattern=track.pattern===1?1:0;
+    return {...base,enabled:typeof track.enabled==='boolean'?track.enabled:base.enabled,pattern,volume:clamp(track.volume,base.volume),notes:Array.isArray(track.notes)&&track.notes.length===8?track.notes.map(n=>Number.isInteger(n)&&n>=0&&n<=4?n:null):[...PATTERNS[base.id][pattern]]};
+  });
+  return band;
+}
+export function notesForBeat(band,beat) {
+  return band.tracks.filter(t=>t.enabled&&t.volume>0&&t.notes[beat%8]!==null).map(t=>({id:t.id,pitch:t.notes[beat%8],volume:t.volume}));
+}
+export function applyBeatChanges(current,pending,beat) {
+  return {...pending,tracks:pending.tracks.map(t=>{
+    const old=current.tracks.find(x=>x.id===t.id);
+    return beat%8===0?{...t,notes:[...t.notes]}:{...t,pattern:old.pattern,notes:[...old.notes]};
+  })};
+}
+export const BAND_MIX_GAIN = 10 ** (10 / 20);
+export const BAND_MIX_HEADROOM = .8;
+export function createBandMix(context,destination) {
+  const input=context.createGain(),compressor=context.createDynamicsCompressor(),headroom=context.createGain();
+  input.gain.value=BAND_MIX_GAIN;
+  headroom.gain.value=BAND_MIX_HEADROOM;
+  // Lift the deliberately soft instrument envelopes by 10 dB. Compression acts
+  // only near loud peaks; the user's volume gain remains downstream and exact.
+  compressor.threshold.value=-6;compressor.knee.value=6;compressor.ratio.value=8;
+  compressor.attack.value=.003;compressor.release.value=.15;
+  // Measured full-volume transients can exceed the compressor threshold. Leave
+  // another 1.94 dB after compression; net ordinary-level lift is about 8 dB.
+  input.connect(compressor);compressor.connect(headroom);headroom.connect(destination);
+  return {input,destroy(){input.disconnect();compressor.disconnect();headroom.disconnect();}};
+}
+// Exported seam also accepts OfflineAudioContext for rendering/listening to a score.
+export function playBandNote(context,destination,{id,pitch,volume},time,register=()=>{}) {
+  const scale=[0,2,4,7,9];
+  const base={bass:130.8128,voice:261.6256,melody:523.2511,percussion:110}[id];
+  const frequency=base*2**(scale[pitch]/12);
+  const envelope=context.createGain();
+  envelope.connect(destination);
+  const duration=id==='bass'?.48:id==='voice'?.6:id==='melody'?.28:.13;
+  const amplitude=volume*(id==='bass'?.18:id==='voice'?.095:id==='melody'?.065:.11);
+  envelope.gain.setValueAtTime(0,time);
+  envelope.gain.linearRampToValueAtTime(amplitude,time+.018);
+  if(id==='voice')envelope.gain.linearRampToValueAtTime(amplitude*.78,time+.24);
+  envelope.gain.exponentialRampToValueAtTime(.0001,time+duration);
+  const oscillator=context.createOscillator();
+  oscillator.type=id==='bass'?'triangle':'sine';
+  oscillator.frequency.setValueAtTime(id==='percussion'?(pitch===0?145:650):frequency,time);
+  if(id==='percussion') oscillator.frequency.exponentialRampToValueAtTime(pitch===0?48:230,time+duration);
+  if(id==='voice') { oscillator.frequency.setValueAtTime(frequency*.96,time); oscillator.frequency.exponentialRampToValueAtTime(frequency,time+.065); }
+  oscillator.connect(envelope); register(oscillator);
+  oscillator.start(time); oscillator.stop(time+duration+.025);
+  oscillator.onended=()=>{oscillator.disconnect();envelope.disconnect();};
+  if(id==='voice') {
+    // A soft harmonic reed passes through moving "oo" formants. The sine
+    // fundamental above keeps the vowel rounded instead of buzzy.
+    const reed=context.createOscillator(),blend=context.createGain();
+    reed.type='sawtooth';reed.frequency.setValueAtTime(frequency*.96,time);reed.frequency.exponentialRampToValueAtTime(frequency,time+.065);
+    blend.gain.value=.32;
+    const formants=[context.createBiquadFilter(),context.createBiquadFilter()];
+    formants.forEach((filter,i)=>{filter.type='bandpass';filter.Q.value=i?4:2.8;filter.frequency.setValueAtTime(i?1200:520,time);filter.frequency.exponentialRampToValueAtTime(i?850:360,time+.2);reed.connect(filter);filter.connect(blend);});
+    blend.connect(envelope);register(reed);reed.start(time);reed.stop(time+duration);
+    reed.onended=()=>{reed.disconnect();blend.disconnect();formants.forEach(f=>f.disconnect());};
+  }
+  if(id==='percussion'&&pitch!==0) {
+    // A tiny deterministic noise brush adds Cricket's dry, woody sh-sh texture.
+    const buffer=context.createBuffer(1,Math.ceil(context.sampleRate*.09),context.sampleRate),samples=buffer.getChannelData(0);
+    let seed=173;
+    for(let i=0;i<samples.length;i++){seed=(seed*16807)%2147483647;samples[i]=(seed/1073741823.5-1);}
+    const brush=context.createBufferSource(),filter=context.createBiquadFilter(),level=context.createGain();
+    brush.buffer=buffer;filter.type='bandpass';filter.frequency.value=2100;filter.Q.value=.8;level.gain.value=.42;
+    brush.connect(filter);filter.connect(level);level.connect(envelope);register(brush);brush.start(time);brush.stop(time+.095);
+    brush.onended=()=>{brush.disconnect();filter.disconnect();level.disconnect();};
+  }
+  // Rounded vowel harmonics give Nori a warm "doo"; bird has a soft whistle overtone.
+  if(id==='voice'||id==='melody') {
+    const harmonic=context.createOscillator(),gain=context.createGain();
+    harmonic.type='sine';harmonic.frequency.setValueAtTime(frequency*(id==='voice'?2:3),time);
+    gain.gain.value=id==='voice'?.22:.06;harmonic.connect(gain);gain.connect(envelope);register(harmonic);
+    harmonic.start(time);harmonic.stop(time+duration);harmonic.onended=()=>{harmonic.disconnect();gain.disconnect();};
+  }
+}
+export async function renderBandPreview(snapshot,{phrases=2,sampleRate=44100}={}) {
+  const band=sanitizeBandSnapshot(snapshot),Offline=globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext;
+  if(!Offline)throw new Error('Offline audio rendering is unavailable in this browser.');
+  const count=Math.max(1,Math.min(8,Math.floor(phrases)||2))*8;
+  const context=new Offline(2,Math.ceil((count*60/90+1)*sampleRate),sampleRate),master=context.createGain();
+  master.gain.value=band.masterVolume;master.connect(context.destination);
+  const mix=createBandMix(context,master);
+  for(let beat=0;beat<count;beat++)for(const note of notesForBeat(band,beat))playBandNote(context,mix.input,note,.05+beat*60/90);
+  return context.startRendering();
+}
+export function encodeWav(buffer) {
+  const channels=buffer.numberOfChannels,frames=buffer.length,sampleRate=buffer.sampleRate;
+  if(!Number.isInteger(channels)||channels<1||channels>2||!Number.isInteger(frames)||frames<0||!Number.isFinite(sampleRate)||sampleRate<1)throw new Error('Invalid audio buffer');
+  const bytes=new ArrayBuffer(44+frames*channels*2),view=new DataView(bytes);
+  const word=(offset,text)=>{for(let i=0;i<text.length;i++)view.setUint8(offset+i,text.charCodeAt(i));};
+  word(0,'RIFF');view.setUint32(4,bytes.byteLength-8,true);word(8,'WAVE');word(12,'fmt ');view.setUint32(16,16,true);view.setUint16(20,1,true);view.setUint16(22,channels,true);view.setUint32(24,sampleRate,true);view.setUint32(28,sampleRate*channels*2,true);view.setUint16(32,channels*2,true);view.setUint16(34,16,true);word(36,'data');view.setUint32(40,frames*channels*2,true);
+  const data=Array.from({length:channels},(_,i)=>buffer.getChannelData(i));
+  for(let frame=0;frame<frames;frame++)for(let channel=0;channel<channels;channel++){
+    const raw=data[channel][frame],sample=Number.isFinite(raw)?Math.max(-1,Math.min(1,raw)):0;
+    view.setInt16(44+(frame*channels+channel)*2,Math.round(sample*(sample<0?32768:32767)),true);
+  }
+  return bytes;
+}
+export function createBandEngine({onBeat=()=>{},onStatus=()=>{}}={}) {
+  let context=null,master=null,timer=null,frame=null,running=false,destroyed=false,epoch=0;
+  let mix=null;
+  let pending=createDefaultBand(),active=pending,nextTime=0,nextBeat=0,visuals=[];
+  const sources=new Set();
+  const status=value=>onStatus(value);
+  function stop() {
+    epoch++;running=false;clearInterval(timer);timer=null;
+    if(frame!==null) cancelAnimationFrame(frame);frame=null;visuals=[];
+    for(const source of sources) {try{source.stop();source.disconnect();}catch{ /* already ended */ }}
+    sources.clear();status('stopped');
+  }
+  function contextStateChanged() {
+    if(running&&context.state!=='running'){
+      stop();status('interrupted');
+    }
+  }
+  function schedule() {
+    if(!running)return;
+    while(nextTime<context.currentTime+.11) {
+      active=applyBeatChanges(active,pending,nextBeat);
+      const notes=notesForBeat(active,nextBeat);
+      for(const note of notes) playBandNote(context,mix.input,note,nextTime,source=>{
+        sources.add(source);source.addEventListener('ended',()=>sources.delete(source),{once:true});
+      });
+      visuals.push({time:nextTime,beat:nextBeat,notes});
+      nextTime+=60/90;nextBeat=(nextBeat+1)%8;
+    }
+  }
+  function paint() {
+    if(!running)return;
+    while(visuals.length&&visuals[0].time<=context.currentTime)onBeat(visuals.shift());
+    frame=requestAnimationFrame(paint);
+  }
+  const hidden=()=>{if(document.hidden)stop();};
+  if(typeof document!=='undefined')document.addEventListener('visibilitychange',hidden);
+  if(typeof window!=='undefined')window.addEventListener('pagehide',stop);
+  return {
+    async start(snapshot) {
+      if(destroyed)return false;
+      stop();const token=epoch;
+      try {
+        if(!context) {
+          const Audio=globalThis.AudioContext||globalThis.webkitAudioContext;
+          if(!Audio){status('unavailable');return false;}
+          context=new Audio();context.onstatechange=contextStateChanged;
+          master=context.createGain();master.connect(context.destination);
+          mix=createBandMix(context,master);
+        }
+        await context.resume();
+        if(token!==epoch||destroyed)return false;
+        if(context.state!=='running'){status('unavailable');return false;}
+        pending=sanitizeBandSnapshot(snapshot);active=pending;
+        master.gain.setValueAtTime(pending.masterVolume,context.currentTime);
+        nextTime=context.currentTime+.055;nextBeat=0;running=true;
+        schedule();timer=setInterval(schedule,25);paint();status('playing');return true;
+      }catch{if(token!==epoch||destroyed)return false;stop();status('unavailable');return false;}
+    },
+    update(snapshot){pending=sanitizeBandSnapshot(snapshot);this.setVolume(pending.masterVolume);},
+    setVolume(value){if(master)master.gain.setTargetAtTime(clamp(value,.65),context.currentTime,.025);},
+    stop,
+    destroy(){stop();destroyed=true;if(typeof document!=='undefined')document.removeEventListener('visibilitychange',hidden);if(typeof window!=='undefined')window.removeEventListener('pagehide',stop);mix?.destroy();if(context){context.onstatechange=null;context.close().catch(()=>{});}},
+  };
+}
