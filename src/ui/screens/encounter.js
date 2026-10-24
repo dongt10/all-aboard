@@ -17,6 +17,7 @@ const feetAt = (fx, fy, scale) => `left:${fx - 32 * scale}px;top:${fy - 57 * sca
 const NEIGHBOR = { x: 848, y: 240, scale: 2 };
 const PLAYER = { x: 120, y: 436, scale: 3 };
 const TYPING = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
+const FOCUSABLE = 'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 
 // The Pokémon-battle frame: plate, neighbor on its platform, the player's back, the field, dialogue and menu.
 export function createEncounterScene(ctx, { id } = {}) {
@@ -30,6 +31,8 @@ export function createEncounterScene(ctx, { id } = {}) {
   const saveNow = () => ctx.commit(saveDraft(ctx.getState(), id, scoped()));
   const say = line => dialogue.say(character.name, line);
   const inField = () => root.querySelector('.enc__field').contains(document.activeElement);
+  // The menu can't take focus while every command is disabled (an empty sign), so say where it went.
+  const focusMenu = () => { menu.focus(); return root.querySelector('.enc__menu').contains(document.activeElement); };
 
   function dispatch(action) {
     if (finishing) return;
@@ -101,12 +104,15 @@ export function createEncounterScene(ctx, { id } = {}) {
       field.update(state, ui);
       menu.set(activity.commands(state, ui, grade));
       say(activity.opening(state, ui, grade));
-      menu.focus();
+      if (!focusMenu()) root.querySelector('.enc__field').querySelector(FOCUSABLE)?.focus();
     },
     handleIntent(intent) {
       if (finishing) return false;   // the item-get card handles its own A
       if (intent === 'b') {
-        if (inField() && TYPING.has(document.activeElement.tagName)) { menu.focus(); return true; }
+        if (inField() && TYPING.has(document.activeElement.tagName)) {
+          if (!focusMenu()) root.querySelector('.enc__back').focus();   // a second B leaves
+          return true;
+        }
         leave();
         return true;
       }
@@ -115,7 +121,7 @@ export function createEncounterScene(ctx, { id } = {}) {
         if (!inField()) { menu.focus(); return true; }
         return false;
       }
-      if (inField()) return false;
+      if (inField()) return intent === 'down' && focusMenu();   // grids that use the arrows already took them
       return menu.handleIntent(intent);
     },
     pause() {},

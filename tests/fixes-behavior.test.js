@@ -211,3 +211,39 @@ test('music: A with focus outside the menu brings focus back to the menu', () =>
   scene.destroy();
 });
 
+// ---- B2: Fumi's empty sign ----
+test('sign: an empty sign opens with focus in the field, not on the Village button', () => {
+  const ctx = fakeCtx(grade2());
+  const scene = createEncounterScene(ctx, { id: 'writing' });
+  scene.mount();
+  assert.ok(ctx.stage.querySelector('.enc__field').contains(doc.activeElement), 'focus starts in the field');
+  scene.destroy();
+});
+
+test('sign: B in the empty textarea moves to Village, and a second B leaves', async () => {
+  const ctx = fakeCtx(grade2());
+  const scene = createEncounterScene(ctx, { id: 'writing' });
+  scene.mount();
+  ctx.stage.querySelector('textarea').focus();
+  assert.equal(scene.handleIntent('b'), true);
+  assert.ok(doc.activeElement === ctx.stage.querySelector('.enc__back'), 'focus goes to Village');
+  assert.deepEqual(ctx.gone, []);
+  scene.handleIntent('b');
+  await tick();
+  assert.deepEqual(ctx.gone, [['village', { focus: 'writing' }]]);
+  scene.destroy();
+});
+
+// ---- B10: arrows out of the field ----
+test('encounter: down from the field moves focus to the menu', () => {
+  const ctx = fakeCtx();
+  const scene = createEncounterScene(ctx, { id: 'writing' });
+  scene.mount();
+  const tile = ctx.stage.querySelector('.sign-tile');
+  tile.click();   // a word on the sign, so the menu has commands
+  tile.focus();
+  assert.equal(scene.handleIntent('down'), true);
+  assert.ok(ctx.stage.querySelector('.enc__menu').contains(doc.activeElement), 'focus is in the menu');
+  scene.destroy();
+});
+
