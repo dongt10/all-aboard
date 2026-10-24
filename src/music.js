@@ -2,7 +2,7 @@ import { characterSVG } from './characters.js';
 import { createBandEngine, createDefaultBand, sanitizeBandSnapshot, PATTERNS, applyBeatChanges, notesForBeat, renderBandPreview, encodeWav } from './audio.js';
 export { createDefaultBand, sanitizeBandSnapshot } from './audio.js';
 
-const CAST=[
+export const CAST=[
   {id:'bass',character:'reading',name:'Sora',color:'#91c5f5',sound:'Bum-bum bass',icon:'♩',line:'My low notes give our song a cozy floor.'},
   {id:'voice',character:'nori',name:'Nori',color:'#e4a2cf',sound:'Doo-doo singer',icon:'♫',line:'I sing a warm little doo. Shall we try another tune?'},
   {id:'melody',character:'music',name:'Kiko',color:'#f6c85f',sound:'Whistling bird',icon:'♪',line:'My whistle floats up high! Every tune belongs here.'},

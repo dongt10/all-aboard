@@ -1,0 +1,100 @@
+/* Kiko's Sound Garden: everything is absolutely positioned inside the 960×540 stage. */
+.music { position: absolute; inset: 0; overflow: hidden; background: var(--sky); }
+
+/* Backdrop: flat sky, stepped hills, drifting clouds and pixel flowers. */
+.music-sky, .music-sky i { position: absolute; display: block; }
+.music-sky { inset: 0; pointer-events: none; }
+.music-cloud { width: 96px; height: 24px; background: var(--white); box-shadow: 16px -12px 0 -4px var(--white), 48px -8px 0 -2px var(--white); animation: music-drift 60s linear infinite; }
+.music-cloud--a { left: 120px; top: 84px; }
+.music-cloud--b { left: 640px; top: 110px; animation-duration: 80s; animation-delay: -30s; }
+@keyframes music-drift { from { transform: translateX(-40px); } 50% { transform: translateX(60px); } to { transform: translateX(-40px); } }
+.music-hill--back { left: -20px; right: -20px; top: 230px; bottom: 0; background: var(--grass-dark);
+  clip-path: polygon(0 40px, 8% 40px, 8% 24px, 22% 24px, 22% 8px, 38% 8px, 38% 28px, 56% 28px, 56% 0, 74% 0, 74% 20px, 90% 20px, 90% 36px, 100% 36px, 100% 100%, 0 100%); }
+.music-hill--front { left: 0; right: 0; top: 320px; bottom: 0; background: var(--grass); border-top: 4px solid var(--grass-dark); }
+.music-flower { left: var(--x); top: var(--y); width: 20px; height: 20px; background: var(--petal);
+  clip-path: polygon(6px 0, 14px 0, 14px 6px, 20px 6px, 20px 14px, 14px 14px, 14px 20px, 6px 20px, 6px 14px, 0 14px, 0 6px, 6px 6px); }
+.music-flower::after { content: ''; position: absolute; inset: 7px; background: var(--lantern); }
+
+/* Top row: the way back, the eight beat lanterns, and the garden's name. */
+.music-back { position: absolute; left: 16px; top: 16px; z-index: 2; }
+.music-back .icon { width: 22px; height: 22px; }
+.music-title { position: absolute; right: 16px; top: 20px; z-index: 2; --chip: var(--music); font-size: var(--text-small); }
+.music-title .icon { width: 20px; height: 20px; }
+.music-lanterns { position: absolute; left: 228px; top: 12px; width: 432px; height: 48px; }
+.music-string { position: absolute; left: -8px; right: -8px; top: 4px; height: 2px; background: var(--ink); }
+.music-lantern { position: absolute; top: 12px; margin-left: 13px; width: 28px; height: 32px; display: grid; place-items: center;
+  background: var(--paper-shade); border: solid var(--ink); border-width: 6px 4px; border-top-color: var(--vermilion); border-bottom-color: var(--vermilion); }
+.music-lantern::before { content: ''; position: absolute; left: 50%; top: -14px; width: 2px; height: 8px; background: var(--ink); }
+.music-lantern b { font-family: var(--font-pixel); font-size: var(--text-small); line-height: 1; color: var(--ink); }
+.music-lantern.is-lit { background: var(--lantern); transform: translateY(2px); box-shadow: inset 3px 3px 0 var(--white), 0 0 0 6px rgba(255, 201, 74, .55), 0 0 0 12px rgba(255, 248, 230, .35); }
+
+/* The band: one button per musician, floating on a pedestal ringed in its own color. */
+.music-band { position: absolute; inset: 0; pointer-events: none; }
+.music-musician { position: absolute; width: 160px; height: 212px; padding: 0; border: 0; background: none; pointer-events: auto; color: var(--ink); }
+.music-musician__float { position: absolute; inset: 0; animation: music-float 2.4s steps(4) infinite; animation-delay: var(--float-delay, 0ms); }
+@keyframes music-float { 50% { transform: translateY(-6px); } }
+.music-pedestal { position: absolute; left: 10px; width: 140px; height: 44px; }
+.music-pedestal__top, .music-pedestal__rock { position: absolute; display: block; }
+.music-pedestal__top { left: 0; right: 0; top: 0; height: 16px; z-index: 1; background: var(--grass); border: 4px solid var(--ink); border-top-color: var(--musician);
+  clip-path: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px)); }
+.music-pedestal__rock { left: 12px; right: 12px; top: 12px; height: 32px; background: var(--wood); border-bottom: 8px solid var(--ink);
+  clip-path: polygon(0 0, 100% 0, 100% 8px, 88% 8px, 88% 16px, 72% 16px, 72% 24px, 28% 24px, 28% 16px, 12% 16px, 12% 8px, 0 8px); }
+.music-ring { position: absolute; left: 16px; width: 128px; height: 28px; z-index: 2; background: var(--musician);
+  clip-path: polygon(evenodd, 8px 0, 120px 0, 128px 8px, 128px 20px, 120px 28px, 8px 28px, 0 20px, 0 8px, 8px 0, 14px 6px, 10px 10px, 10px 18px, 14px 22px, 114px 22px, 118px 18px, 118px 10px, 114px 6px, 14px 6px); }
+.music-figure { position: absolute; z-index: 3; width: 96px; height: 96px; }
+.music-figure > span { position: absolute; inset: 0; }
+.music-figure__joy { visibility: hidden; }
+.music-note, .music-zzz { position: absolute; z-index: 4; font-family: var(--font-pixel); font-weight: 700; line-height: 1; }
+.music-note { left: 112px; top: 20px; font-size: 28px; color: var(--ink); visibility: hidden; }
+.music-zzz { left: 108px; top: 22px; font-size: 22px; visibility: hidden; animation: music-snore 1.8s steps(3) infinite; }
+.music-zzz i { font-style: normal; font-size: 16px; margin-left: 2px; vertical-align: super; }
+@keyframes music-snore { 0% { transform: translate(0, 4px); } 100% { transform: translate(6px, -8px); } }
+.music-name { position: absolute; left: 50%; top: 182px; transform: translateX(-50%); white-space: nowrap; }
+.music-swatch { display: inline-block; flex: none; width: 12px; height: 12px; background: var(--musician); border: 2px solid var(--ink); }
+.music-musician:hover .music-name { --chip: var(--white); }
+.music-musician:active .music-musician__float { transform: translateY(2px); }
+
+/* On a beat it plays: the joy face, a brighter ring and a note that pops up. */
+.music-musician.is-performing .music-figure__idle { visibility: hidden; }
+.music-musician.is-performing .music-figure__joy { visibility: visible; }
+.music-musician.is-performing .music-ring { transform: scale(1.12, 1.25); background: var(--ink); }
+.music-musician.is-performing .music-pedestal__top { background: var(--musician); }
+.music-musician.is-performing .music-note { visibility: visible; animation: music-pop 420ms steps(3) both; }
+@keyframes music-pop { from { transform: translateY(8px); } to { transform: translateY(-6px); } }
+
+/* Resting: dim and sleepy, with a "z". */
+.music-musician.is-resting .music-figure { filter: saturate(.35); opacity: .7; }
+.music-musician.is-resting .music-ring { background: var(--paper-shade); }
+.music-musician.is-resting .music-zzz { visibility: visible; }
+.music-musician.is-resting .music-name { --chip: var(--paper-shade); }
+
+/* Dialogue and command menu, the same regions as every encounter. */
+.music-dialogue { position: absolute; left: 16px; top: 388px; width: 472px; height: 136px; z-index: 5; }
+.music-menu { position: absolute; left: 504px; top: 388px; width: 440px; height: 136px; z-index: 5; }
+
+/* Tunes window. */
+.tunes { display: grid; gap: 12px; font-size: var(--text-field); }
+.tunes-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.tunes-tab { min-height: 44px; font-size: var(--text-field); }
+.tunes-tab[aria-selected="true"] { --chip: var(--musician); }
+.tunes-tab:hover { --chip: var(--white); }
+.tunes-tab[aria-selected="true"]:hover { --chip: var(--musician); }
+.tunes-editor { display: grid; gap: 10px; }
+.tunes-hint { font-size: var(--text-field); line-height: 1.3; }
+.tunes-patterns { display: flex; gap: 12px; }
+.tunes-pattern .icon { width: 20px; height: 20px; }
+.tunes-pattern[aria-pressed="true"] { --fill: var(--musician); --light: var(--white); }
+.tunes-beats { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
+.tunes-beat { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 56px; padding: 2px;
+  border: 4px solid var(--ink); background: var(--paper); color: var(--ink); font-size: var(--text-field); font-weight: 700; line-height: 1.1;
+  clip-path: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px)); }
+.tunes-beat b { font-family: var(--font-pixel); font-size: var(--text-small); }
+.tunes-beat:hover { background: var(--white); }
+.tunes-beat.is-on { background: var(--musician); box-shadow: inset 3px 3px 0 rgba(255, 255, 255, .55); }
+.tunes-beat:focus-visible { clip-path: none; }
+.tunes-slider { display: grid; grid-template-columns: 11em 1fr; align-items: center; gap: 12px; font-size: var(--text-field); }
+.tunes-slider input { width: 100%; min-height: 32px; accent-color: var(--ink); }
+.tunes-foot { display: flex; align-items: center; gap: 12px; }
+.tunes-record { flex: none; }
+.tunes-record .icon { width: 20px; height: 20px; }
+.tunes-status { font-size: var(--text-small); color: var(--ink-soft); }
