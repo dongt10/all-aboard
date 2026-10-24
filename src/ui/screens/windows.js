@@ -7,6 +7,7 @@ import { toggleSetting, chooseGrade, gradeChoices, isChosenGrade } from '../save
 import { guideEntries, stampCount } from '../guide.js';
 import { creationMarkup } from '../creations.js';
 import { getCreations } from '../../progress.js';
+import { stopSpeaking } from '../voice.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const ARROWS = new Set(['up', 'down', 'left', 'right']);
@@ -30,8 +31,10 @@ export function rove(container, getItems, columns, onMove) {
   });
 }
 
-// Opens a window with a size class, after pausing the scene behind it.
+// Opens a window with a size class, after pausing the scene and its speech. Never mid-transition.
 function open(ctx, kind, options) {
+  if (ctx.scenes?.busy) return null;
+  stopSpeaking();
   ctx.scenes?.pause?.();
   const handle = openWindow(ctx.stage, options);
   if (handle) ctx.stage.querySelector('.win-backdrop .win')?.classList.add(`win--${kind}`);

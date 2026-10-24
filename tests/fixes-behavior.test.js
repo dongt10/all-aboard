@@ -260,3 +260,18 @@ test('village: hiding the dialogue while it holds focus moves focus to the villa
   scene.destroy();
 });
 
+// ---- B3, B5: windows ----
+test('windows: opening a window stops speech', () => {
+  const ctx = fakeCtx();
+  const before = speech.cancels;
+  assert.ok(openPauseWindow(ctx));
+  assert.ok(speech.cancels > before, 'speech was stopped');
+});
+
+test('windows: no window opens during a scene transition', () => {
+  const ctx = fakeCtx();
+  ctx.scenes.busy = true;
+  assert.equal(openPauseWindow(ctx), null);
+  assert.ok(!ctx.stage.querySelector('.win-backdrop'), 'no window');
+});
+
