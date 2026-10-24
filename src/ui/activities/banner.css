@@ -1,0 +1,46 @@
+/* Yuki's banner: paint rail · 6×5 cloth · stamp rail, inside the 520×268 field. */
+.banner-field {
+  display: grid; grid-template-columns: 132px 240px 132px; gap: 8px; align-items: center;
+  width: 520px; height: 268px; box-sizing: border-box; color: var(--ink); font-family: var(--font-read);
+}
+
+/* Rails: radio groups of paint pots and stamp shapes. */
+.banner-rail { display: flex; flex-direction: column; gap: 4px; height: 100%; justify-content: center; }
+.banner-option {
+  display: flex; align-items: center; gap: 6px; min-height: 38px; padding: 2px 6px; margin: 0;
+  border: 2px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink);
+  font: 700 var(--text-small)/1.1 var(--font-read); text-align: left; cursor: pointer;
+  box-shadow: 0 2px 0 var(--paper-shade); transition: transform 80ms ease, background-color 80ms ease;
+}
+.banner-shapes .banner-option { min-height: 54px; }
+.banner-option:hover { background: var(--white); }
+.banner-option:active { transform: translateY(1px); }
+.banner-option[aria-checked="true"] { background: var(--lantern); box-shadow: inset 0 0 0 2px var(--ink); }
+.banner-option:focus-visible { outline: 3px solid var(--vermilion); outline-offset: 1px; }
+.banner-option__name { white-space: nowrap; overflow: hidden; text-overflow: clip; }
+.banner-pot { flex: none; width: 22px; height: 22px; border: 2px solid var(--ink); box-sizing: border-box; }
+.banner-shape-pic { flex: none; display: block; width: 32px; height: 32px; }
+.banner-shape-pic .banner-stamp { width: 32px; height: 32px; }
+
+/* The cloth hangs from a wooden pole; stamps sit under a transparent 6×5 button grid. */
+.banner-middle { display: flex; flex-direction: column; align-items: center; }
+.banner-pole { width: 256px; height: 10px; background: var(--wood); border: 2px solid var(--ink); box-sizing: border-box; }
+.banner-cloth {
+  position: relative; width: 240px; height: 200px; box-sizing: border-box;
+  border: 3px solid var(--ink); border-top: 0; transition: background-color 150ms ease;
+}
+.banner-stamps { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.banner-stamp-spot { position: absolute; width: 32px; height: 32px; transform: translate(-50%, -50%); }
+.banner-stamp { display: block; width: 100%; height: 100%; }
+.banner-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(6, 1fr); grid-template-rows: repeat(5, 1fr); }
+.banner-cell { margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; cursor: pointer; }
+.banner-cell:hover { box-shadow: inset 0 0 0 2px var(--ink-soft); }
+.banner-cell:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--vermilion); }
+
+/* Bigger words: tighten the rail so the longest name (Lavender) still fits. */
+.large-text .banner-option { gap: 4px; padding: 2px 4px; letter-spacing: -.3px; }
+.large-text .banner-pot { width: 18px; height: 18px; }
+
+/* Calm motion. */
+.calm .banner-option, .calm .banner-cloth { transition: none; }
+.calm .banner-option:active { transform: none; }
