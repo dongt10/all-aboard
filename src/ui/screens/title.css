@@ -25,7 +25,7 @@
 .avatar-choice[aria-pressed="true"], .grade-tile[aria-pressed="true"] { --fill: var(--lantern); --light: #ffe08f; --shade: #e0a92f; }
 .avatar-choice[aria-pressed="true"] .avatar-choice__check, .grade-tile[aria-pressed="true"] .grade-tile__check { display: block; }
 
-.title__grade-label { position: absolute; left: 66px; top: 222px; z-index: 1; }
+.title__grade-label { position: absolute; left: 66px; bottom: 286px; z-index: 1; }   /* grows upward, clear of the tiles */
 .title__grades { position: absolute; left: 66px; top: 258px; width: 828px; }
 .grade-tiles { display: flex; justify-content: space-between; gap: 8px; }
 .grade-tile { flex-direction: column; gap: 0; width: 128px; height: 96px; padding: 2px 4px; }
