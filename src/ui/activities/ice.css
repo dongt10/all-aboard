@@ -1,0 +1,65 @@
+/* Momo's ice stand: fits a 520×268 field; flat pixel shapes, no rounding. */
+.ice-field {
+  position: relative; box-sizing: border-box; width: 100%; height: 100%; max-width: 520px; max-height: 268px;
+  display: flex; flex-direction: column; gap: 6px; padding: 6px 10px 8px; overflow: hidden;
+  background: var(--sky); color: var(--ink); font-family: var(--font-read);
+  box-shadow: inset 0 -40px 0 var(--grass);
+}
+.ice-top { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
+.ice-tag {
+  font-family: var(--font-pixel); font-size: var(--text-small); line-height: 1.1;
+  background: var(--paper); border: 3px solid var(--ink); padding: 3px 6px; white-space: nowrap;
+}
+.ice-clock {
+  display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-small); line-height: 1.1; font-weight: 700;
+  background: var(--paper); border: 3px solid var(--ink); padding: 3px 6px; white-space: nowrap;
+}
+.ice-clock .icon { flex: none; }
+
+/* The sun: a square core with four stepped rays. */
+.ice-sun { position: absolute; left: 50%; top: 0; width: 40px; height: 40px; margin-left: -20px; pointer-events: none; }
+.ice-sun::before, .ice-sun::after { content: ''; position: absolute; background: var(--lantern); }
+.ice-sun::before { left: 17px; top: 0; width: 6px; height: 40px; }
+.ice-sun::after { top: 17px; left: 0; width: 40px; height: 6px; }
+.ice-sun i { position: absolute; z-index: 1; inset: 8px; background: var(--lantern); border: 3px solid var(--ink); }
+
+.ice-trays { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.ice-tray {
+  min-height: 0; display: flex; flex-direction: column; align-items: stretch; gap: 2px; padding: 4px 8px 6px; margin: 0;
+  background: var(--paper); color: var(--ink); border: 4px solid var(--ink); border-radius: 0;
+  font: inherit; cursor: pointer; text-align: center;
+  box-shadow: inset 0 -4px 0 var(--paper-shade);
+}
+.ice-tray:hover { background: var(--white); }
+.ice-tray:focus-visible { outline: 3px solid var(--paper); outline-offset: -7px; box-shadow: 0 0 0 4px var(--ink); }
+.ice-tray--shaded { background: var(--paper-shade); }
+
+/* Canopy: an awning band with a stepped fringe, that only shows over the shaded tray. */
+.ice-canopy {
+  position: relative; flex: none; height: 20px; margin: 0 -4px 6px; visibility: hidden;
+  background: var(--science); box-shadow: inset 0 3px 0 var(--white);
+  border: 3px solid var(--ink);
+}
+.ice-canopy::after {
+  content: ''; position: absolute; left: 4px; bottom: -9px; width: 12px; height: 6px; background: var(--ink);
+  box-shadow: 24px 0 var(--ink), 48px 0 var(--ink), 72px 0 var(--ink), 96px 0 var(--ink), 120px 0 var(--ink), 144px 0 var(--ink), 168px 0 var(--ink), 192px 0 var(--ink);
+}
+.ice-tray--shaded .ice-canopy { visibility: visible; }
+
+.ice-box {
+  position: relative; flex: 1; min-height: 34px; overflow: hidden;
+  background: var(--white); border: 3px solid var(--ink); border-top-width: 0;
+}
+.ice-tray--shaded .ice-box { background: var(--paper-shade); }
+.ice-water { position: absolute; left: 0; right: 0; bottom: 0; height: 8%; background: var(--sea); transition: height 400ms steps(4); }
+.ice-cube {
+  position: absolute; left: 50%; bottom: 4px; transform: translateX(-50%); box-sizing: border-box;
+  width: 50%; height: 75%; background: var(--white); border: 3px solid var(--reading);
+  box-shadow: inset 4px 4px 0 var(--sky);
+  transition: width 400ms steps(4), height 400ms steps(4);
+}
+.ice-name { font-family: var(--font-pixel); font-size: var(--text-field); line-height: 1.1; }
+.ice-left { font-size: var(--text-small); line-height: 1.1; font-weight: 700; }
+
+.calm .ice-water, .calm .ice-cube { transition: none; }
+@media (prefers-reduced-motion: reduce) { .ice-water, .ice-cube { transition: none; } }
