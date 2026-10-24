@@ -7,6 +7,7 @@ import { icon } from '../icons.js';
 import { createCommandMenu } from '../menu.js';
 import { createDialogue } from '../dialogue.js';
 import { openWindow } from '../window.js';
+import { stopSpeaking } from '../voice.js';
 import { onceAtATime } from '../scenes.js';
 import { withScope } from '../save.js';
 import { creationMarkup } from '../creations.js';
@@ -31,7 +32,7 @@ const trackOf = (band, id) => band.tracks.find(t => t.id === id);
 export function createMusicScene(ctx) {
   let root = null, menu = null, dialogue = null, engine = null, playback = null, tunes = null;
   let band = null, selected = 'melody', quiet = false, quietTimer = null, quietBand = null, quietBeat = 0;
-  let destroyed = false, recordingToken = 0, recording = false;
+  let destroyed = false, finishing = false, recordingToken = 0, recording = false;
   const downloads = new Map();
   const $ = selector => root.querySelector(selector);
   const settings = () => ctx.getState().settings ?? {};
@@ -188,6 +189,8 @@ export function createMusicScene(ctx) {
     }
   }
   function openTunes() {
+    if (ctx.scenes?.busy) return;   // never over a scene change
+    stopSpeaking();
     const body = document.createElement('div');
     body.className = 'tunes';
     body.innerHTML = `<div class="tunes-tabs" role="tablist" aria-label="Musicians">${CAST.map(c => `<button type="button" role="tab" class="px-chip tunes-tab" data-tab="${c.id}" style="--musician:${MUSICIAN_COLORS[c.id]}"><i class="music-swatch"></i>${c.icon} ${c.name}</button>`).join('')}</div>
@@ -228,6 +231,7 @@ export function createMusicScene(ctx) {
 
   // ---- Leaving and finishing ----
   async function leave() {
+    if (finishing) return;
     stopAll();
     saveNow();
     await ctx.go('village', { focus: 'music' });
@@ -235,7 +239,8 @@ export function createMusicScene(ctx) {
   const finish = onceAtATime(async () => {
     stopAll();
     saveNow();
-    await showItemGet(ctx.stage, { name: 'Your festival band', artHTML: creationMarkup('music', band), figureHTML: figureMarkup('music', { pose: 'joy', scale: 3 }) });
+    finishing = true;   // the card is up: B and Village wait for it
+    await showItemGet(ctx.stage, { name: 'Your festival band', artHTML: creationMarkup('music', band), figureHTML: figureMarkup('music', { pose: 'joy', scale: 2 }) });
     if (destroyed) return;
     ctx.commit(publishCreation(ctx.getState(), 'music', withScope(band, ctx.getState())));
     await ctx.go('village', { focus: 'music', celebrate: 'music' });
@@ -288,8 +293,9 @@ export function createMusicScene(ctx) {
       menu.focus();
     },
     handleIntent(intent) {
+      if (finishing) return intent === 'b';   // the item-get card handles its own A; B waits
       if (intent === 'b') { void leave(); return true; }
-      if (intent === 'a') return dialogue.next();
+      if (intent === 'a') { if (dialogue.next()) return true; menu.focus(); return true; }
       const musician = document.activeElement?.closest?.('.music-musician');
       if (musician && (intent === 'left' || intent === 'right')) {
         const buttons = [...root.querySelectorAll('.music-musician')], i = buttons.indexOf(musician);
