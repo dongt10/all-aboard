@@ -33,8 +33,8 @@
 
 /* Grades 3–5: long phrases. The sign stands on the left and the phrases stack in one column. */
 .sign-field--phrases { flex-direction: row; align-items: stretch; gap: 10px; }
-.sign-field--phrases .sign-board { flex: 0 0 196px; width: auto; display: flex; }
-.sign-field--phrases .sign-input { height: auto; min-height: 0; flex: 1 1 auto; }
+.sign-field--phrases .sign-board { flex: 0 0 220px; width: auto; display: flex; }
+.sign-field--phrases .sign-input { height: auto; min-height: 0; flex: 1 1 auto; font-size: var(--text-small); }   /* all 120 letters fit at Bigger words */
 .sign-field--phrases .sign-post { display: none; }
 .sign-field--phrases .sign-tiles { flex: 1 1 0; min-width: 0; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; padding: 4px 6px; }
 .sign-field--phrases .sign-tile { flex: 0 0 auto; font-size: var(--text-small); }
