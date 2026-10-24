@@ -1,8 +1,8 @@
 # All Aboard
 
-**A learning adventure in an animal village**
+**Summer Remix — a learning adventure in an animal village**
 
-We’re building a 2D pixel-art game for neurodivergent children, set in a village preparing for a Japanese summer festival. A human player meets animal neighbors, chooses which subjects to explore, and adds their creations to a festival stall. This repository includes the playable rough draft for **Kindergarten and grades 1–5**.
+Summer Remix is a playable village adventure for **Kindergarten and grades 1–5**, designed with neurodivergent children in mind. Explore Willow Bay as it prepares for a Japanese summer festival, meet animal neighbors in Game Boy Advance–inspired encounter scenes, and put your own creations into the village and its parade.
 
 ## Quick start — play on your computer
 
@@ -42,15 +42,28 @@ Open **[http://127.0.0.1:4173](http://127.0.0.1:4173)** in your browser. Keep Te
 
 ## How to play
 
-- Choose **Kindergarten** or **Elementary, grades 1–5**.
-- Visit any animal by clicking a village location or a neighbor in the sidebar.
-- Try a short activity and add its creation to your festival stall. All seven subjects are open from the start.
-- To walk, focus the village and use **arrow keys / WASD**. Press **E or Space** near a neighbor to talk.
-- Use **Read aloud**, **Show a hint**, **One step at a time**, **Comfort settings**, or **Take a break** whenever helpful.
+- Choose **Kindergarten** or an elementary grade from **1–5**.
+- Choose a labeled subject in the village, or open **Subjects** for large subject cards. Each subject has its own color and symbol. All seven subjects are open from the start.
+- Balance Taro’s cart, compare shade and melting ice, stamp a banner, read with Sora and choose what to pack, write a welcome sign, or arrange a welcoming square. Publish a creation to see it in the village.
+- With Kiko, combine **four musical voices**, change looping patterns and notes, adjust volumes, or explore in quiet mode. Export your arrangement as a **WAV file** on your device.
+- Start a parade after publishing a creation. A saved band can play during the parade when you choose **Play our band**.
+- Use **Hear**, **Help**, **Settings**, or **Pause** when helpful.
 
-Progress is saved in this browser on this device, separately for Kindergarten and each elementary grade. Returning to an unfinished activity starts that activity again.
+Drafts and published creations save in this browser on this device, separately for Kindergarten and each elementary grade. Return to a neighbor to continue your draft; unfinished edits do not replace the version already displayed in the village. Older saves retain completion markers without inventing a creation.
 
-> **Prototype scope:** 42 sample activities, original placeholder artwork, and local progress saving. This is a playable interaction draft, not a full curriculum. It has no accounts, remote backend, or AI-generated lessons. Read aloud uses available browser voices.
+> **Prototype scope:** seven creative encounters with grade-aware prompts and controls, an explorable village, a parade, and local saving. This is an interaction prototype, not a full curriculum. It has no accounts, remote backend, or AI-generated lessons. Read aloud uses available browser voices; music uses browser audio and can remain silent.
+
+### Music controls by grade
+
+Open **Edit tunes & notes** to find the controls for the selected grade. Every grade can invite or rest musicians, choose preset tunes, adjust volume, and use Quiet play.
+
+| Grade | Editing controls |
+| :--- | :--- |
+| Kindergarten | Choose between two preset tunes for each musician. |
+| Grades 1–2 | Also switch each of the eight beats between a sound and a rest. |
+| Grades 3–5 | Also choose Do, Re, Mi, Sol, La, or Rest for melodic parts. Percussion uses sound/rest buttons. |
+
+The musicians, starting tunes, eight-beat loop, and tempo are shared across grades. These are three editing tiers; individual grades do not yet have separate music lessons or learning goals.
 
 <details>
 <summary><strong>Build, checks, and where to make changes</strong></summary>
@@ -64,13 +77,17 @@ The build produces a static site in `dist/`, ready for a static web server. Serv
 
 | File | Purpose |
 | :--- | :--- |
-| `src/data.js` | Characters and the 42 sample activities |
-| `src/progress.js` | Local save format and chapter/grade progress |
-| `src/village.js` and `src/village.css` | Village, placeholder character artwork, and movement |
-| `src/activity.js` and `src/activity.css` | Activities, feedback, and help controls |
-| `src/app.js` and `src/styles.css` | Main screen, chapter selection, settings, and festival stall |
+| `src/data.js` | Neighbor identities, subjects, and rewards |
+| `src/progress.js` | Local drafts, published creations, grade scopes, and older-save migration |
+| `src/characters.js` | Shared character artwork |
+| `src/world.js` and `src/world.css` | Village, saved creations, and parade |
+| `src/encounters.js` and `src/encounters.css` | Six creative subject encounters |
+| `src/reading.js` | Festival packing story, picture choices, and reading progression |
+| `src/music.js`, `src/music.css`, and `src/audio.js` | Four-voice band controls, playback, and WAV export |
+| `src/app.js` and `src/styles.css` | Screen navigation, chapter selection, settings, and shared layout |
+| `tests/` | Persistence, encounter, and audio checks |
 
-Replace the placeholder art as the character and environment assets become available. The activity data and progress module are separate from the screen code to make a future backend easier to connect.
+The scene controllers and persistence module keep editable drafts separate from published festival contributions.
 
 </details>
 
