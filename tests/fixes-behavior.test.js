@@ -333,3 +333,22 @@ test('app: reload keeps only focus, not one-shot params', async () => {
   assert.deepEqual(log.params.at(-1), ['village', { focus: 'math' }]);
   app.destroy();
 });
+
+// ---- QA: the portrait rotate card is modal ----
+test('stage: in portrait the rotate card holds focus, and Play anyway hands it back to the game', async () => {
+  Object.assign(window, { innerWidth: 375, innerHeight: 812 });
+  try {
+    const { app } = fakeApp();
+    await app.go('title');
+    const card = doc.body.querySelector('.rotate-card'), play = card.querySelector('button');
+    assert.equal(card.hidden, false, 'the card shows in portrait');
+    assert.ok(doc.activeElement === play, 'focus stays on Play anyway, not on the game behind the card');
+    assert.equal(app.stage.inert, true, 'the game behind the card is inert');
+    play.click();
+    assert.equal(app.stage.inert, false);
+    assert.ok(app.stage.contains(doc.activeElement), 'focus returns to the game');
+    app.destroy();
+  } finally {
+    Object.assign(window, { innerWidth: 1920, innerHeight: 1080 });
+  }
+});

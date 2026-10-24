@@ -37,8 +37,9 @@ export function mountStage(root) {
     stage.style.transform = `translate(${box.left}px, ${box.top}px) scale(${box.scale})`;
     root.dataset.portrait = String(box.portrait);
     const showCard = box.portrait && !dismissed;
+    stage.inert = showCard;   // the card is modal: the game behind it can't take focus
     if (showCard && card.hidden) { card.hidden = false; button.focus(); }
-    if (!showCard) card.hidden = true;
+    if (!showCard && !card.hidden) { card.hidden = true; stage.querySelector('button:not(:disabled), [tabindex]:not([tabindex="-1"])')?.focus(); }
   }
   button.addEventListener('click', () => { dismissed = true; playAnyway.set(); fit(); });
   viewport.append(stage, card);
