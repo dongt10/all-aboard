@@ -17,7 +17,8 @@ const SIDE = {
   nori: { name: 'Nori', line: 'You can go anywhere first. I’m going slowly. That’s my favorite speed.' },
 };
 const STEP_CYCLE = [1, 0, 2, 0];
-const STEP_MS = 160;
+const STEP_MS = 120;            // ms per walk frame at the base speed; faster walks step faster
+const WANDER_STEP_MS = 300;     // a stroll: the neighbors amble
 const WANDER_SPEED = 24;        // px per second
 const PLAYER_SPEED = 240;       // px per second for key steps; tap walks speed up to finish within 600ms
 const TAP_WALK_MS = 600;
@@ -182,9 +183,10 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       }
       for (const a of actors.values()) a.el.classList.toggle('village-actor--near', a.id === id);
     }
-    if (id) {
-      chip.style.left = px(player.pos.x);
-      chip.style.top = px(Math.max(76, player.pos.y - 57 - 40));
+    if (id) {   // the chip stands in for the neighbor's name chip, so the two never overlap
+      const a = actors.get(id);
+      chip.style.left = px(a.pos.x);
+      chip.style.top = px(a.pos.y + (SIDE[id] ? 2 : 4));
       chip.style.zIndex = '900';
     }
   }
@@ -228,7 +230,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     a.clock += dt;
     if (move.arrived) { a.target = null; a.facing = 'front'; a.step = 0; a.waitUntil = t + 1500 + Math.random() * 2500; return; }
     a.facing = move.facing;
-    a.step = STEP_CYCLE[Math.floor(a.clock / STEP_MS) % 4];
+    a.step = STEP_CYCLE[Math.floor(a.clock / WANDER_STEP_MS) % 4];
   }
   function tickPlayer(dt) {
     const goal = player.visitOnArrive ? clampToBounds(talkPoint(player.visitOnArrive, actors.get(player.visitOnArrive).pos)) : player.target;
@@ -237,7 +239,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const move = stepToward(player.pos, goal, player.speed * dt / 1000);
     const dx = goal.x - player.pos.x, dy = goal.y - player.pos.y;
     player.pos = move.pos;
-    player.clock += dt;
+    player.clock += dt * player.speed / PLAYER_SPEED;   // the legs keep up with a tap walk
     if (Math.abs(dx) >= Math.abs(dy) && dx) player.facing = dx > 0 ? 'right' : 'left';
     else if (dy) player.facing = dy > 0 ? 'front' : 'back';
     player.step = calm() ? 0 : STEP_CYCLE[Math.floor(player.clock / STEP_MS) % 4];

@@ -15,7 +15,7 @@ import { showItemGet } from './item-get.js';
 // Stand a figure with its feet at stage point (fx, fy): the feet sit at x 32, y 57 of the 64×64 frame.
 const feetAt = (fx, fy, scale) => `left:${fx - 32 * scale}px;top:${fy - 57 * scale}px`;
 const NEIGHBOR = { x: 848, y: 240, scale: 2 };
-const PLAYER = { x: 120, y: 436, scale: 3 };
+const PLAYER = { x: 120, y: 420, scale: 3 };   // high enough that the speaker chip never sits on the hair
 const TYPING = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 const FOCUSABLE = 'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 

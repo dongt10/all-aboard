@@ -9,7 +9,7 @@
   clip-path: polygon(16% 0, 84% 0, 84% 12%, 94% 12%, 94% 30%, 100% 30%, 100% 70%, 94% 70%, 94% 88%, 84% 88%, 84% 100%, 16% 100%, 16% 88%, 6% 88%, 6% 70%, 0 70%, 0 30%, 6% 30%, 6% 12%, 16% 12%);
 }
 .enc__platform--neighbor { left: 752px; top: 224px; width: 192px; height: 40px; }   /* centered at 848,240 */
-.enc__platform--player { left: 0; top: 412px; width: 240px; height: 48px; }          /* centered at 120,436 */
+.enc__platform--player { left: 0; top: 396px; width: 240px; height: 48px; }          /* centered at 120,420, behind the dialogue */
 
 /* Figures: feet placed by inline left/top (left = fx − 32·s, top = fy − 57·s). */
 .enc__neighbor, .enc__player { position: absolute; z-index: 1; line-height: 0; }

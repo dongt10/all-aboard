@@ -27,7 +27,8 @@
   font-size: var(--text-small); padding: 0 8px; --chip: var(--paper);
 }
 .village-name--side { top: 74px; }
-.village-actor:hover .village-name, .village-actor:focus-visible .village-name, .village-actor--near .village-name { --chip: var(--lantern); }
+.village-actor:hover .village-name, .village-actor:focus-visible .village-name { --chip: var(--lantern); }
+.village-actor--near .village-name { visibility: hidden; }   /* the Talk chip takes its place */
 .village-actor:hover .village-actor__fig, .village-actor--near .village-actor__fig { transform: translateY(-2px); }
 
 /* Subject badge at (feet.x + 16, feet.y − 80): the subject icon on its color, with a status mark */
@@ -47,6 +48,11 @@
 
 /* The player, the Talk chip, and the Find arrows */
 .village-player { position: absolute; width: 64px; height: 64px; pointer-events: none; }
+/* A soft pixel shadow under every walker, so nobody floats above the ground. */
+.village-actor__fig::before, .village-player::before {
+  content: ''; position: absolute; left: 20px; top: 53px; width: 24px; height: 6px; background: rgba(31, 33, 71, .22);
+  clip-path: polygon(4px 0, 20px 0, 24px 2px, 24px 4px, 20px 6px, 4px 6px, 0 4px, 0 2px);
+}
 .village-player .figure { display: block; }
 .village-talk { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: var(--text-small); --chip: var(--lantern); cursor: pointer; }
 .village-talk__key { display: inline-grid; place-items: center; min-width: 20px; height: 20px; background: var(--ink); color: var(--paper); font-family: var(--font-pixel); font-size: 14px; }

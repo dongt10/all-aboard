@@ -11,7 +11,7 @@ import { paradeLineup, paradeCommands, paradeStatus, paradeBackdropMarkup } from
 
 const STAGE_WIDTH = 960;
 const SPACING = 112;          // one marcher per slot; eight slots fill the stage for the still line-up
-const FEET_Y = 372;           // feet on the street, just above the dialogue
+const FEET_Y = 360;           // feet on the street, clear of the dialogue's Hear and Help tabs
 const WALK = [1, 0, 2, 0];    // walk frames, one every 160 ms
 const STEP_MS = 160;
 const BUNTING = 18;
