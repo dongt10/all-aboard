@@ -35,6 +35,12 @@ export function roamRect(id) {
 
 export const talkPoint = (id, feet = homeSpot(id)) => ({ x: feet.x, y: feet.y + TALK_OFFSET });
 
+// A creation's 80×56 easel stands 4px beside its stall, on the side toward the middle of the map.
+export function easelRect(id) {
+  const { x, y } = VILLAGE_SPOTS[id];
+  return { x: x > 480 ? x - 64 - 84 : x + 64 + 4, y: y - 70, w: 80, h: 56 };
+}
+
 // `positions` maps id → current feet. The player talks from a point just below the feet.
 export function nearestNeighbor(player, positions = VILLAGE_SPOTS, maxDistance = 72) {
   let best = null, bestDistance = maxDistance;

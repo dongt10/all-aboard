@@ -9,7 +9,7 @@ import { onceAtATime } from '../scenes.js';
 import { creationMarkup } from '../creations.js';
 import {
   VILLAGE_SPOTS, SIDE_SPOTS, PLAYER_START, WALK_BOUNDS, STEP, homeSpot, hotspotRect, talkPoint, nearestNeighbor,
-  stepPlayer, stallState, wanderTarget, stepToward, guideArrow, villageMapSVG, stallSVG,
+  stepPlayer, stallState, wanderTarget, stepToward, guideArrow, villageMapSVG, stallSVG, easelRect,
 } from '../village-map.js';
 
 const SIDE = {
@@ -93,10 +93,9 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   }
   function stallMarkup(c, made) {
     const { x, y } = VILLAGE_SPOTS[c.id];
-    const creation = made.creations[c.id];
-    const easelLeft = x > 480 ? x - 64 - 88 : x + 64 + 8;
+    const creation = made.creations[c.id], easel = easelRect(c.id);
     return `<div class="village-stall" data-id="${c.id}" style="left:${x - 64}px;top:${y - 96}px">${stallSVG(c.id)}<span class="village-sparkle" aria-hidden="true"></span></div>
-      <div class="village-easel${creation ? '' : ' village-easel--empty'}" data-id="${c.id}" style="left:${easelLeft}px;top:${y - 70}px">${creation ? creationMarkup(c.id, creation) : ''}</div>`;
+      <div class="village-easel${creation ? '' : ' village-easel--empty'}" data-id="${c.id}" style="left:${easel.x}px;top:${easel.y}px">${creation ? creationMarkup(c.id, creation) : ''}</div>`;
   }
   function boardMarkup(made) {
     const count = Object.keys(made.creations).length;

@@ -97,6 +97,21 @@ test('saved creations render safely', () => {
   for (const { id } of CHARACTERS) assert.equal(typeof creationMarkup(id, {}), 'string');
 });
 
+test('creation easels stand beside their stalls, a few pixels clear of every stall and each other', async () => {
+  const { easelRect } = await import('../src/ui/village-map.js');
+  const stall = id => ({ x: VILLAGE_SPOTS[id].x - 64, y: VILLAGE_SPOTS[id].y - 96, w: 128, h: 80 });
+  const roomy = r => ({ x: r.x - 2, y: r.y - 2, w: r.w + 4, h: r.h + 4 });   // at least 4px between any two
+  const ids = Object.keys(VILLAGE_SPOTS);
+  for (const id of ids) {
+    const easel = easelRect(id);
+    assert.deepEqual([easel.w, easel.h], [80, 56], `${id} easel size`);
+    for (const other of ids) {
+      assert.equal(overlaps(roomy(easel), roomy(stall(other))), false, `${id} easel vs ${other} stall`);
+      if (other !== id) assert.equal(overlaps(roomy(easel), roomy(easelRect(other))), false, `${id} easel vs ${other} easel`);
+    }
+  }
+});
+
 test('a welcome map draws the square with each saved item where it was put', () => {
   const placements = [{ item: 'quiet', x: 30, y: 10 }, { item: 'bench', x: 70, y: 30 }, { item: 'sign', x: 50, y: 70 }];
   const html = creationMarkup('community', { placements });
