@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>All Aboard — Style guide</title>
+    <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+    <link rel="stylesheet" href="./src/ui/tokens.css">
+    <link rel="stylesheet" href="./src/ui/kit.css">
+    <style>
+      body.guide { background: var(--paper-shade); padding: 24px 16px 64px; }
+      .guide-page { max-width: 1120px; margin: 0 auto; display: grid; gap: 28px; }
+      .guide-section { display: grid; gap: 14px; }
+      .guide-heading { font-size: 28px; }
+      .guide-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+      .guide-note { font-size: 16px; color: var(--ink-soft); max-width: 70ch; }
+      .guide-swatch { margin: 0; width: 150px; font-size: 14px; line-height: 1.35; }
+      .guide-swatch span { display: block; height: 56px; border: 4px solid var(--ink); }
+      .guide-type { display: grid; gap: 8px; padding: 16px; background: var(--paper); border: 4px solid var(--ink); min-width: 320px; flex: 1; }
+      .guide-type small { font-size: 14px; color: var(--ink-soft); }
+      .guide-specimen { padding: 20px; border: 4px solid var(--ink); display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+      .guide-specimen--grass { background: var(--grass); }
+      .guide-specimen--sky { background: var(--sky); }
+      .guide-specimen--ink { background: var(--ink); }
+    </style>
+    <script type="module" src="./src/styleguide.js"></script>
+  </head>
+  <body class="guide">
+    <main class="guide-page" id="guide">
+      <header>
+        <h1 class="px-title">All Aboard · Style guide</h1>
+        <p class="guide-note">The handheld festival kit: palette, type, pixel windows, icons, the cast, and live controls. Every screen is built from these pieces.</p>
+      </header>
+    </main>
+  </body>
+</html>

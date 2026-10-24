@@ -1,0 +1,18 @@
+/* Self-hosted fonts: Andika for everything a child reads, Pixelify Sans for names, titles, and numbers. */
+@font-face { font-family: 'Andika'; font-style: normal; font-weight: 400; font-display: swap; src: url('../../assets/fonts/andika-400.woff2') format('woff2'); }
+@font-face { font-family: 'Andika'; font-style: normal; font-weight: 700; font-display: swap; src: url('../../assets/fonts/andika-700.woff2') format('woff2'); }
+@font-face { font-family: 'Pixelify Sans'; font-style: normal; font-weight: 400 700; font-display: swap; src: url('../../assets/fonts/pixelify-sans.woff2') format('woff2'); }
+
+:root {
+  --ink: #1f2147; --ink-soft: #4a4e7a; --paper: #fff8e6; --paper-shade: #f3e3bf; --white: #ffffff;
+  --finish: #1f7a55; --finish-light: #3f9a72; --finish-shade: #155c40;
+  --sky: #9fdcff; --sea: #3fa7d6; --grass: #79c96a; --grass-dark: #4f9a50; --path: #f4d9a0; --wood: #b8754a;
+  --vermilion: #d9412e; --lantern: #ffc94a; --letterbox: #2b2d5c;
+  --math: #ff9a3c; --science: #3fcfbf; --art: #ff8fc0; --reading: #6db8ff; --writing: #b59cff; --community: #7fd46a; --music: #ffd447;
+  --font-read: 'Andika', 'Trebuchet MS', system-ui, sans-serif;
+  --font-pixel: 'Pixelify Sans', 'Andika', ui-monospace, monospace;
+  /* Logical stage pixels. Nothing a child reads is smaller than --text-small. */
+  --text-small: 16px; --text-field: 20px; --text-name: 20px; --text-command: 22px; --text-body: 24px; --text-title: 40px;
+}
+/* Bigger words. */
+.large-text { --text-small: 20px; --text-field: 24px; --text-name: 24px; --text-command: 26px; --text-body: 30px; --text-title: 40px; }
