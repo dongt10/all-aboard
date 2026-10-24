@@ -1,0 +1,195 @@
+import { openWindow } from '../window.js';
+import { icon } from '../icons.js';
+import { keyIntent, gridMove } from '../input.js';
+import { figureMarkup } from '../figures/index.js';
+import { SUBJECT_THEME } from '../palette.js';
+import { toggleSetting, chooseGrade, gradeChoices, isChosenGrade } from '../save.js';
+import { guideEntries, stampCount } from '../guide.js';
+
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
+const ARROWS = new Set(['up', 'down', 'left', 'right']);
+
+// Roving focus: one item in the group is tabbable, the arrows move between them.
+export function setRoving(items, index) {
+  items.forEach((item, i) => { item.tabIndex = i === index ? 0 : -1; });
+}
+export function rove(container, getItems, columns, onMove) {
+  container.addEventListener('keydown', event => {
+    const intent = keyIntent(event);
+    if (!ARROWS.has(intent)) return;
+    const items = getItems(), from = items.indexOf(document.activeElement);
+    if (from < 0) return;
+    event.preventDefault();
+    const to = gridMove(from, intent, columns, items.length);
+    if (to === from) return;
+    setRoving(items, to);
+    items[to].focus();
+    onMove?.(to);
+  });
+}
+
+// Opens a window with a size class, after pausing the scene behind it.
+function open(ctx, kind, options) {
+  ctx.scenes?.pause?.();
+  const handle = openWindow(ctx.stage, options);
+  if (handle) ctx.stage.querySelector('.win-backdrop .win')?.classList.add(`win--${kind}`);
+  return handle;
+}
+
+// Comfort toggles, shared by the title screen and the Comfort window.
+export const COMFORT = [
+  { key: 'largeText', label: 'Bigger words' },
+  { key: 'reducedMotion', label: 'Calm motion' },
+  { key: 'autoRead', label: 'Read to me' },
+];
+export const comfortMarkup = () => COMFORT.map(({ key, label }) =>
+  `<button type="button" class="px-toggle comfort-toggle" data-setting="${key}" aria-pressed="false"><span>${label}</span><span class="px-toggle__state" aria-hidden="true">Off</span></button>`).join('');
+
+export function syncComfort(root, settings) {
+  for (const button of root.querySelectorAll('[data-setting]')) {
+    const on = Boolean(settings[button.dataset.setting]);
+    button.setAttribute('aria-pressed', String(on));
+    button.querySelector('.px-toggle__state').textContent = on ? 'On' : 'Off';
+  }
+}
+
+export function bindComfort(root, ctx) {
+  syncComfort(root, ctx.getState().settings);
+  root.addEventListener('click', event => {
+    const button = event.target.closest('[data-setting]');
+    if (!button || !root.contains(button)) return;
+    const { key, label } = COMFORT.find(item => item.key === button.dataset.setting);
+    ctx.commit(toggleSetting(ctx.getState(), key));
+    syncComfort(root, ctx.getState().settings);
+    ctx.announce(`${label} is ${ctx.getState().settings[key] ? 'on' : 'off'}.`);
+  });
+}
+
+// Grade tiles, shared by the title screen and the Grade window.
+export const gradeTilesMarkup = () => gradeChoices().map((choice, i) =>
+  `<button type="button" class="px-button grade-tile" data-grade="${i}" aria-label="${choice.name}" aria-pressed="false">
+    <span class="grade-tile__num">${choice.label}</span><span class="grade-tile__word">${choice.chapter === 0 ? 'Kinder&shy;garten' : 'Grade'}</span>
+    <span class="grade-tile__check" aria-hidden="true">${icon('check')}</span></button>`).join('');
+
+export function syncGradeTiles(root, state) {
+  const tiles = [...root.querySelectorAll('.grade-tile')];
+  const choices = gradeChoices();
+  tiles.forEach((tile, i) => tile.setAttribute('aria-pressed', String(isChosenGrade(state, choices[i]))));
+  setRoving(tiles, Math.max(0, tiles.findIndex(tile => tile.getAttribute('aria-pressed') === 'true')));
+  return tiles;
+}
+
+export function openComfortWindow(ctx) {
+  const body = document.createElement('div');
+  body.className = 'comfort-window';
+  body.innerHTML = comfortMarkup();
+  bindComfort(body, ctx);
+  return open(ctx, 'comfort', { title: 'Comfort', body });
+}
+
+export function openPauseWindow(ctx) {
+  const body = document.createElement('div');
+  body.className = 'pause-window';
+  const note = ctx.saveOk === false ? 'Take your time. Keep this tab open.' : 'Take your time. Your work is saved.';
+  body.innerHTML = `<span class="pause-window__nori">${figureMarkup('nori', { scale: 2 })}</span><p>${note}</p>
+    <button type="button" class="px-button px-button--finish">${icon('play')}<span>Keep playing</span></button>`;
+  let handle = null;
+  body.querySelector('button').addEventListener('click', () => handle?.close());
+  handle = open(ctx, 'pause', { title: 'Paused', body, initialFocus: 'button' });
+  return handle;
+}
+
+export function openGradeWindow(ctx) {
+  const body = document.createElement('div');
+  body.className = 'grade-window';
+  body.innerHTML = `<div class="grade-tiles">${gradeTilesMarkup()}</div>`;
+  const tiles = syncGradeTiles(body, ctx.getState());
+  rove(body, () => tiles, 6);
+  let handle = null;
+  body.addEventListener('click', event => {
+    const tile = event.target.closest('.grade-tile');
+    if (!tile) return;
+    const before = ctx.getState(), choice = gradeChoices()[Number(tile.dataset.grade)];
+    const changed = !isChosenGrade(before, choice);
+    ctx.commit(chooseGrade(before, choice));
+    syncGradeTiles(body, ctx.getState());
+    handle?.close();
+    if (changed) ctx.reload?.();
+  });
+  handle = open(ctx, 'grade', { title: 'Your grade', body, initialFocus: () => tiles.find(tile => tile.tabIndex === 0) });
+  return handle;
+}
+
+function guidePage(entry, state) {
+  const theme = entry.subject ? SUBJECT_THEME[entry.subject] : null;
+  const earned = Boolean(entry.stamp?.earned);
+  const stamp = !entry.stamp ? '' : earned
+    ? `<div class="guide-stamp guide-stamp--earned"><span class="guide-stamp__seal" aria-hidden="true">${icon(theme.icon)}</span><p><strong>Learned:</strong> ${esc(entry.stamp.learned)}</p></div>
+       <div class="guide-creation" data-id="${entry.id}"></div>`
+    : `<div class="guide-stamp"><span class="guide-stamp__seal" aria-hidden="true"></span><p><strong>You’ll learn:</strong> ${esc(entry.stamp.learned)}</p></div>`;
+  const buttons = [
+    entry.canFind ? `<button type="button" class="px-button" data-action="find">${icon('map')}<span>Find</span></button>` : '',
+    entry.canVisit ? `<button type="button" class="px-button px-button--finish" data-action="visit">${icon('next')}<span>Visit</span></button>` : '',
+  ].join('');
+  return `<div class="guide-page__who">
+      <span class="guide-page__figure">${figureMarkup(entry.id, { scale: 2, pose: earned ? 'joy' : 'idle' })}</span>
+      <div><h3 class="px-name">${esc(entry.name)}</h3><p class="guide-page__meta">${esc(entry.species)} · ${esc(entry.role)}</p></div>
+    </div>
+    <p class="guide-page__bio">${esc(entry.bio)}</p>${stamp}
+    ${buttons ? `<div class="guide-page__actions">${buttons}</div>` : ''}`;
+}
+
+// The Matsuri Guide: ten character tiles on the left, the chosen character's page on the right.
+export function openGuideWindow(ctx, { id } = {}) {
+  const state = ctx.getState();
+  const entries = guideEntries(state), { earned, total } = stampCount(state);
+  let index = Math.max(0, entries.findIndex(entry => entry.id === id));
+  const body = document.createElement('div');
+  body.className = 'guide';
+  body.innerHTML = `<div class="guide__tiles">${entries.map((entry, i) => `<button type="button" class="px-button guide-tile" data-index="${i}" aria-pressed="false"${entry.subject ? ` style="--subject:var(--${entry.subject})"` : ''}>
+      ${figureMarkup(entry.id)}<span class="guide-tile__name">${esc(entry.name)}</span>${entry.stamp?.earned ? `<span class="guide-tile__stamp">${icon('check')}<span class="sr-only">, stamp earned</span></span>` : ''}</button>`).join('')}</div>
+    <section class="guide-page" aria-live="polite"></section>`;
+  const tiles = [...body.querySelectorAll('.guide-tile')];
+  const page = body.querySelector('.guide-page');
+  function show(i) {
+    index = i;
+    tiles.forEach((tile, k) => tile.setAttribute('aria-pressed', String(k === i)));
+    setRoving(tiles, i);
+    page.innerHTML = guidePage(entries[i], state);
+  }
+  let handle = null;
+  rove(body.querySelector('.guide__tiles'), () => tiles, 2, show);
+  body.addEventListener('click', event => {
+    const tile = event.target.closest('.guide-tile');
+    if (tile) { show(Number(tile.dataset.index)); return; }
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (!action) return;
+    const target = entries[index].id;
+    handle?.close();
+    if (action === 'find') ctx.go('village', { guide: target });
+    else ctx.go(target === 'music' ? 'music' : 'encounter', { id: target });
+  });
+  show(index);
+  handle = open(ctx, 'guide', { title: 'Matsuri Guide', body, initialFocus: () => tiles[index] });
+  const head = handle && body.closest('.win')?.querySelector('.win__head');
+  if (head) {   // the stamp count sits in the header, beside the title
+    const count = document.createElement('p');
+    count.className = 'px-chip guide__count';
+    count.innerHTML = `${icon('star')}<span>${earned} of ${total} stamps</span>`;
+    head.querySelector('.win__title').after(count);
+  }
+  return handle;
+}
+
+// Help: numbered steps, each with its own Hear button.
+export function openHelpWindow(ctx, title, steps = []) {
+  const body = document.createElement('ol');
+  body.className = 'help-steps';
+  body.innerHTML = steps.map((step, i) => `<li><span class="help-steps__num">${i + 1}</span><p>${esc(step)}</p>
+    <button type="button" class="px-icon-button" data-step="${i}" aria-label="Hear step ${i + 1}">${icon('hear')}<span>Hear</span></button></li>`).join('');
+  body.addEventListener('click', event => {
+    const button = event.target.closest('[data-step]');
+    if (button) ctx.speak(steps[Number(button.dataset.step)]);
+  });
+  return open(ctx, 'help', { title: title || 'Help', body });
+}

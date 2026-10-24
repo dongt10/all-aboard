@@ -11,7 +11,7 @@ const safeColor = value => artColors.includes(value) ? value : '#fff1cf';
 const scopes = ['chapter-0', ...[1, 2, 3, 4, 5].map(grade => `chapter-1-grade-${grade}`)];
 
 export function createState() {
-  return { version: 2, hasStarted: false, chapter: 0, grade: 1, settings: { largeText: false, reducedMotion: false }, progress: {}, drafts: {} };
+  return { version: 2, hasStarted: false, chapter: 0, grade: 1, avatar: 'boy', settings: { largeText: false, reducedMotion: false, autoRead: false }, progress: {}, drafts: {} };
 }
 
 export function scopeKey(chapter, grade) {
@@ -52,6 +52,7 @@ export function normalizeState(input) {
   state.hasStarted = input.hasStarted === true;
   state.chapter = input.chapter === 1 ? 1 : 0;
   state.grade = Number.isInteger(input.grade) && input.grade >= 1 && input.grade <= 5 ? input.grade : 1;
+  state.avatar = input.avatar === 'girl' ? 'girl' : 'boy';
   for (const key of Object.keys(state.settings)) if (typeof input.settings?.[key] === 'boolean') state.settings[key] = input.settings[key];
   for (const scope of scopes) {
     for (const id of IDS) {

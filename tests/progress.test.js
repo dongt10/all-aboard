@@ -36,7 +36,7 @@ test('chapter and grade changes keep independent drafts and creations', () => {
 
 test('published creations and settings round-trip through local storage', () => {
   const storage=memoryStorage(); let state=publishCreation(createState(),'music',createDefaultBand());
-  state=publishCreation(state,'art',banner);state.settings={largeText:true,reducedMotion:true};
+  state=publishCreation(state,'art',banner);state.settings={largeText:true,reducedMotion:true,autoRead:true};state.avatar='girl';
   assert.equal(saveState(state,storage),true);
   assert.deepEqual(loadState(storage),state);
   const read=getCreations(state);read.art.stamps[0].color='#000';
@@ -129,4 +129,19 @@ test('reading preserves known discoveries in canonical order and replay leaves p
   assert.deepEqual(getDraft(state,'reading').found,[]);
   assert.deepEqual(getCreations(state).reading.found,['key','umbrella','book']);
   assert.deepEqual(getCompleted(state),['reading']);
+});
+
+test('Read to me defaults off and round-trips', () => {
+  assert.equal(createState().settings.autoRead, false);
+  const storage = memoryStorage(); const state = createState(); state.settings.autoRead = true;
+  assert.equal(saveState(state, storage), true);
+  assert.equal(loadState(storage).settings.autoRead, true);
+});
+
+test('the chosen kid round-trips and anything else falls back to the boy', () => {
+  assert.equal(createState().avatar, 'boy');
+  const storage = memoryStorage(); const state = createState(); state.avatar = 'girl';
+  saveState(state, storage);
+  assert.equal(loadState(storage).avatar, 'girl');
+  for (const junk of ['player', 7, null, undefined, '<b>']) assert.equal(normalizeState({ ...createState(), avatar: junk }).avatar, 'boy');
 });
