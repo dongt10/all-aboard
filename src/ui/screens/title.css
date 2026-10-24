@@ -17,9 +17,9 @@
 
 .title__who { position: absolute; left: 0; right: 0; top: 88px; display: flex; justify-content: center; align-items: center; gap: 14px; }
 .title__who-label { width: 140px; text-align: right; }
-.avatar-choice { flex-direction: column; gap: 0; width: 150px; height: 140px; padding: 0 4px 4px; }
-.avatar-choice__art { position: relative; width: 128px; height: 100px; overflow: hidden; }
-.avatar-choice__art .figure { position: absolute; left: 0; bottom: -14px; }
+.avatar-choice { flex-direction: column; gap: 0; width: 150px; height: 152px; padding: 0 4px 4px; }
+.avatar-choice__art { position: relative; width: 128px; height: 112px; overflow: hidden; }
+.avatar-choice__art .figure { position: absolute; left: 0; bottom: -6px; }   /* feet in view */
 .avatar-choice__label { font-size: var(--text-command); line-height: 1.1; }
 .avatar-choice__check, .grade-tile__check { position: absolute; top: 2px; right: 2px; display: none; color: var(--finish); }
 .avatar-choice[aria-pressed="true"], .grade-tile[aria-pressed="true"] { --fill: var(--lantern); --light: #ffe08f; --shade: #e0a92f; }
