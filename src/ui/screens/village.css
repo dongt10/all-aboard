@@ -89,11 +89,12 @@
 
 /* Creations (shared by the stall easels, the parade, and the item-get card) */
 .creation { display: block; box-sizing: border-box; max-width: 100%; }
-.creation.world-sign { background: var(--paper-shade); color: var(--ink); border: 2px solid var(--ink); font: 700 12px/1.2 var(--font-read); padding: 2px 4px; max-height: 40px; overflow: hidden; text-align: center; }
+.creation.world-sign { background: var(--paper-shade); color: var(--ink); border: 2px solid var(--ink); font: 700 10px/1.15 var(--font-read); padding: 2px 4px; max-height: 40px; overflow: hidden; text-align: center; }
 .creation.world-score { display: flex; gap: 3px; align-items: center; background: var(--paper); border: 2px solid var(--ink); padding: 4px; }
 .creation.world-score i { display: block; width: 6px; height: 4px; background: var(--ink-soft); }
 .creation.world-score i.world-note-on { height: 14px; background: var(--music); box-shadow: 0 0 0 1px var(--ink); }
-.creation.world-book { background: linear-gradient(90deg, var(--paper) 48%, var(--ink) 48% 52%, var(--paper) 52%); color: var(--ink); border: 2px solid var(--reading); font: 700 11px/1.2 var(--font-read); padding: 2px 4px; max-height: 40px; overflow: hidden; text-align: center; }
+/* A book cover with a thick spine on the left, so no line runs through the title. */
+.creation.world-book { background: var(--paper); color: var(--ink); border: 2px solid var(--reading); border-left-width: 6px; font: 700 11px/1.2 var(--font-read); padding: 2px 4px; max-height: 40px; overflow: hidden; text-align: center; }
 .creation.world-ices { display: flex; gap: 6px; justify-content: center; }
 .creation.world-ices i { width: 18px; height: 22px; box-sizing: border-box; background: var(--science); border: 2px solid var(--ink); border-bottom: 6px solid var(--paper-shade); }
 .creation.world-ices i:nth-child(2) { background: var(--art); }
