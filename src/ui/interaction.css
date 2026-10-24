@@ -25,10 +25,13 @@
 .cmd-slot[data-cursor="true"] .cmd-slot__cursor::before { content: '▶'; }
 .cmd-slot__pic { display: inline-flex; flex: none; align-items: center; }
 .cmd-slot__pic .icon { width: 22px; height: 22px; }
+/* Picture commands (Sora's reading words) pass art with no intrinsic size. */
+.cmd-slot__pic svg { display: block; width: 32px; height: 32px; flex: none; }
 .cmd-slot__label { min-width: 0; overflow: hidden; text-overflow: clip; }
 .large-text .cmd-slot[data-long] .cmd-slot__pic { display: none; }
 .large-text .cmd-slot { gap: 4px; padding-right: 4px; letter-spacing: -.3px; }
 .large-text .cmd-slot__pic .icon { width: 20px; height: 20px; }
+.large-text .cmd-slot__pic svg { width: 28px; height: 28px; }
 .cmd-slot[aria-pressed="true"] { --fill: var(--lantern); --light: #ffe08f; --shade: #e0a92f; }
 .cmd-slot.px-button--finish[aria-pressed="true"] { --fill: var(--finish); }
 .cmd-slot:active:not(:disabled) { transform: translateY(2px); }

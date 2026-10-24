@@ -15,3 +15,10 @@ test('every scene root is its own stacking context, so windows, item-get and the
   }
 });
 
+test('pictures in command cells are sized, not left at 0×0', () => {
+  const body = rulesFor(css(['src/ui/interaction.css']), '.cmd-slot__pic svg');
+  assert.match(body, /width:\s*\d+px/);
+  assert.match(body, /height:\s*\d+px/);
+  assert.match(body, /flex:\s*none/);
+});
+
