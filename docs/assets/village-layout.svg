@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="480" viewBox="0 0 960 480" role="img" aria-labelledby="title desc">
+<title id="title">All Aboard village layout</title>
+<desc id="desc">A shared village for both chapters. Hana, Sora, and Fumi are north of the festival square. Taro is west and Yuki east. Momo, the arrival pier, and Kiko are south. Paths connect the locations around the player’s stall.</desc>
+<rect width="960" height="480" rx="22" fill="#FAF9F4"/>
+<g font-family="-apple-system, BlinkMacSystemFont, Segoe UI, Arial, sans-serif">
+<text x="38" y="42" font-size="15" font-weight="600" letter-spacing="2" fill="#506656">VILLAGE LAYOUT</text>
+<text x="922" y="42" text-anchor="end" font-size="14" fill="#526358">One world for both chapters</text>
+<g stroke="#D7C7A9" stroke-width="12" fill="none" stroke-linecap="round" stroke-linejoin="round">
+<path d="M170 132 L170 260 L480 260 L790 260 L790 132"/>
+<path d="M480 132 L480 390"/>
+<path d="M170 390 L170 260 M790 390 L790 260"/>
+</g>
+<rect x="44" y="84" width="252" height="96" rx="14" fill="#E9F0E9" stroke="#C4D3C7"/>
+<text x="170" y="116" text-anchor="middle" font-size="20" font-weight="700" fill="#243F31">Hana</text>
+<text x="170" y="141" text-anchor="middle" font-size="16" fill="#304B3D">Map kiosk</text>
+<text x="170" y="164" text-anchor="middle" font-size="13" fill="#526358">Community</text>
+<rect x="354" y="84" width="252" height="96" rx="14" fill="#E9F0E9" stroke="#C4D3C7"/>
+<text x="480" y="116" text-anchor="middle" font-size="20" font-weight="700" fill="#243F31">Sora</text>
+<text x="480" y="141" text-anchor="middle" font-size="16" fill="#304B3D">Reading nook</text>
+<text x="480" y="164" text-anchor="middle" font-size="13" fill="#526358">Reading</text>
+<rect x="664" y="84" width="252" height="96" rx="14" fill="#E9F0E9" stroke="#C4D3C7"/>
+<text x="790" y="116" text-anchor="middle" font-size="20" font-weight="700" fill="#243F31">Fumi</text>
+<text x="790" y="141" text-anchor="middle" font-size="16" fill="#304B3D">Writing booth</text>
+<text x="790" y="164" text-anchor="middle" font-size="13" fill="#526358">Writing</text>
+<rect x="44" y="212" width="252" height="96" rx="14" fill="#E9F0E9" stroke="#C4D3C7"/>
+<text x="170" y="244" text-anchor="middle" font-size="20" font-weight="700" fill="#243F31">Taro</text>
+<text x="170" y="269" text-anchor="middle" font-size="16" fill="#304B3D">Workshop</text>
+<text x="170" y="292" text-anchor="middle" font-size="13" fill="#526358">Math</text>
+<rect x="354" y="212" width="252" height="96" rx="14" fill="#F2E5BF" stroke="#C5AB69"/>
+<text x="480" y="244" text-anchor="middle" font-size="20" font-weight="700" fill="#243F31">Festival square</text>
+<text x="480" y="269" text-anchor="middle" font-size="16" fill="#304B3D">Player’s stall</text>
+<text x="480" y="292" text-anchor="middle" font-size="13" fill="#526358">Your creations</text>
+<rect x="664" y="212" width="252" height="96" rx="14" fill="#E9F0E9" stroke="#C4D3C7"/>
+<text x="790" y="244" text-anchor="middle" font-size="20" font-weight="700" fill="#243F31">Yuki</text>
+<text x="790" y="269" text-anchor="middle" font-size="16" fill="#304B3D">Design studio</text>
+<text x="790" y="292" text-anchor="middle" font-size="13" fill="#526358">Art</text>
+<rect x="44" y="342" width="252" height="96" rx="14" fill="#E9F0E9" stroke="#C4D3C7"/>
+<text x="170" y="374" text-anchor="middle" font-size="20" font-weight="700" fill="#243F31">Momo</text>
+<text x="170" y="399" text-anchor="middle" font-size="16" fill="#304B3D">Festival kitchen</text>
+<text x="170" y="422" text-anchor="middle" font-size="13" fill="#526358">Science</text>
+<rect x="354" y="342" width="252" height="96" rx="14" fill="#E9F0E9" stroke="#C4D3C7"/>
+<text x="480" y="374" text-anchor="middle" font-size="20" font-weight="700" fill="#243F31">Arrival pier</text>
+<text x="480" y="399" text-anchor="middle" font-size="16" fill="#304B3D">Human player</text>
+<text x="480" y="422" text-anchor="middle" font-size="13" fill="#526358">Start here</text>
+<rect x="664" y="342" width="252" height="96" rx="14" fill="#E9F0E9" stroke="#C4D3C7"/>
+<text x="790" y="374" text-anchor="middle" font-size="20" font-weight="700" fill="#243F31">Kiko</text>
+<text x="790" y="399" text-anchor="middle" font-size="16" fill="#304B3D">Music stage</text>
+<text x="790" y="422" text-anchor="middle" font-size="13" fill="#526358">Music</text>
+</g></svg>
