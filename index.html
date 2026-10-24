@@ -3,20 +3,29 @@
   <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#31584b">
+    <meta name="theme-color" content="#2b2d5c">
     <meta name="description" content="Help animal neighbors prepare a summer festival. Choose any subject, learn at your pace, and make the village your own.">
     <title>All Aboard — Summer Festival</title>
     <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
-    <link rel="stylesheet" href="./src/styles.css">
-    <link rel="stylesheet" href="./src/village.css">
-    <link rel="stylesheet" href="./src/activity.css">
-    <script type="module" src="./src/app.js"></script>
+    <link rel="stylesheet" href="./src/ui/tokens.css">
+    <link rel="stylesheet" href="./src/ui/kit.css">
+    <link rel="stylesheet" href="./src/ui/interaction.css">
+    <link rel="stylesheet" href="./src/ui/screens/title.css">
+    <link rel="stylesheet" href="./src/ui/screens/windows.css">
+    <link rel="stylesheet" href="./src/ui/screens/village.css">
+    <link rel="stylesheet" href="./src/ui/screens/encounter.css">
+    <link rel="stylesheet" href="./src/ui/screens/music.css">
+    <link rel="stylesheet" href="./src/ui/screens/parade.css">
+    <link rel="stylesheet" href="./src/ui/activities/cart.css">
+    <link rel="stylesheet" href="./src/ui/activities/ice.css">
+    <link rel="stylesheet" href="./src/ui/activities/story.css">
+    <link rel="stylesheet" href="./src/ui/activities/banner.css">
+    <link rel="stylesheet" href="./src/ui/activities/square.css">
+    <link rel="stylesheet" href="./src/ui/activities/sign.css">
+    <script type="module" src="./src/main.js"></script>
   </head>
-  <body>
-    <a class="skip-link" href="#village-section">Skip to the village</a>
+  <body class="game">
     <div id="app"></div>
-    <div id="activity-host"></div>
-    <div id="announcements" class="sr-only" role="status" aria-live="polite"></div>
     <noscript>This village needs JavaScript to play. Please enable it in your browser.</noscript>
   </body>
 </html>

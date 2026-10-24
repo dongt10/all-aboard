@@ -1,0 +1,112 @@
+/* Willow Bay overworld. Everything is absolutely positioned on the 960×540 stage. */
+.village { position: absolute; inset: 0; isolation: isolate; overflow: hidden; background: var(--grass); outline: none; }
+.village:focus-visible { box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 8px var(--ink); }
+.village-map { position: absolute; left: 0; top: 0; width: 960px; height: 540px; display: block; }
+.village-stalls, .village-actors { position: absolute; inset: 0; pointer-events: none; }
+.village-stalls > *, .village-actors > * { pointer-events: auto; }
+
+/* Stalls and the creations on display beside them */
+.village-stall { position: absolute; width: 128px; height: 80px; pointer-events: none; }
+.village-stall > svg { display: block; width: 128px; height: 80px; }
+.village-easel { position: absolute; width: 80px; height: 56px; display: grid; place-items: center; padding: 4px; box-sizing: border-box; background: var(--paper); border: 4px solid var(--ink); pointer-events: none; }
+.village-easel::before, .village-easel::after { content: ''; position: absolute; top: 100%; width: 4px; height: 12px; background: var(--wood); }
+.village-easel::before { left: 12px; } .village-easel::after { right: 12px; }
+.village-easel--empty { display: none; }
+.village-easel > svg { display: block; width: 100%; max-height: 40px; }
+
+/* Neighbors and the side cast: the whole hotspot is one button that moves with its figure */
+.village-actor { position: absolute; padding: 0; margin: 0; border: 0; background: none; color: var(--ink); cursor: pointer; font: inherit; }
+.village-npc { width: 112px; height: 112px; }
+.village-side { width: 72px; height: 88px; }
+.village-actor__fig { position: absolute; width: 64px; height: 64px; pointer-events: none; }
+.village-npc .village-actor__fig { left: 24px; top: 23px; }
+.village-side .village-actor__fig { left: 4px; top: 15px; }
+.village-actor__fig .figure { display: block; }
+.village-name {
+  position: absolute; left: 50%; top: 84px; transform: translateX(-50%); white-space: nowrap; pointer-events: none;
+  font-size: var(--text-small); padding: 0 8px; --chip: var(--paper);
+}
+.village-name--side { top: 74px; }
+.village-actor:hover .village-name, .village-actor:focus-visible .village-name, .village-actor--near .village-name { --chip: var(--lantern); }
+.village-actor:hover .village-actor__fig, .village-actor--near .village-actor__fig { transform: translateY(-2px); }
+
+/* Subject badge at (feet.x + 16, feet.y − 80): the subject icon on its color, with a status mark */
+.village-badge {
+  position: absolute; left: 72px; top: 0; width: 32px; height: 32px; box-sizing: border-box; display: grid; place-items: center;
+  background: var(--subject); color: var(--ink); border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); pointer-events: none;
+}
+.village-badge > .icon { width: 24px; height: 24px; }
+.village-badge__mark {
+  position: absolute; left: 22px; top: -10px; min-width: 20px; height: 20px; box-sizing: border-box; display: grid; place-items: center;
+  border: 2px solid var(--ink); font-family: var(--font-pixel); font-size: 14px; font-weight: 700; line-height: 1;
+}
+.village-badge__mark--new { background: var(--lantern); color: var(--ink); animation: village-nod 1.6s steps(2) infinite; }
+.village-badge__mark--made { background: var(--finish); color: var(--paper); }
+.village-badge__mark--made .icon { width: 16px; height: 16px; }
+.village-badge__mark--visited { left: 30px; top: 6px; padding: 0 4px; background: var(--paper); color: var(--ink); font-family: var(--font-read); font-size: var(--text-small); height: auto; white-space: nowrap; }
+
+/* The player, the Talk chip, and the Find arrows */
+.village-player { position: absolute; width: 64px; height: 64px; pointer-events: none; }
+.village-player .figure { display: block; }
+.village-talk { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: var(--text-small); --chip: var(--lantern); cursor: pointer; }
+.village-talk__key { display: inline-grid; place-items: center; min-width: 20px; height: 20px; background: var(--ink); color: var(--paper); font-family: var(--font-pixel); font-size: 14px; }
+.village-find { position: absolute; width: 32px; height: 36px; pointer-events: none; animation: village-bob .8s steps(2) infinite alternate; }
+.village-find__lantern { position: absolute; left: 6px; top: 0; width: 20px; height: 18px; background: var(--vermilion); border: 2px solid var(--ink); box-shadow: inset 0 4px 0 var(--lantern); box-sizing: border-box; }
+.village-find::after { content: ''; position: absolute; left: 8px; top: 20px; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 12px solid var(--ink); }
+.village-pointer { position: absolute; font-family: var(--font-pixel); font-size: var(--text-name); line-height: 1; padding: 2px 6px; --chip: var(--lantern); pointer-events: none; }
+
+/* HUD */
+.village-hud { position: absolute; left: 0; top: 0; width: 960px; height: 64px; box-sizing: border-box; padding: 4px 12px; display: flex; align-items: center; gap: 16px; background: var(--letterbox); color: var(--paper); z-index: 1000; }
+.village-grade { min-height: 40px; font-family: var(--font-pixel); font-size: var(--text-name); cursor: pointer; --chip: var(--lantern); }
+.village-hud__title { margin: 0; flex: 1; font-family: var(--font-pixel); font-size: 32px; font-weight: 700; color: var(--paper); letter-spacing: 1px; }
+.village-hud__buttons { display: flex; gap: 8px; }
+.village-hud__buttons .px-icon-button { min-height: 52px; min-width: 72px; cursor: pointer; }
+
+/* Festival board (bottom left) */
+.village-board { position: absolute; left: 8px; top: 460px; width: 424px; height: 72px; box-sizing: border-box; padding: 6px 10px; display: flex; align-items: center; gap: 10px; z-index: 1000; }
+.village-board__title { display: grid; place-items: center; color: var(--vermilion); }
+.village-board__pips { display: flex; gap: 3px; flex: 1; }
+.village-pip { position: relative; width: 28px; height: 28px; box-sizing: border-box; display: grid; place-items: center; border: 2px dashed var(--ink-soft); color: var(--ink-soft); background: var(--paper); }
+.village-pip > .icon { width: 20px; height: 20px; opacity: .45; }
+.village-pip--filled { border: 2px solid var(--ink); background: var(--subject); color: var(--ink); }
+.village-pip--filled > .icon { opacity: 1; }
+.village-parade { cursor: pointer; padding: 4px 10px; white-space: nowrap; }
+.village-parade[hidden], .village-talk[hidden], .village-find[hidden], .village-pointer[hidden], .village-dialogue[hidden] { display: none; }
+
+/* Dialogue (styles for .dlg live in interaction.css); it sits bottom right, clear of the board */
+.village-dialogue { position: absolute; right: 12px; bottom: 8px; width: 472px; z-index: 1001; }
+.village-dialogue--top { right: auto; bottom: auto; left: 244px; top: 96px; }
+
+/* A new creation sparkles once */
+.village-sparkle { position: absolute; inset: -8px; display: none; pointer-events: none; }
+.village-stall--sparkle .village-sparkle { display: block; animation: village-sparkle 1.2s steps(4) 1 both; }
+.village-sparkle::before, .village-sparkle::after {
+  content: ''; position: absolute; width: 8px; height: 8px; background: var(--lantern);
+  box-shadow: 0 0 0 2px var(--ink), 56px -4px 0 0 var(--white), 56px -4px 0 2px var(--ink), 112px 12px 0 0 var(--lantern), 112px 12px 0 2px var(--ink);
+}
+.village-sparkle::before { left: 4px; top: 4px; }
+.village-sparkle::after { left: 28px; top: 60px; box-shadow: 0 0 0 2px var(--ink), 64px 8px 0 0 var(--lantern), 64px 8px 0 2px var(--ink); }
+
+/* Creations (shared by the stall easels, the parade, and the item-get card) */
+.creation { display: block; box-sizing: border-box; max-width: 100%; }
+.creation.world-sign { background: var(--paper-shade); color: var(--ink); border: 2px solid var(--ink); font: 700 10px/1.15 var(--font-read); padding: 2px 4px; max-height: 40px; overflow: hidden; text-align: center; }
+.creation.world-score { display: flex; gap: 3px; align-items: center; background: var(--paper); border: 2px solid var(--ink); padding: 4px; }
+.creation.world-score i { display: block; width: 6px; height: 4px; background: var(--ink-soft); }
+.creation.world-score i.world-note-on { height: 14px; background: var(--music); box-shadow: 0 0 0 1px var(--ink); }
+/* A book cover with a thick spine on the left, so no line runs through the title. */
+.creation.world-book { background: var(--paper); color: var(--ink); border: 2px solid var(--reading); border-left-width: 6px; font: 700 11px/1.2 var(--font-read); padding: 2px 4px; max-height: 40px; overflow: hidden; text-align: center; }
+.creation.world-ices { display: flex; gap: 6px; justify-content: center; }
+.creation.world-ices i { width: 18px; height: 22px; box-sizing: border-box; background: var(--science); border: 2px solid var(--ink); border-bottom: 6px solid var(--paper-shade); }
+.creation.world-ices i:nth-child(2) { background: var(--art); }
+
+@keyframes village-bob { from { transform: translateY(0); } to { transform: translateY(6px); } }
+@keyframes village-nod { 50% { transform: translateY(-2px); } }
+@keyframes village-sparkle { 0% { opacity: 0; transform: scale(.6); } 40% { opacity: 1; transform: scale(1.05); } 100% { opacity: 0; transform: scale(1); } }
+
+/* Calm motion: no bounce, no lifts, no sparkle animation (the sparkle stays, still). */
+.calm .village-find, .calm .village-badge__mark--new, .calm .village-stall--sparkle .village-sparkle { animation: none; }
+.calm .village-actor:hover .village-actor__fig, .calm .village-actor--near .village-actor__fig { transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .village-find, .village-badge__mark--new, .village-stall--sparkle .village-sparkle { animation: none; }
+  .village-actor:hover .village-actor__fig, .village-actor--near .village-actor__fig { transform: none; }
+}

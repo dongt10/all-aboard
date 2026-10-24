@@ -1,0 +1,60 @@
+/* The encounter: every region is absolutely placed on the 960×540 stage (spec "Encounter" table). */
+.enc { position: absolute; inset: 0; isolation: isolate; overflow: hidden; }
+.enc__backdrop { position: absolute; inset: 0; background: linear-gradient(var(--sky) 0 216px, var(--grass) 216px); }
+.enc__backdrop::after { content: ''; position: absolute; left: 0; right: 0; top: 216px; height: 4px; background: var(--grass-dark); }
+
+/* Pixel platforms: stepped ovals, no rounded corners. */
+.enc__platform {
+  position: absolute; background: var(--grass-dark); border-top: 4px solid var(--ink);
+  clip-path: polygon(16% 0, 84% 0, 84% 12%, 94% 12%, 94% 30%, 100% 30%, 100% 70%, 94% 70%, 94% 88%, 84% 88%, 84% 100%, 16% 100%, 16% 88%, 6% 88%, 6% 70%, 0 70%, 0 30%, 6% 30%, 6% 12%, 16% 12%);
+}
+.enc__platform--neighbor { left: 752px; top: 224px; width: 192px; height: 40px; }   /* centered at 848,240 */
+.enc__platform--player { left: 0; top: 412px; width: 240px; height: 48px; }          /* centered at 120,436 */
+
+/* Figures: feet placed by inline left/top (left = fx − 32·s, top = fy − 57·s). */
+.enc__neighbor, .enc__player { position: absolute; z-index: 1; line-height: 0; }
+.enc__neighbor { animation: enc-bob 1.2s steps(2) infinite; }
+@keyframes enc-bob { 50% { transform: translateY(-4px); } }
+
+/* Neighbor plate, 16,16 · 352×64. It may grow to the right under Bigger words rather than clip. */
+.enc__plate {
+  position: absolute; left: 16px; top: 16px; z-index: 3; min-width: 352px; max-width: 600px; width: max-content; height: 64px;
+  display: flex; align-items: center; gap: 10px; padding: 0 10px 0 4px;
+}
+.enc__back { flex: none; min-height: 48px; padding: 2px 8px; }
+.enc__back .icon { width: 20px; height: 20px; }
+.enc__who { display: grid; gap: 0; line-height: 1.1; white-space: nowrap; }
+.enc__name { font-size: var(--text-name); line-height: 1.05; }
+.enc__grade { font-size: var(--text-small); color: var(--ink-soft); font-weight: 700; line-height: 1.1; }
+.enc__subject { --chip: var(--subject); flex: none; margin-left: auto; white-space: nowrap; }
+.enc__subject .icon { width: 18px; height: 18px; }
+
+/* Field, 220,96 · 520×268. */
+.enc__field { position: absolute; left: 220px; top: 96px; width: 520px; height: 268px; z-index: 2; }
+
+/* Dialogue 16,388 · 472×136 and menu 504,388 · 440×136, above the player's lower half. */
+.enc__dialogue { position: absolute; left: 16px; top: 388px; width: 472px; height: 136px; z-index: 4; }
+.enc__menu { position: absolute; left: 504px; top: 388px; width: 440px; height: 136px; z-index: 4; }
+
+/* The item-get card. Shared with the music stage (Save band), so it lives here and is linked globally. */
+.item-get { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(31, 33, 71, .55); }
+.item-get__card { position: relative; width: 600px; max-width: calc(100% - 32px); display: grid; justify-items: center; gap: 10px; padding: 16px 24px 20px; text-align: center; }
+.item-get__lead { font-family: var(--font-pixel); font-size: var(--text-body); line-height: 1.1; }
+.item-get__name { line-height: 1.1; }
+.item-get__row { display: flex; align-items: flex-end; justify-content: center; gap: 24px; }
+.item-get__art { width: 264px; height: 188px; padding: 8px; display: grid; place-items: center; }
+.item-get__art > * { max-width: 100%; max-height: 100%; width: 100%; height: 100%; }
+/* SVG creations scale on their own. The box-and-text ones are drawn for the 64×40 stall easel, so the card
+   zooms that same drawing; signs and books get room to wrap so every word shows. */
+.item-get__art > span.creation { width: auto; height: auto; max-width: 64px; max-height: none; zoom: 3.5; }
+.item-get__art > span.world-sign, .item-get__art > span.world-book { max-width: 120px; zoom: 2; }
+.item-get__figure { line-height: 0; }
+.item-get__go { font-family: var(--font-read); }
+.item-get__spark { position: absolute; width: 12px; height: 12px; background: var(--lantern); box-shadow: 0 0 0 4px var(--ink); animation: item-get-spark 900ms steps(3) infinite; }
+.item-get__spark--a { left: 28px; top: 28px; }
+.item-get__spark--b { right: 36px; top: 64px; animation-delay: 300ms; }
+.item-get__spark--c { left: 56px; bottom: 80px; animation-delay: 600ms; }
+@keyframes item-get-spark { 0%, 100% { transform: scale(.5); opacity: 0; } 50% { transform: scale(1); opacity: 1; } }
+/* Calm motion: no sparkle at all. */
+.calm .item-get__spark { display: none; }
+@media (prefers-reduced-motion: reduce) { .item-get__spark { display: none; } }

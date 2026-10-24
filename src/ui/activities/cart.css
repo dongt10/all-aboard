@@ -1,0 +1,59 @@
+/* Taro's cart, inside the 520×268 field. */
+.cart { position: absolute; inset: 0; }
+.cart__badges { position: absolute; z-index: 2; left: 40px; top: 4px; width: 440px; display: flex; justify-content: space-between; }
+.cart__total { --chip: var(--math); min-width: 112px; justify-content: space-between; white-space: nowrap; font-size: var(--text-field); line-height: 1.2; }
+.cart__total-num { font-family: var(--font-pixel); font-size: var(--text-name); line-height: 1.2; }
+
+.cart__ground { position: absolute; left: 0; right: 0; bottom: 0; height: 32px; background: var(--path); border-top: 4px solid var(--ink); }
+
+.cart__move { position: absolute; left: 40px; top: 64px; width: 440px; height: 172px; }
+.cart__body { position: absolute; inset: 0; transform-origin: 50% 100%; transition: transform .25s steps(3); }
+
+.cart__bay {
+  position: absolute; top: 0; width: 216px; height: 120px;
+  background: var(--wood); border: 4px solid var(--ink); box-shadow: inset 0 -6px 0 rgba(31, 33, 71, .25);
+}
+.cart__bay[data-side="left"] { left: 0; }
+.cart__bay[data-side="right"] { right: 0; }
+.cart__load {
+  position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; border: 0; background: transparent;
+  display: flex; align-items: center; justify-content: center;
+}
+.cart__load:hover { background: rgba(255, 248, 230, .25); }
+.cart__load:focus-visible { outline-offset: -6px; }
+.cart__hint { padding: 2px 8px; background: var(--paper); border: 2px solid var(--ink); font-size: var(--text-small); font-weight: 700; }
+
+/* Crates stack from the bottom of the bay, four to a row. Only the crates take taps; the bay is below. */
+.cart__crates {
+  position: absolute; left: 6px; right: 6px; bottom: 6px; height: 100px; pointer-events: none;
+  display: flex; flex-wrap: wrap-reverse; align-content: flex-start; gap: 4px;
+}
+.cart__crate {
+  --crate: var(--lantern);
+  pointer-events: auto; width: 45px; height: 48px; padding: 0;
+  background: var(--crate); border: 4px solid var(--ink); box-shadow: inset 0 -5px 0 rgba(31, 33, 71, .22), inset 3px 3px 0 rgba(255, 255, 255, .45);
+  font-family: var(--font-pixel); font-size: var(--text-name); font-weight: 700; line-height: 1; color: var(--ink);
+}
+.cart__crate:hover { filter: brightness(1.08); }
+.cart__crate--w1 { --crate: var(--lantern); }
+.cart__crate--w2 { --crate: var(--science); }
+.cart__crate--w3 { --crate: var(--reading); }
+.cart__crate--w5 { --crate: var(--writing); }
+
+.cart__chassis { position: absolute; left: 12px; right: 12px; top: 120px; height: 16px; background: var(--wood); border: 4px solid var(--ink); }
+/* Pixel wheels: an octagon with a hub, no rounded corners. */
+.cart__wheel {
+  position: absolute; top: 132px; width: 40px; height: 40px; background: var(--ink);
+  clip-path: polygon(30% 0, 70% 0, 100% 30%, 100% 70%, 70% 100%, 30% 100%, 0 70%, 0 30%);
+}
+.cart__wheel::after { content: ''; position: absolute; inset: 12px; background: var(--paper-shade); }
+.cart__wheel--left { left: 56px; }
+.cart__wheel--right { right: 56px; }
+
+/* A balanced roll trundles off and back; a wobble shakes. Calm motion removes both (kit.css). */
+.cart--roll { animation: cart-roll 900ms steps(9) 1; }
+.cart--wobble { animation: cart-wobble 480ms steps(6) 1; }
+.cart--roll .cart__wheel { animation: cart-wheel 900ms steps(9) 1; }
+@keyframes cart-roll { 0%, 100% { transform: translateX(0); } 50% { transform: translateX(28px); } }
+@keyframes cart-wobble { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-6px); } 75% { transform: translateX(6px); } }
+@keyframes cart-wheel { to { transform: rotate(360deg); } }

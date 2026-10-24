@@ -1,0 +1,89 @@
+/* Hana's square: a 5×5 map (258×258) beside a four-tool rail, inside the 520×268 encounter field. */
+.square-field {
+  display: flex; gap: 10px; align-items: center;
+  width: 520px; height: 268px; box-sizing: border-box; padding: 5px 0;
+  font-family: var(--font-read); color: var(--ink);
+}
+
+/* The map: grass, a path band on row 3, quiet trees top-left, a stage top-right, an entrance bottom-left. */
+.square-map {
+  position: relative; flex: none; width: 258px; height: 258px; box-sizing: border-box;
+  border: 4px solid var(--ink); background: var(--grass);
+}
+.square-quiet {
+  position: absolute; left: 0; top: 0; width: 100px; height: 100px; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-end; padding-bottom: 4px;
+  background: var(--grass-dark); border-right: 3px dashed var(--paper); border-bottom: 3px dashed var(--paper);
+}
+.square-quiet__trees { display: flex; gap: 6px; color: var(--ink); opacity: .55; }
+.square-quiet__word {
+  font-size: var(--text-small); line-height: 1.05; text-align: center; color: var(--white);
+  text-shadow: 2px 2px 0 var(--ink);
+}
+.square-path {
+  position: absolute; left: 0; right: 0; top: 100px; height: 50px;
+  background: var(--path); border-top: 3px solid var(--wood); border-bottom: 3px solid var(--wood); box-sizing: border-box;
+}
+.square-stage { position: absolute; right: 4px; top: 4px; width: 42px; height: 42px; }
+.square-stage__roof { position: absolute; left: 0; right: 0; top: 0; height: 10px; background: var(--vermilion); }
+.square-stage__deck {
+  position: absolute; left: 4px; right: 4px; top: 10px; bottom: 0;
+  background: var(--wood); border-bottom: 6px solid var(--ink);
+}
+.square-entrance { position: absolute; left: 0; bottom: 6px; width: 50px; height: 38px; }
+.square-entrance span { position: absolute; top: 6px; bottom: 0; width: 6px; background: var(--vermilion); }
+.square-entrance span:nth-child(1) { left: 6px; }
+.square-entrance span:nth-child(2) { left: 34px; }
+.square-entrance span:nth-child(3) { left: 0; top: 0; bottom: auto; width: 46px; height: 6px; }
+
+/* Neighbors trying the square walk the path; a blocked path stops them in red. */
+.square-walkers {
+  position: absolute; left: 6px; right: 6px; top: 118px; height: 14px;
+  display: flex; justify-content: space-around; pointer-events: none;
+}
+.square-walkers[hidden] { display: none; }
+.square-walkers span { width: 14px; height: 14px; background: var(--letterbox); border: 2px solid var(--white); box-sizing: border-box; }
+.square-walkers--blocked span { background: var(--vermilion); }
+
+.square-grid { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(5, 50px); grid-template-rows: repeat(5, 50px); }
+.square-cell {
+  display: grid; place-items: center; width: 50px; height: 50px; padding: 0; margin: 0;
+  background: transparent; border: 1px dotted rgb(31 33 71 / .18); color: var(--ink); cursor: pointer;
+  transition: background-color .12s;
+}
+.square-cell:hover { background: rgb(255 255 255 / .25); }
+.square-cell:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; background: rgb(255 255 255 / .35); }
+.square-item { display: grid; place-items: center; width: 36px; height: 36px; border: 2px solid var(--ink); box-sizing: border-box; }
+.square-item--bench { background: var(--lantern); }
+.square-item--sign { background: var(--sky); }
+.square-item--quiet { background: var(--grass); color: var(--grass-dark); }
+.square-item--quiet .icon { color: var(--ink); }
+
+/* The tool rail: a radio group, one tool per row, each with a picture and a word. */
+.square-rail { display: flex; flex-direction: column; gap: 6px; flex: 1 1 auto; min-width: 0; height: 258px; }
+.square-tool {
+  display: flex; align-items: center; gap: 10px; flex: 1 1 0; min-height: 0; padding: 0 10px; margin: 0;
+  background: var(--paper); border: 3px solid var(--ink); color: var(--ink); cursor: pointer;
+  font-family: var(--font-read); font-size: var(--text-field); line-height: 1; text-align: left;
+  box-shadow: inset -3px -3px 0 var(--paper-shade);
+  transition: transform .1s;
+}
+.square-tool__pic {
+  flex: none; display: grid; place-items: center; width: 40px; height: 40px;
+  border: 2px solid var(--ink); box-sizing: border-box;
+}
+.square-tool--bench .square-tool__pic { background: var(--lantern); }
+.square-tool--sign .square-tool__pic { background: var(--sky); }
+.square-tool--quiet .square-tool__pic { background: var(--grass); }
+.square-tool--remove .square-tool__pic { background: var(--paper-shade); }
+.square-tool__word { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+.square-tool[aria-checked="true"] { background: var(--ink); color: var(--white); box-shadow: none; transform: translateX(-4px); }
+.square-tool[aria-checked="true"] .square-tool__pic { color: var(--ink); border-color: var(--white); }
+.square-tool[aria-checked="true"] .square-tool__word::after { content: ' ✓'; }
+.square-tool:focus-visible { outline: 3px solid var(--lantern); outline-offset: 2px; }
+
+/* Calm motion: nothing slides or fades. */
+.calm .square-field *, .calm .square-field *::before, .calm .square-field *::after { transition: none !important; animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .square-field *, .square-field *::before, .square-field *::after { transition: none !important; animation: none !important; }
+}

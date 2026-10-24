@@ -1,0 +1,46 @@
+/* In-stage windows: Comfort, Paused, Grade, Matsuri Guide, Help. */
+.win--grade { width: 880px; }
+.win--guide { width: 912px; height: 100%; }
+.win--help { width: 720px; }
+
+.comfort-window { display: grid; gap: 12px; }
+.comfort-window .px-toggle { justify-content: space-between; }
+
+.pause-window { display: grid; justify-items: center; gap: 12px; text-align: center; }
+.pause-window__nori { display: block; }
+
+.grade-window .grade-tiles { padding: 4px; }
+
+/* Matsuri Guide: tiles on the left, the page on the right. */
+.guide { display: grid; grid-template-columns: 320px 1fr; gap: 16px; height: 100%; font-size: var(--text-body); }
+.win--guide .win__body { flex: 1; overflow: hidden; }
+.guide__count { margin-left: auto; }
+.guide__tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; align-content: start; padding: 4px; overflow: auto; }
+.guide-tile { justify-content: flex-start; gap: 4px; height: 70px; padding: 0 6px 0 10px; }
+.guide-tile .figure { flex: none; margin: 0 -10px; }   /* the frame's empty sides, so "Cricket" fits at Bigger words */
+.guide-tile::after { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 8px; background: var(--subject, var(--paper-shade)); }
+.guide-tile__name { font-family: var(--font-pixel); font-size: var(--text-small); }
+.guide-tile__stamp { position: absolute; top: 2px; right: 2px; color: var(--vermilion); }
+.guide-tile[aria-pressed="true"] { --fill: var(--lantern); --light: #ffe08f; --shade: #e0a92f; }
+.guide-page { display: flex; flex-direction: column; gap: 8px; min-width: 0; padding: 4px; overflow: auto; }
+.guide-page__who { display: flex; align-items: flex-end; gap: 12px; }
+.guide-page__meta { font-size: var(--text-small); color: var(--ink-soft); }
+/* What the child made, framed like its stall easel beside the name, so an earned page is no taller. */
+.guide-creation { flex: none; margin-left: auto; width: 128px; height: 88px; box-sizing: border-box; padding: 6px; display: grid; place-items: center; background: var(--paper); border: 4px solid var(--ink); }
+.guide-creation > svg { display: block; width: 100%; height: 100%; }
+.guide-creation > span.creation { zoom: 1.6; }
+.guide-page__bio { font-size: var(--text-command); }
+.guide-stamp { display: flex; align-items: center; gap: 12px; font-size: var(--text-command); }
+.guide-stamp__seal { display: grid; place-items: center; flex: none; width: 56px; height: 56px; border: 4px dashed var(--ink-soft); }
+.guide-stamp--earned .guide-stamp__seal { border: 4px solid var(--vermilion); outline: 2px solid var(--vermilion); outline-offset: -10px; color: var(--vermilion); transform: rotate(-6deg); }
+.guide-page__actions { display: flex; gap: 12px; margin-top: auto; }
+
+/* Help: numbered steps, each with Hear. */
+.help-steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.help-steps li { display: flex; align-items: center; gap: 12px; }
+.help-steps p { flex: 1; }
+.help-steps__num { display: grid; place-items: center; flex: none; width: 40px; height: 40px; background: var(--ink); color: var(--paper); font-family: var(--font-pixel); font-size: var(--text-name); }
+
+/* The built-in card for scenes that aren't built yet. */
+.missing-scene { display: grid; place-items: center; background: var(--sky); }
+.missing-scene__card { display: grid; justify-items: center; gap: 16px; max-width: 560px; text-align: center; }

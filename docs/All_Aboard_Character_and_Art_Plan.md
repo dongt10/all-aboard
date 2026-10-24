@@ -186,7 +186,23 @@ The backend supplies the chapter, grade, activity content, dialogue, available s
 
 ## Asset guide
 
-These are **proposed production sizes**, not measurements taken from the sprite reference.
+### Sprite sheets in the game (current)
+
+Every character is drawn on the team’s **64 × 64 chibi canvas**, the one the boy and girl designs use, and ships as one sheet.
+
+| Asset | Size | Rules |
+| :--- | :--- | :--- |
+| **Frame** | **64 × 64 px** | Transparent; the body base sits at cols 14–49, with the feet on **row 56** in every frame. |
+| **Sheet** | **256 × 256 px** | Four columns × four rows of frames. |
+| **Rows** | Front, left, right, back | Characters without a view leave that row empty; the game falls back to the front. |
+| **Columns** | Step A, stand, step B, joy | Joy is the happy face on the front row only. Non-walkers fill only the stand column. |
+| **Pixels** | Fully opaque or fully clear | No soft edges. Silhouette edges are dark outlines. |
+
+Sheets live in `assets/figures/` (`player-boy.png`, `player-girl.png`, then one per neighbor). To change a character, edit its PNG in a pixel editor and keep the layout. `npm test` checks the size, the feet row, the outlines, and that no two characters share a silhouette. The source layers for the boy and girl are in `docs/art/source/`.
+
+### Original proposal
+
+These were the **proposed production sizes** before the team’s 64 × 64 designs arrived.
 
 | Asset | Size | Export notes |
 | :--- | :--- | :--- |
