@@ -64,6 +64,8 @@ export function createApp(root, { scenes = {}, storage } = {}) {
   const windowOpen = () => Boolean(stage.querySelector('.win-backdrop'));
   function onKey(event) {
     if (event.defaultPrevented) return;
+    // A held A or B acts once: the browser would click a focused button on every repeat.
+    if (event.repeat && ['a', 'b'].includes(keyIntent(event))) { event.preventDefault(); return; }
     const route = routeIntent(event);
     if (!route || route === 'native') return;
     if (route === 'click-target') { event.preventDefault(); event.target.click(); return; }
@@ -71,6 +73,8 @@ export function createApp(root, { scenes = {}, storage } = {}) {
     if (manager.scene?.handleIntent?.(keyIntent(event))) event.preventDefault();
   }
   document.addEventListener('keydown', onKey);
+  const onVisibility = () => { if (document.hidden) { stopSpeaking(); manager.pause(); } };
+  document.addEventListener('visibilitychange', onVisibility);
 
   const ctx = {
     stage,
@@ -86,7 +90,11 @@ export function createApp(root, { scenes = {}, storage } = {}) {
     },
     go: (name, params) => manager.go(name, params),
     // Rebuild the current scene, e.g. after the grade changes underneath it.
-    reload: () => manager.go(manager.current ?? 'title', lastParams),
+    // One-shot params (a celebration, a Find target) don't replay.
+    reload: () => {
+      const { celebrate, guide, ...keep } = lastParams ?? {};
+      return manager.go(manager.current ?? 'title', lastParams && keep);
+    },
     open: {
       comfort: () => openComfortWindow(ctx),
       pause: () => openPauseWindow(ctx),
@@ -103,6 +111,7 @@ export function createApp(root, { scenes = {}, storage } = {}) {
     },
     destroy() {
       document.removeEventListener('keydown', onKey);
+      document.removeEventListener('visibilitychange', onVisibility);
       stopSpeaking();
       manager.scene?.destroy();
       live.remove();

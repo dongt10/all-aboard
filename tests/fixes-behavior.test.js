@@ -275,3 +275,61 @@ test('windows: no window opens during a scene transition', () => {
   assert.ok(!ctx.stage.querySelector('.win-backdrop'), 'no window');
 });
 
+// ---- App-level: B3 visibility, B6 held keys, B7 reload ----
+function fakeApp() {
+  doc.body.children = []; doc._active = null; doc.listeners = {};
+  const host = doc.createElement('div');
+  doc.body.append(host);
+  const log = { params: [], pauses: 0 };
+  const scene = (name) => (ctx, params) => ({
+    mount() { log.params.push([name, params]); const b = doc.createElement('button'); b.className = 'cmd'; ctx.stage.append(b); this.button = b; b.focus(); },
+    pause() { log.pauses++; },
+    destroy() { this.button?.remove(); },
+  });
+  const app = createApp(host, { scenes: { village: scene('village'), title: scene('title') }, storage: null });
+  return { app, log };
+}
+
+test('app: hiding the tab stops speech and pauses the scene, until destroy', async () => {
+  const { app, log } = fakeApp();
+  await app.go('title');
+  const before = speech.cancels;
+  doc.hidden = true;
+  doc.dispatchEvent(new Event('visibilitychange'));
+  assert.ok(speech.cancels > before, 'speech stopped');
+  assert.equal(log.pauses, 1, 'scene paused');
+  app.destroy();
+  doc.dispatchEvent(new Event('visibilitychange'));
+  assert.equal(log.pauses, 1, 'listener removed on destroy');
+  doc.hidden = false;
+});
+
+test('app: a held Enter or Space on a button acts once', async () => {
+  const { app } = fakeApp();
+  await app.go('title');
+  const button = app.stage.querySelector('.cmd');
+  let clicks = 0;
+  button.addEventListener('click', () => clicks++);
+  const first = new Event('keydown', { key: 'Enter' });
+  button.dispatchEvent(first);
+  assert.equal(first.defaultPrevented, false, 'the first press is left to the browser');
+  for (const key of ['Enter', ' ']) {
+    const held = new Event('keydown', { key, repeat: true });
+    button.dispatchEvent(held);
+    assert.equal(held.defaultPrevented, true, `a repeated ${JSON.stringify(key)} is swallowed`);
+  }
+  const area = doc.createElement('textarea');
+  app.stage.append(area);
+  const typing = new Event('keydown', { key: 'Enter', repeat: true });
+  area.dispatchEvent(typing);
+  assert.equal(typing.defaultPrevented, false, 'text fields keep held keys');
+  app.destroy();
+});
+
+test('app: reload keeps only focus, not one-shot params', async () => {
+  const { app, log } = fakeApp();
+  await app.go('village', { focus: 'math', celebrate: 'math', guide: 'art' });
+  await app.reload();
+  assert.deepEqual(log.params.at(-1), ['village', { focus: 'math' }]);
+  app.destroy();
+});
