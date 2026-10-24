@@ -1,0 +1,14 @@
+{
+  "name": "all-aboard-demo",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A rough draft of the All Aboard summer festival learning game",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "test": "node --test",
+    "build": "node scripts/build.js"
+  },
+  "engines": { "node": ">=20" }
+}
