@@ -247,3 +247,16 @@ test('encounter: down from the field moves focus to the menu', () => {
   scene.destroy();
 });
 
+// ---- B4: hush never drops focus ----
+test('village: hiding the dialogue while it holds focus moves focus to the village', () => {
+  const ctx = fakeCtx();
+  const scene = createVillageScene(ctx, { celebrate: 'math' });
+  scene.mount();
+  const hear = ctx.stage.querySelector('.village-dialogue').querySelector('.dlg__tab');
+  hear.focus();
+  assert.ok(doc.activeElement === hear);
+  scene.handleIntent('up');
+  assert.ok(doc.activeElement === ctx.stage.querySelector('.village'), 'focus is on the village, not <body>');
+  scene.destroy();
+});
+

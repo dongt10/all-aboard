@@ -64,7 +64,10 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   }
   function hush() {
     const host = root?.querySelector('.village-dialogue');
-    if (host && !host.hidden) host.hidden = true;
+    if (!host || host.hidden) return;
+    const held = host.contains(document.activeElement);
+    host.hidden = true;
+    if (held) root.focus({ preventScroll: true });   // focus never falls back to <body>
   }
 
   /* ---------- Markup ---------- */
