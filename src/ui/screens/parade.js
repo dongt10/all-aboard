@@ -7,7 +7,7 @@ import { creationMarkup } from '../creations.js';
 import { createCommandMenu } from '../menu.js';
 import { createDialogue } from '../dialogue.js';
 import { onceAtATime } from '../scenes.js';
-import { paradeLineup, paradeCommands, paradeStatus } from '../parade-lineup.js';
+import { paradeLineup, paradeCommands, paradeStatus, paradeBackdropMarkup } from '../parade-lineup.js';
 
 const STAGE_WIDTH = 960;
 const SPACING = 112;          // one marcher per slot; eight slots fill the stage for the still line-up
@@ -80,8 +80,7 @@ export function createParadeScene(ctx) {
       .map(c => `${c.name} with the ${c.reward.label.replace(/^Your /, '').toLowerCase()}`);
     const label = names.length ? `You lead the parade. Behind you: ${names.join(', ')}.` : 'You lead the parade.';
     return `<div class="parade-street" role="img" aria-label="${label}">
-        <div class="parade-sky"></div><div class="parade-glow"></div><div class="parade-town"></div><div class="parade-road"></div>
-        <span class="parade-string"></span>${lanterns}
+        ${paradeBackdropMarkup()}${lanterns}
         <div class="parade-line is-marching" style="--line-w:${width}px;--line-x:${(STAGE_WIDTH - width) / 2}px;width:${width}px">${player}${neighbors}</div>
       </div>`;
   }

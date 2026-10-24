@@ -32,3 +32,47 @@ export function paradeStatus(phase, reason, band) {
     .replace('Raise band volume to listen.', 'Visit Kiko to raise the band volume.')
     .replace(' Try a new sound!', '');
 }
+
+// The sunset street behind the marchers (960×388): sky, warm glow with a low pixel sun, a row of lit
+// houses on the indigo band, the road, and triangle bunting on the lantern string. Flat and static.
+const HOUSES = [   // [left, width, wall height, roof color]
+  [8, 88, 48, 'vermilion'], [112, 72, 56, 'wood'], [196, 104, 44, 'ink'], [316, 80, 60, 'vermilion'],
+  [412, 96, 48, 'wood'], [524, 72, 40, 'ink'], [612, 88, 52, 'vermilion'], [752, 96, 44, 'wood'], [864, 88, 56, 'ink'],
+];
+const FLAG_COLORS = ['math', 'science', 'art', 'reading', 'writing', 'community', 'music'];
+const rect = (x, y, w, h, attrs = '') => `<rect ${attrs}${attrs && ' '}x="${x}" y="${y}" width="${w}" height="${h}"/>`;
+
+// A pixel disc built from 4px rows, so it stays crisp at any stage scale.
+function sunRows(cx, cy, r) {
+  const rows = [];
+  for (let y = -r; y < r; y += 4) {
+    const half = Math.floor(Math.sqrt(r * r - (y + 2) ** 2) / 4) * 4;
+    if (half > 0) rows.push(rect(cx - half, cy + y, half * 2, 4));
+  }
+  return rows.join('');
+}
+
+function houseMarkup([x, w, h, roof], i) {
+  const base = 120, top = base - h;
+  const parts = [rect(x, top, w, h, `style="fill:var(${i % 2 ? '--letterbox' : '--ink-soft'})"`)];
+  parts.push(rect(x - 6, top - 8, w + 12, 8, `style="fill:var(--${roof})"`));   // eave
+  for (let inset = 8, y = top - 14; w - inset * 2 >= 16; inset += 8, y -= 6) parts.push(rect(x + inset, y, w - inset * 2, 6, `style="fill:var(--${roof})"`));
+  const door = x + Math.floor(w / 2 / 4) * 4 - 8;
+  parts.push(rect(door, base - 24, 16, 24, 'style="fill:var(--ink)"'));
+  for (const wx of [x + 10, x + w - 26]) parts.push(rect(wx, top + 10, 16, 14, 'class="parade-window"'));
+  return `<g class="parade-house">${parts.join('')}</g>`;
+}
+
+export function paradeBackdropMarkup() {
+  const flags = Array.from({ length: 18 }, (_, i) => {
+    const x = 52 + i * 52;
+    return `<polygon class="parade-flag parade-flag--${i}" points="${x},0 ${x + 16},0 ${x + 8},14" style="fill:var(--${FLAG_COLORS[i % FLAG_COLORS.length]})"/>`;
+  }).join('');
+  return `<div class="parade-sky"></div><div class="parade-glow"></div>
+    <svg class="parade-sun" viewBox="0 0 960 300" width="960" height="300" shape-rendering="crispEdges" aria-hidden="true">${sunRows(720, 214, 52)}</svg>
+    <div class="parade-town"></div>
+    <svg class="parade-houses" viewBox="0 0 960 120" width="960" height="120" shape-rendering="crispEdges" aria-hidden="true">${HOUSES.map(houseMarkup).join('')}</svg>
+    <div class="parade-road"></div>
+    <span class="parade-string"></span>
+    <svg class="parade-flags" viewBox="0 0 960 16" width="960" height="16" shape-rendering="crispEdges" aria-hidden="true">${flags}</svg>`;
+}
