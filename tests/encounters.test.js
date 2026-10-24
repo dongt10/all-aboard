@@ -10,50 +10,11 @@ test('reading discoveries are unique and do not accept unknown objects',()=>asse
 test('writing persists personal text and requires a visible message',()=>{const s=normalizeEncounterSnapshot('writing',{kind:'writing',text:'Welcome, friends!'});assert.equal(s.text,'Welcome, friends!');assert.equal(encounterReady(s),true);assert.equal(encounterReady({...s,text:'  '}),false);});
 test('a snapshot for another character cannot leak into a new encounter',()=>assert.deepEqual(normalizeEncounterSnapshot('math',{kind:'art',left:[5]}).left,[]));
 
-test('consuming a reading object advances keyboard focus locally, then to publishing',async()=>{
- const {encounterFocusTarget}=await import('../src/encounters.js');
- const key={dataset:{action:'find',object:'key'},disabled:true};
- const umbrella={dataset:{action:'find',object:'umbrella'},disabled:false};
- const publish={dataset:{action:'publish'},disabled:false};
- assert.equal(encounterFocusTarget({action:'find',object:'key'},[key,umbrella,publish]),umbrella);
- assert.equal(encounterFocusTarget({action:'find',object:'key'},[key,umbrella,publish],true),publish);
-});
-test('removing the last crate returns focus to its load control',async()=>{
- const {encounterFocusTarget}=await import('../src/encounters.js');
- const load={dataset:{action:'load-left'},disabled:false};
- assert.equal(encounterFocusTarget({action:'remove-left',index:'0'},[load]),load);
- const crate={dataset:{action:'remove-left',index:'0'},disabled:false};
- assert.equal(encounterFocusTarget({action:'remove-left',index:'2'},[crate,load]),crate);
-});
-
-test('a successful trial transfers keyboard focus to the new primary publish action',async()=>{
- const {encounterFocusTarget}=await import('../src/encounters.js');
- const publish={dataset:{action:'publish'},disabled:false};
- for(const action of ['roll','time','routes']) assert.equal(encounterFocusTarget({action},[publish],true),publish);
-});
-test('closing a palette returns keyboard focus to its named chooser',async()=>{
- const {encounterFocusTarget}=await import('../src/encounters.js');
- const shape={dataset:{action:'pick-shape'},disabled:false};
- const color={dataset:{action:'pick-color'},disabled:false};
- assert.equal(encounterFocusTarget({action:'shape',shape:'leaf'},[shape,color]),shape);
- assert.equal(encounterFocusTarget({action:'color',color:'#559fc7'},[shape,color]),color);
-});
 test('every saved art color has a distinct readable name',async()=>{
  const {ENCOUNTER_COLORS,ENCOUNTER_COLOR_NAMES}=await import('../src/encounters.js');
  const names=ENCOUNTER_COLORS.map(color=>ENCOUNTER_COLOR_NAMES[color]);
  assert.equal(names.every(name=>typeof name==='string'&&name.length>0),true);
  assert.equal(new Set(names).size,ENCOUNTER_COLORS.length);
-});
-
-test('rerender keeps a visible control at the saved scroll position',async()=>{
- const {encounterScrollTop}=await import('../src/encounters.js');
- assert.equal(encounterScrollTop(280,{top:100,bottom:700},{top:420,bottom:468}),280);
-});
-test('palette and completion focus reveal only the nearest missing distance',async()=>{
- const {encounterScrollTop}=await import('../src/encounters.js');
- assert.equal(encounterScrollTop(280,{top:100,bottom:700},{top:720,bottom:768}),356);
- assert.equal(encounterScrollTop(280,{top:100,bottom:700},{top:60,bottom:108}),232);
- assert.equal(encounterScrollTop(0,{top:100,bottom:700},{top:60,bottom:108}),0);
 });
 
 test('old out-of-order reading saves keep discoveries and always select a missing item',async()=>{
@@ -87,14 +48,6 @@ test('reading word mode and elementary passages have direct matching questions',
  assert.match(readingStep([],0).question,/KEY/);
  assert.match(readingStep(['key'],5).passage,/umbrella/);
  assert.match(readingStep(['key'],5).question,/stay dry/);
-});
-test('reading pause focuses Next before another object and next focuses the passage',async()=>{
- const {encounterFocusTarget}=await import('../src/encounters.js');
- const next={dataset:{action:'reading-next'},disabled:false};
- const picture={dataset:{action:'find',object:'umbrella'},disabled:false};
- const passage={dataset:{action:'reading-passage'},disabled:false};
- assert.equal(encounterFocusTarget({action:'find',object:'key'},[next,picture]),next);
- assert.equal(encounterFocusTarget({action:'reading-next'},[picture,passage]),passage);
 });
 
 test('typing from an empty writing draft enables removal as well as publishing',async()=>{

@@ -8,13 +8,3 @@ export const CHARACTERS = [
   { id: 'community', name: 'Hana', species: 'deer', subject: 'Community', location: 'Map kiosk', color: '#789b58', description: 'A friendly guide who helps everyone find their place.', greeting: 'Welcome, neighbor. Let’s make the festival welcoming.', position: { x: 20, y: 18 }, reward: { label: 'Welcome map', icon: '🗺️' } },
   { id: 'music', name: 'Kiko', species: 'sparrow', subject: 'Music', location: 'Music stage', color: '#c6a044', description: 'An enthusiastic musician exploring visible rhythm patterns.', greeting: 'We can explore music with our eyes, too!', position: { x: 77, y: 76 }, reward: { label: 'Your festival band', icon: '🎵' } },
 ];
-
-export const SUBJECT_UI = {
-  math: { color: '#f6c85f', icon: '+' },
-  science: { color: '#79cfc2', icon: '◒' },
-  art: { color: '#f397a8', icon: '✿' },
-  reading: { color: '#91c5f5', icon: '▤' },
-  writing: { color: '#c3a6e8', icon: '✎' },
-  community: { color: '#a6ce82', icon: '♧' },
-  music: { color: '#e4a2cf', icon: '♫' },
-};

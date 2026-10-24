@@ -21,7 +21,7 @@ export function paradeCommands({ hasBand = false, playing = false } = {}) {
 }
 
 // The music stage's status lines, reworded for the parade, which has no volume or friend controls
-// (the same replacements as the old parade in src/app.js).
+// (the same replacements the original parade screen used).
 export function paradeStatus(phase, reason, band) {
   if (reason === 'unavailable') return 'Sound could not start. The parade is still yours.';
   if (phase === 'starting') return 'Starting your band…';

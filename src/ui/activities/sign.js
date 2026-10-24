@@ -5,7 +5,7 @@ const KIND = 'writing';
 const MAX = 120;
 const READY_LINE = 'Your sign is ready. Add words or put it up.';
 
-// Verbatim from src/encounters.js writingWords().
+// Verbatim from the original writing encounter's word lists.
 export function signWords(grade) {
   return grade === 0 ? ['Hello', 'friend!', 'Welcome', '♡']
     : grade < 3 ? ['Welcome', 'to', 'our', 'festival!', 'Come', 'play', 'with', 'us.']
