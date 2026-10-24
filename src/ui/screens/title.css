@@ -1,5 +1,5 @@
 /* Title: logo, who you are, your grade, Start, and the comfort toggles. Logical stage px. */
-.scene { position: absolute; inset: 0; }
+.scene { position: absolute; inset: 0; isolation: isolate; }
 .title { background: var(--sky); }
 .title__bunting { position: absolute; left: 0; right: 0; top: 0; height: 26px; display: flex; justify-content: space-around; border-top: 4px solid var(--ink); }
 .title__bunting i { width: 18px; height: 20px; background: var(--vermilion); border: 3px solid var(--ink); border-top: 0; }

@@ -1,6 +1,6 @@
 /* Parade: a sunset street in flat pixel bands (vermilion → lantern → indigo), lantern bunting, and a
    marching line that crosses the 960×540 stage left to right in about 12 s. Calm motion: a still line-up. */
-.parade { position: absolute; inset: 0; overflow: hidden; background: var(--letterbox); }
+.parade { position: absolute; inset: 0; isolation: isolate; overflow: hidden; background: var(--letterbox); }
 .parade-street { position: absolute; left: 0; top: 0; width: 960px; height: 388px; overflow: hidden; }
 .parade-sky, .parade-glow, .parade-town, .parade-road { position: absolute; left: 0; width: 960px; }
 .parade-sky { top: 0; height: 140px; background: var(--vermilion); }

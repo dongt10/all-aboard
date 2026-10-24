@@ -1,5 +1,5 @@
 /* Kiko's Sound Garden: everything is absolutely positioned inside the 960×540 stage. */
-.music { position: absolute; inset: 0; overflow: hidden; background: var(--sky); }
+.music { position: absolute; inset: 0; isolation: isolate; overflow: hidden; background: var(--sky); }
 
 /* Backdrop: flat sky, stepped hills, drifting clouds and pixel flowers. */
 .music-sky, .music-sky i { position: absolute; display: block; }

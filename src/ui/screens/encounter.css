@@ -1,5 +1,5 @@
 /* The encounter: every region is absolutely placed on the 960×540 stage (spec "Encounter" table). */
-.enc { position: absolute; inset: 0; overflow: hidden; }
+.enc { position: absolute; inset: 0; isolation: isolate; overflow: hidden; }
 .enc__backdrop { position: absolute; inset: 0; background: linear-gradient(var(--sky) 0 216px, var(--grass) 216px); }
 .enc__backdrop::after { content: ''; position: absolute; left: 0; right: 0; top: 216px; height: 4px; background: var(--grass-dark); }
 
