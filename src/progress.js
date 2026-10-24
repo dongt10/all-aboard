@@ -1,67 +1,69 @@
 import { CHARACTERS } from './data.js';
 
-const STORAGE_KEY = 'all-aboard-demo-v1';
-const SUBJECT_IDS = new Set(CHARACTERS.map(character => character.id));
-const own = (object, key) => Object.hasOwn(object, key);
-const objectLike = value => value !== null && typeof value === 'object' && !Array.isArray(value);
-const plainText = (value, limit = 240) => typeof value === 'string' && value.trim().length > 0
-  && value.length <= limit && !/[<>\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(value);
+export const STORAGE_KEY = 'all-aboard-demo-v2';
+const LEGACY_KEY = 'all-aboard-demo-v1';
+const IDS = new Set(CHARACTERS.map(character => character.id));
+const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
+const finite = (value, min, max, fallback = min) => Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+const shortText = (value, max = 160) => typeof value === 'string' ? value.replace(/[<>\u0000-\u001f]/g, '').slice(0, max) : '';
+const artColors = ['#e96163', '#f4bf4f', '#6dbea0', '#559fc7', '#9d7fbd', '#fff1cf'];
+const safeColor = value => artColors.includes(value) ? value : '#fff1cf';
+const scopes = ['chapter-0', ...[1, 2, 3, 4, 5].map(grade => `chapter-1-grade-${grade}`)];
 
 export function createState() {
-  return {
-    version: 1,
-    hasStarted: false,
-    chapter: 0,
-    grade: 1,
-    settings: { largeText: false, reducedMotion: true },
-    progress: {},
-  };
+  return { version: 2, hasStarted: false, chapter: 0, grade: 1, settings: { largeText: false, reducedMotion: false }, progress: {}, drafts: {} };
 }
 
 export function scopeKey(chapter, grade) {
   if (chapter === 0) return 'chapter-0';
-  if (chapter === 1 && Number.isInteger(grade) && grade >= 1 && grade <= 5) {
-    return `chapter-1-grade-${grade}`;
+  if (chapter === 1 && Number.isInteger(grade) && grade >= 1 && grade <= 5) return `chapter-1-grade-${grade}`;
+  throw new RangeError('Choose Kindergarten or an elementary grade from 1 to 5.');
+}
+
+// Saved creations contain only the small set of fields each scene understands.
+export function cleanCreation(subjectId, input) {
+  if (!IDS.has(subjectId) || !isObject(input) || input.kind !== subjectId) return null;
+  const base = { kind: subjectId, chapter: input.chapter === 1 ? 1 : 0, grade: input.chapter === 1 ? Math.round(finite(input.grade, 1, 5, 1)) : 0 };
+  if (subjectId === 'math') {
+    const cargo = values => Array.isArray(values) ? values.filter(value => [1, 2, 3, 5].includes(value)).slice(0, 8) : [];
+    return { ...base, left: cargo(input.left), right: cargo(input.right), rolled: input.rolled === true };
   }
-  throw new RangeError('Use chapter 0 or chapter 1 with a grade from 1 to 5.');
+  if (subjectId === 'science') return { ...base, canopy: ['left', 'right', 'none'].includes(input.canopy) ? input.canopy : 'none', time: finite(input.time, 0, 20, 0) };
+  if (subjectId === 'art') return { ...base, background: safeColor(input.background), stamps: (Array.isArray(input.stamps) ? input.stamps : []).filter(stamp => isObject(stamp) && ['star', 'flower', 'leaf', 'circle'].includes(stamp.shape) && artColors.includes(stamp.color)).slice(0, 30).map(stamp => ({ shape: shortText(stamp.shape, 24), color: safeColor(stamp.color), x: finite(stamp.x, 5, 95), y: finite(stamp.y, 5, 95), rotation: finite(stamp.rotation, 0, 359) })) };
+  if (subjectId === 'reading') return { ...base, found: ['key', 'umbrella', 'book'].filter(value => Array.isArray(input.found) && input.found.includes(value)) };
+  if (subjectId === 'writing') return { ...base, text: typeof input.text === 'string' ? input.text.slice(0, 120) : '' };
+  if (subjectId === 'community') return { ...base, placements: (Array.isArray(input.placements) ? input.placements : []).filter(item => isObject(item) && ['bench', 'sign', 'quiet'].includes(item.item)).slice(0, 12).map(item => ({ item: item.item, x: finite(item.x, 10, 90), y: finite(item.y, 10, 90) })), tried: input.tried === true };
+  const trackIds = ['bass', 'voice', 'melody', 'percussion'];
+  return { ...base, tempo: 90, masterVolume: finite(input.masterVolume, 0, 1, 0.45), tracks: trackIds.map(id => {
+    const track = Array.isArray(input.tracks) ? input.tracks.find(item => isObject(item) && item.id === id) : null;
+    return { id, enabled: track?.enabled === true, pattern: track?.pattern === 1 ? 1 : 0, notes: Array.from({ length: 8 }, (_, index) => { const note = track?.notes?.[index]; return Number.isInteger(note) && note >= 0 && note <= 4 ? note : null; }), volume: finite(track?.volume, 0, 1, 0.65) };
+  }) };
 }
 
-function cleanRecord(record) {
-  if (!objectLike(record) || !plainText(record.activityId, 100)
-    || !objectLike(record.reward) || !plainText(record.reward.label)
-    || !plainText(record.reward.icon, 32) || typeof record.completedAt !== 'string'
-    || !Number.isFinite(Date.parse(record.completedAt))) return null;
-  return {
-    activityId: record.activityId,
-    reward: { label: record.reward.label, icon: record.reward.icon },
-    creation: plainText(record.creation) ? record.creation : null,
-    completedAt: new Date(record.completedAt).toISOString(),
-  };
+function cleanRecord(id, record) {
+  if (!isObject(record) || typeof record.completedAt !== 'string' || !Number.isFinite(Date.parse(record.completedAt))) return null;
+  const character = CHARACTERS.find(item => item.id === id);
+  return { activityId: shortText(record.activityId, 100) || `${id}-festival`, reward: { ...character.reward }, creation: cleanCreation(id, record.creation), completedAt: new Date(record.completedAt).toISOString() };
 }
 
-// Copy only recognized fields. Unknown scopes and prototype property names never enter state.
-function cleanState(input) {
+export function normalizeState(input) {
   const state = createState();
-  if (!objectLike(input) || input.version !== 1) return state;
-  if (typeof input.hasStarted === 'boolean') state.hasStarted = input.hasStarted;
-  if (input.chapter === 0 || input.chapter === 1) state.chapter = input.chapter;
-  if (Number.isInteger(input.grade) && input.grade >= 1 && input.grade <= 5) state.grade = input.grade;
-  if (objectLike(input.settings)) {
-    for (const key of ['largeText', 'reducedMotion']) {
-      if (typeof input.settings[key] === 'boolean') state.settings[key] = input.settings[key];
-    }
-  }
-  if (!objectLike(input.progress)) return state;
-  const scopes = ['chapter-0', ...[1, 2, 3, 4, 5].map(grade => scopeKey(1, grade))];
+  if (!isObject(input) || ![1, 2].includes(input.version)) return state;
+  state.hasStarted = input.hasStarted === true;
+  state.chapter = input.chapter === 1 ? 1 : 0;
+  state.grade = Number.isInteger(input.grade) && input.grade >= 1 && input.grade <= 5 ? input.grade : 1;
+  for (const key of Object.keys(state.settings)) if (typeof input.settings?.[key] === 'boolean') state.settings[key] = input.settings[key];
   for (const scope of scopes) {
-    if (!own(input.progress, scope) || !objectLike(input.progress[scope])) continue;
-    const records = {};
-    for (const subjectId of SUBJECT_IDS) {
-      if (!own(input.progress[scope], subjectId)) continue;
-      const record = cleanRecord(input.progress[scope][subjectId]);
-      if (record) records[subjectId] = record;
+    for (const id of IDS) {
+      if (isObject(input.progress?.[scope]) && Object.hasOwn(input.progress[scope], id)) {
+        const record = cleanRecord(id, input.progress[scope][id]);
+        if (record) (state.progress[scope] ??= {})[id] = record;
+      }
+      if (isObject(input.drafts?.[scope]) && Object.hasOwn(input.drafts[scope], id)) {
+        const snapshot = cleanCreation(id, input.drafts[scope][id]);
+        if (snapshot) (state.drafts[scope] ??= {})[id] = snapshot;
+      }
     }
-    if (Object.keys(records).length) state.progress[scope] = records;
   }
   return state;
 }
@@ -70,57 +72,49 @@ export function loadState(storage) {
   try {
     const target = storage === undefined ? globalThis.localStorage : storage;
     if (!target) return createState();
-    const saved = target.getItem(STORAGE_KEY);
-    return saved ? cleanState(JSON.parse(saved)) : createState();
-  } catch {
-    return createState();
-  }
+    const current = target.getItem(STORAGE_KEY);
+    if (current) { try { const parsed = JSON.parse(current); if (parsed?.version === 2) return normalizeState(parsed); } catch {} }
+    const legacy = target.getItem(LEGACY_KEY);
+    return legacy ? normalizeState(JSON.parse(legacy)) : createState();
+  } catch { return createState(); }
 }
 
 export function saveState(state, storage) {
   try {
     const target = storage === undefined ? globalThis.localStorage : storage;
     if (!target) return false;
-    target.setItem(STORAGE_KEY, JSON.stringify(cleanState(state)));
+    target.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state)));
     return true;
-  } catch {
-    return false;
-  }
+  } catch { return false; }
 }
 
-export function completeActivity(state, activity, creation = null) {
-  const updated = cleanState(state);
-  if (!objectLike(activity) || !SUBJECT_IDS.has(activity.subjectId)) return updated;
-  let scope;
-  try {
-    scope = scopeKey(activity.chapter, activity.grade);
-  } catch {
-    return updated;
-  }
-  const record = cleanRecord({
-    activityId: activity.id,
-    reward: activity.reward,
-    creation,
-    completedAt: new Date().toISOString(),
-  });
-  if (!record) return updated;
-  updated.hasStarted = true;
-  updated.progress[scope] = { ...updated.progress[scope], [activity.subjectId]: record };
-  return updated;
+export function saveDraft(state, subjectId, creation) {
+  const next = normalizeState(state), snapshot = cleanCreation(subjectId, creation);
+  if (!snapshot) return next;
+  const scope = scopeKey(next.chapter, next.grade);
+  (next.drafts[scope] ??= {})[subjectId] = snapshot;
+  next.hasStarted = true;
+  return next;
 }
 
-export function getCompleted(state, chapter = state.chapter, grade = state.grade) {
-  return getRewards(state, chapter, grade).map(record => record.subjectId);
+export function publishCreation(state, subjectId, creation) {
+  const next = saveDraft(state, subjectId, creation), snapshot = cleanCreation(subjectId, creation);
+  if (!snapshot) return next;
+  const scope = scopeKey(next.chapter, next.grade), character = CHARACTERS.find(item => item.id === subjectId);
+  (next.progress[scope] ??= {})[subjectId] = { activityId: `${subjectId}-${scope}-v2`, reward: { ...character.reward }, creation: snapshot, completedAt: new Date().toISOString() };
+  return next;
 }
 
 export function getRewards(state, chapter = state.chapter, grade = state.grade) {
   let scope;
-  try {
-    scope = scopeKey(chapter, grade);
-  } catch {
-    return [];
-  }
-  const records = cleanState(state).progress[scope] || {};
-  return [...SUBJECT_IDS].filter(subjectId => own(records, subjectId))
-    .map(subjectId => ({ subjectId, ...records[subjectId] }));
+  try { scope = scopeKey(chapter, grade); } catch { return []; }
+  const records = normalizeState(state).progress[scope] || {};
+  return [...IDS].filter(id => Object.hasOwn(records, id)).map(subjectId => ({ subjectId, ...records[subjectId] }));
+}
+export const getCompleted = (state, chapter = state.chapter, grade = state.grade) => getRewards(state, chapter, grade).map(record => record.subjectId);
+export const getCreations = state => Object.fromEntries(getRewards(state).filter(record => record.creation).map(record => [record.subjectId, record.creation]));
+export const canStartParade = state => Object.keys(getCreations(state)).length > 0;
+export function getDraft(state, subjectId) {
+  const safe = normalizeState(state), scope = scopeKey(safe.chapter, safe.grade);
+  return safe.drafts[scope]?.[subjectId] || safe.progress[scope]?.[subjectId]?.creation || null;
 }
