@@ -32,3 +32,9 @@ test('the stamp count covers the current grade', () => {
   assert.deepEqual(stampCount(createState()), { earned: 0, total: 7 });
   assert.deepEqual(stampCount(publishCreation(createState(), 'writing', sign)), { earned: 1, total: 7 });
 });
+test('an earned guide page shows what the child made there', async () => {
+  const { guideCreation } = await import('../src/ui/screens/windows.js');
+  const state = publishCreation(createState(), 'writing', sign);
+  assert.match(guideCreation('writing', state), /creation--writing[^>]*>Welcome!</);
+  assert.equal(guideCreation('math', state), '');
+});

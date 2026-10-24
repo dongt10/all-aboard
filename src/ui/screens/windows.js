@@ -5,6 +5,8 @@ import { figureMarkup } from '../figures/index.js';
 import { SUBJECT_THEME } from '../palette.js';
 import { toggleSetting, chooseGrade, gradeChoices, isChosenGrade } from '../save.js';
 import { guideEntries, stampCount } from '../guide.js';
+import { creationMarkup } from '../creations.js';
+import { getCreations } from '../../progress.js';
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const ARROWS = new Set(['up', 'down', 'left', 'right']);
@@ -120,12 +122,15 @@ export function openGradeWindow(ctx) {
   return handle;
 }
 
+// The thing the child made with this neighbor, when the save still has it.
+export const guideCreation = (id, state) => { const made = getCreations(state)[id]; return made ? creationMarkup(id, made) : ''; };
+
 function guidePage(entry, state) {
   const theme = entry.subject ? SUBJECT_THEME[entry.subject] : null;
   const earned = Boolean(entry.stamp?.earned);
   const stamp = !entry.stamp ? '' : earned
     ? `<div class="guide-stamp guide-stamp--earned"><span class="guide-stamp__seal" aria-hidden="true">${icon(theme.icon)}</span><p><strong>Learned:</strong> ${esc(entry.stamp.learned)}</p></div>
-       <div class="guide-creation" data-id="${entry.id}"></div>`
+       <div class="guide-creation" data-id="${entry.id}">${guideCreation(entry.id, state)}</div>`
     : `<div class="guide-stamp"><span class="guide-stamp__seal" aria-hidden="true"></span><p><strong>You’ll learn:</strong> ${esc(entry.stamp.learned)}</p></div>`;
   const buttons = [
     entry.canFind ? `<button type="button" class="px-button" data-action="find">${icon('map')}<span>Find</span></button>` : '',

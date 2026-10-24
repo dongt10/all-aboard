@@ -1,7 +1,11 @@
-import { loadState } from './progress.js';
-import { mountStage, applySettings } from './ui/stage.js';
+import { createApp } from './ui/app.js';
+import { createTitleScene } from './ui/screens/title.js';
+import { createVillageScene } from './ui/screens/village.js';
+import { createEncounterScene } from './ui/screens/encounter.js';
+import { createMusicScene } from './ui/screens/music.js';
+import { createParadeScene } from './ui/screens/parade.js';
 
-const state = loadState();
-const { stage } = mountStage(document.querySelector('#app'));
-applySettings(stage, state.settings);
-stage.innerHTML = '<div class="stage-placeholder"><p class="px-frame">The festival is getting ready…</p></div>';
+const app = createApp(document.querySelector('#app'), {
+  scenes: { title: createTitleScene, village: createVillageScene, encounter: createEncounterScene, music: createMusicScene, parade: createParadeScene },
+});
+app.go('title');
