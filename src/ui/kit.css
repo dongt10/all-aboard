@@ -70,6 +70,10 @@ body.game {
 .px-toggle[aria-pressed="true"] { --fill: var(--lantern); --light: #ffe08f; --shade: #e0a92f; }
 .px-toggle__state { font-family: var(--font-pixel); font-size: var(--text-small); min-width: 2.5em; text-align: right; }
 
+/* Sprite-sheet figures: one 64×64 frame of a 256×256 sheet, scaled without blur. */
+.figure { display: inline-block; flex: none; background-repeat: no-repeat; image-rendering: pixelated; vertical-align: bottom; }
+.figure--missing { outline: 2px dashed var(--ink-soft); outline-offset: -2px; }
+
 .px-name { font-family: var(--font-pixel); font-size: var(--text-name); font-weight: 600; letter-spacing: .5px; }
 .px-title { font-family: var(--font-pixel); font-size: var(--text-title); font-weight: 700; line-height: 1.1; }
 

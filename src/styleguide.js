@@ -42,3 +42,31 @@ addSection('Windows, buttons, chips',
    <div class="guide-specimen guide-specimen--ink">${kit}</div>
    <div class="guide-specimen guide-specimen--sky">${chips}</div>`,
   'Tab through these to check the focus ring: paper inside ink, on every background.');
+
+import { ICON_NAMES, icon } from './ui/icons.js';
+import { allFigures, figureMarkup } from './ui/figures/index.js';
+
+const style = document.createElement('style');
+style.textContent = `.guide-icon{margin:0;display:grid;justify-items:center;gap:4px;width:96px;font-size:13px}
+.guide-sheet{image-rendering:pixelated;border:4px solid var(--ink);background:repeating-conic-gradient(#e9dfc8 0 25%,#f6efe0 0 50%) 0 0/32px 32px}
+.guide-figure{margin:0;display:grid;gap:8px}.guide-walk{display:flex;gap:6px;align-items:flex-end;min-height:128px}`;
+document.head.append(style);
+
+addSection('Icons', `<div class="guide-row">${ICON_NAMES.map(name => `<figure class="guide-icon">${icon(name)}${icon(name, { size: 48 })}<figcaption>${name}</figcaption></figure>`).join('')}</div>`,
+  'pixelarticons 2.4.2 (MIT). Icons take the color of the text beside them.');
+
+const castCard = figure => `<figure class="guide-figure"><img class="guide-sheet" src="${figure.sheet}" width="512" height="512" alt="${figure.id} sprite sheet">
+  <figcaption><strong>${figure.id}</strong> · ${figure.species}</figcaption><div class="guide-walk" data-figure="${figure.id}"></div></figure>`;
+addSection('Cast', `<div class="guide-row">${allFigures().map(castCard).join('')}</div>`,
+  'Each sheet is 4×4 frames of 64×64: rows front, left, right, back; columns step A, stand, step B, joy. The loops below play the walk in every direction, then the joy face.');
+const WALK = [1, 0, 2, 0];
+let tick = 0;
+const drawWalks = () => {
+  document.querySelectorAll('.guide-walk').forEach(node => {
+    const id = node.dataset.figure, step = WALK[tick % WALK.length];
+    node.innerHTML = ['front', 'left', 'right', 'back'].map(facing => figureMarkup(id, { facing, step, scale: 2 })).join('') + figureMarkup(id, { pose: 'joy', scale: 2 });
+  });
+  tick++;
+};
+drawWalks();
+setInterval(drawWalks, 180);

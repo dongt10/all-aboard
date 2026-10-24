@@ -29,3 +29,13 @@ test('core text pairs meet their contrast targets', () => {
   assert.ok(contrastRatio(PAPER, FINISH) >= 4.5);
   assert.ok(Math.abs(contrastRatio('#000000', '#ffffff') - 21) < 1e-9);
 });
+
+import { ICON_NAMES, icon } from '../src/ui/icons.js';
+test('every needed icon is a decorative 24×24 currentColor svg', () => {
+  const needed = ['math','science','art','reading','writing','community','music','settings','pause','map','help','hear','back','next','check','play','stop','quiet','undo','turn','clock','crate','shade','fill','trash','download','people','star','home'];
+  assert.deepEqual([...ICON_NAMES].sort(), [...needed].sort());
+  for (const name of ICON_NAMES) assert.match(icon(name), /^<svg class="icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M[^"]+"\/><\/svg>$/);
+  assert.match(icon('play', { size: 32 }), /width="32" height="32"/);
+  assert.throws(() => icon('sparkles'), /Unknown icon: sparkles/);
+  for (const theme of Object.values(SUBJECT_THEME)) assert.ok(ICON_NAMES.includes(theme.icon));
+});
