@@ -34,3 +34,6 @@ test('the parade backdrop is a sunset street: a sun, lit houses and triangle bun
   assert.doesNotMatch(html, /gradient|<image|url\(/i);
 });
 
+test('index.html leaves the live region to app.js', () => {
+  assert.equal((read('index.html').match(/id="announcements"/g) ?? []).length, 0);
+});
