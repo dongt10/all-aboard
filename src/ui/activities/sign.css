@@ -1,0 +1,40 @@
+/* Fumi's sign (writing). Fits the 520×268 field; scrolls vertically only as a last resort. */
+.sign-field {
+  box-sizing: border-box; width: 100%; max-width: 520px; height: 100%; max-height: 268px;
+  display: flex; flex-direction: column; align-items: center; padding: 8px 8px 10px;
+  overflow-x: hidden; overflow-y: auto; font-family: var(--font-read); color: var(--ink);
+}
+
+/* The wooden sign: a plank frame with a light face so ink text keeps its contrast. */
+.sign-board {
+  box-sizing: border-box; flex: 0 0 auto; width: 100%; padding: 8px;
+  background: var(--wood); border: 4px solid var(--ink);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .35), inset 0 -4px 0 rgba(31, 33, 71, .3);
+  transition: background-color .2s;
+}
+.sign-board--ready { background: var(--writing); }
+.sign-face {
+  box-sizing: border-box; display: block; width: 100%; min-height: calc(var(--text-field) * 1.3 * 2 + 16px); margin: 0;
+  padding: 6px 10px; background: var(--path); border: 3px solid var(--ink); border-radius: 0;
+  font: 700 var(--text-field)/1.3 var(--font-read); color: var(--ink); text-align: center;
+  overflow-wrap: anywhere; white-space: pre-wrap;
+}
+.sign-input { height: calc(var(--text-field) * 1.3 * 3 + 18px); resize: none; overflow-y: auto; }
+.sign-input::placeholder, .sign-placeholder { color: var(--ink-soft); font-weight: 400; opacity: 1; }
+.sign-input:focus-visible { background: var(--paper); }
+.sign-post { flex: 0 0 auto; width: 16px; height: 10px; background: var(--wood); border: solid var(--ink); border-width: 0 4px; }
+
+/* Word tiles sit below the sign and wrap; they never shrink below a tappable size. */
+.sign-tiles { flex: 0 0 auto; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 10px; width: 100%; padding: 4px; box-sizing: border-box; }
+.sign-tile { flex: 0 0 auto; min-height: 44px; padding: 2px 12px; font-size: var(--text-field); }
+
+.calm .sign-board { transition: none; }
+@media (prefers-reduced-motion: reduce) { .sign-board { transition: none; } }
+
+/* Grades 3–5: long phrases. The sign stands on the left and the phrases stack in one column. */
+.sign-field--phrases { flex-direction: row; align-items: stretch; gap: 10px; }
+.sign-field--phrases .sign-board { flex: 0 0 196px; width: auto; display: flex; }
+.sign-field--phrases .sign-input { height: auto; min-height: 0; flex: 1 1 auto; }
+.sign-field--phrases .sign-post { display: none; }
+.sign-field--phrases .sign-tiles { flex: 1 1 0; min-width: 0; flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 6px; padding: 4px 6px; }
+.sign-field--phrases .sign-tile { flex: 0 0 auto; font-size: var(--text-small); }
