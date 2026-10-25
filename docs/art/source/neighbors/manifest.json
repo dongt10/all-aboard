@@ -5,7 +5,8 @@
     "ref-03.png": "7e782f5d73a6bcfa0110ca67d373ac848e90b2aa6cc3f8ad307ae66631b38e15",
     "ref-08.png": "3463e112e33c806ba1fe23eecfde52caa5ff5c9df8354781a6e114de6ca82e3b",
     "ref-21.png": "0edae8b269af0ac2f27994a6de2c6c96a1d54b982902077083699433f6481565",
-    "ref-22.png": "d6cff08375b8d119f187c34ae559c6051ac198dc8c54f2adc3aa662d77ec8b0e"
+    "ref-22.png": "d6cff08375b8d119f187c34ae559c6051ac198dc8c54f2adc3aa662d77ec8b0e",
+    "ref-27.png": "2f0a844bfaf8357ca7f4205d8dc2f2cf78a8cf90fd035366dcf35572d36253b0"
   },
   "frameSize": 64,
   "alphaThreshold": 128,
@@ -225,6 +226,55 @@
         "right": "d431cf7c68bf3f661171fbbd78ef3128816dc40bc2075a337171409cb24fac7a"
       },
       "backStandSha256": "2a92830f672f22dd1622fc837e5dcc17e41e01ad3d489d3b0868ae2ad822a017"
+    },
+    "reading": {
+      "name": "Sora",
+      "composite": "ref-27.png",
+      "grid": {
+        "blockSize": 4,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "swatchBox": [
+        46,
+        4,
+        55,
+        7
+      ],
+      "background": {
+        "color": "#ffffff",
+        "removal": "exterior"
+      },
+      "dropRows": [],
+      "shift": [
+        0,
+        -5
+      ],
+      "feetRow": 56,
+      "joyEyeBox": [
+        22,
+        24,
+        41,
+        30
+      ],
+      "frontStepColumns": [
+        [
+          20,
+          27
+        ],
+        [
+          36,
+          43
+        ]
+      ],
+      "rightMirrorColumns": null,
+      "sideStandSha256": {
+        "left": "c1794b36d23eb40c96f33f1ba1a3ccf9d8e1ce2af97f9a3379147c9f56d327dd",
+        "right": "48d55f81af24dba900df9653e462f01811c167ee5abb7c5aa4dd1517b3828e88"
+      },
+      "backStandSha256": "408aaef0f3217e42d804cd05c0ad76007e2bab5731a0e79959f588d04fd372d5"
     }
   }
 }
