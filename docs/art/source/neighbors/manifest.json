@@ -1,0 +1,36 @@
+{
+  "rule": "the original design overrides all. The team's reference drawing is the source of truth; the sprite sheet is derived, never drawn or restyled. To change the art, change the reference.",
+  "coordinates": "Zero-based art pixels after block sampling; boxes are [left, top, right, bottom], inclusive. Drop rows use original sampled row numbers, before shifting. rightMirrorColumns maps each right column to its left column.",
+  "frameSize": 64,
+  "alphaThreshold": 128,
+  "characters": {
+    "math": {
+      "name": "Taro",
+      "composite": "ref-03.png",
+      "grid": { "blockSize": 4, "offset": [0, 0] },
+      "swatchBox": [50, 3, 61, 8],
+      "background": { "color": "#ffffff", "removal": "all" },
+      "dropRows": [],
+      "shift": [0, -4],
+      "feetRow": 56,
+      "colorSwap": { "from": "#efa54e", "to": "#ff9a3c" },
+      "joyEyeBox": [23, 28, 40, 32],
+      "frontStepColumns": [[0, 31], [32, 46]],
+      "rightMirrorColumns": [0, 1, 2]
+    },
+    "science": {
+      "name": "Momo",
+      "composite": "ref-08.png",
+      "grid": { "blockSize": 4, "offset": [0, 0] },
+      "swatchBox": [48, 6, 57, 15],
+      "background": { "color": "#f5f6f6", "removal": "exterior" },
+      "dropRows": [21, 22, 24, 26, 48],
+      "shift": [0, -1],
+      "feetRow": 56,
+      "colorSwap": { "from": "#aee2d6", "to": "#3fcfbf" },
+      "joyEyeBox": [22, 22, 41, 29],
+      "frontStepColumns": [[0, 31], [32, 63]],
+      "rightMirrorColumns": [2, 1, 0]
+    }
+  }
+}

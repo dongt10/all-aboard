@@ -147,7 +147,7 @@ The build produces a static site in `dist/`, ready for a static web server. Serv
 
 The plan covers the cast, village layout, front-end screens, sprite sizes, and the first batch of artwork to create.
 
-Taro and Momo are rebuilt from the team’s reference art in [docs/art/source/neighbors](docs/art/source/neighbors), on the shared cast body. Their sprite sheets are `assets/figures/math.png` and `assets/figures/science.png`.
+Taro and Momo come from the team’s reference drawings in [docs/art/source/neighbors](docs/art/source/neighbors); their sheets (`assets/figures/math.png` and `assets/figures/science.png`) are derived by the transforms in [manifest.json](docs/art/source/neighbors/manifest.json) and never redrawn. [tests/figures-references.test.js](tests/figures-references.test.js) fails on any deviation from these rules; to change the art, change the reference.
 
 ## Our first chapters
 
