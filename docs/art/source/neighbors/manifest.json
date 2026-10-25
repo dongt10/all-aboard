@@ -7,7 +7,8 @@
     "ref-21.png": "0edae8b269af0ac2f27994a6de2c6c96a1d54b982902077083699433f6481565",
     "ref-22.png": "d6cff08375b8d119f187c34ae559c6051ac198dc8c54f2adc3aa662d77ec8b0e",
     "ref-27.png": "2f0a844bfaf8357ca7f4205d8dc2f2cf78a8cf90fd035366dcf35572d36253b0",
-    "ref-25.png": "34315b18abf13a69674862255edae0193fc33c107a58995d98d65ee3ed504988"
+    "ref-25.png": "34315b18abf13a69674862255edae0193fc33c107a58995d98d65ee3ed504988",
+    "ref-23.png": "9c04c79efbd7f66d655a4b365bd1fc4df7542dfe06e8b51f2bf7d4290791308d"
   },
   "frameSize": 64,
   "alphaThreshold": 128,
@@ -328,6 +329,54 @@
         "right": "b77f2151c06580d4038d17cee45f21c17406e2f33451eb9280f99f6434a2acf2"
       },
       "backStandSha256": "7265533b6e172e2e719637175999d0f0ace60883c0437a8048e7691606ab2513"
+    },
+    "pip": {
+      "name": "Pip",
+      "composite": "ref-23.png",
+      "grid": {
+        "blockSize": 4,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "swatchBox": [
+        50,
+        2,
+        59,
+        5
+      ],
+      "background": {
+        "color": "#ffffff",
+        "removal": "exterior"
+      },
+      "dropRows": [],
+      "shift": [
+        0,
+        -5
+      ],
+      "feetRow": 56,
+      "joyEyeBox": [
+        20,
+        25,
+        43,
+        29
+      ],
+      "frontStepColumns": [
+        [
+          18,
+          28
+        ],
+        [
+          36,
+          46
+        ]
+      ],
+      "rightMirrorColumns": null,
+      "sideStandSha256": {
+        "left": "ca85711a3829e651a1e285c16d5265e16e1ed7fef136e4b64828e34fa96f826f",
+        "right": "e0e5ea97f8f88c217d534cd2381eae910fa85b5a23bae9205e81dcf70d5d7833"
+      }
     }
   }
 }
