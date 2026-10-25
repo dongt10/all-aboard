@@ -13,16 +13,54 @@
     "math": {
       "name": "Taro",
       "composite": "ref-03.png",
-      "grid": { "blockSize": 4, "offset": [0, 0] },
-      "swatchBox": [50, 3, 61, 8],
-      "background": { "color": "#ffffff", "removal": "all" },
+      "grid": {
+        "blockSize": 4,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "swatchBox": [
+        50,
+        3,
+        61,
+        8
+      ],
+      "background": {
+        "color": "#ffffff",
+        "removal": "all"
+      },
       "dropRows": [],
-      "shift": [0, -4],
+      "shift": [
+        0,
+        -4
+      ],
       "feetRow": 56,
-      "colorSwap": { "from": "#efa54e", "to": "#ff9a3c" },
-      "joyEyeBox": [23, 28, 40, 32],
-      "frontStepColumns": [[0, 31], [32, 46]],
-      "rightMirrorColumns": [0, 1, 2],
+      "colorSwap": {
+        "from": "#efa54e",
+        "to": "#ff9a3c"
+      },
+      "joyEyeBox": [
+        23,
+        28,
+        40,
+        32
+      ],
+      "frontStepColumns": [
+        [
+          0,
+          31
+        ],
+        [
+          32,
+          46
+        ]
+      ],
+      "rightMirrorColumns": [
+        0,
+        1,
+        2
+      ],
       "sideStandSha256": {
         "left": "79acb30cb011317acd4c3f44c6296f4ea1e34b304671e19f24ad2234a5360ba1",
         "right": "8ae247b5951a5926d3ded07006fd5afb6974949c529eabefdd6ecc387bbd5835"
@@ -31,16 +69,60 @@
     "science": {
       "name": "Momo",
       "composite": "ref-08.png",
-      "grid": { "blockSize": 4, "offset": [0, 0] },
-      "swatchBox": [48, 6, 57, 15],
-      "background": { "color": "#f5f6f6", "removal": "exterior" },
-      "dropRows": [21, 22, 24, 26, 48],
-      "shift": [0, -1],
+      "grid": {
+        "blockSize": 4,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "swatchBox": [
+        48,
+        6,
+        57,
+        15
+      ],
+      "background": {
+        "color": "#f5f6f6",
+        "removal": "exterior"
+      },
+      "dropRows": [
+        21,
+        22,
+        24,
+        26,
+        48
+      ],
+      "shift": [
+        0,
+        -1
+      ],
       "feetRow": 56,
-      "colorSwap": { "from": "#aee2d6", "to": "#3fcfbf" },
-      "joyEyeBox": [22, 22, 41, 29],
-      "frontStepColumns": [[0, 31], [32, 63]],
-      "rightMirrorColumns": [2, 1, 0],
+      "colorSwap": {
+        "from": "#aee2d6",
+        "to": "#3fcfbf"
+      },
+      "joyEyeBox": [
+        22,
+        22,
+        41,
+        29
+      ],
+      "frontStepColumns": [
+        [
+          0,
+          31
+        ],
+        [
+          32,
+          63
+        ]
+      ],
+      "rightMirrorColumns": [
+        2,
+        1,
+        0
+      ],
       "sideStandSha256": {
         "left": "fead9b4512c19fc834420a63605c9d3dfd643391eaed7ed8ebd9651510691785",
         "right": "72d684c0fc7d1a1d4d730d8f711b523f9f561d06c9e775b7526292df9f87f8c4"
@@ -49,20 +131,108 @@
     "art": {
       "name": "Yuki",
       "composite": "ref-21.png",
-      "grid": { "blockSize": 4, "offset": [0, 0] },
-      "swatchBox": [49, 3, 62, 8],
-      "background": { "color": "#ffffff", "removal": "exterior" },
+      "grid": {
+        "blockSize": 4,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "swatchBox": [
+        49,
+        3,
+        62,
+        8
+      ],
+      "background": {
+        "color": "#ffffff",
+        "removal": "exterior"
+      },
       "dropRows": [],
-      "shift": [0, -5],
+      "shift": [
+        0,
+        -5
+      ],
       "feetRow": 56,
-      "joyEyeBox": [22, 26, 41, 31],
-      "frontStepColumns": [[18, 28], [35, 45]],
-      "rightMirrorColumns": [0, 1, 2],
+      "joyEyeBox": [
+        22,
+        26,
+        41,
+        31
+      ],
+      "frontStepColumns": [
+        [
+          18,
+          28
+        ],
+        [
+          35,
+          45
+        ]
+      ],
+      "rightMirrorColumns": [
+        0,
+        1,
+        2
+      ],
       "sideStandSha256": {
         "left": "6d03d332006b1f10dcc386ee9e46de2b4a05a6778358cac5ceaf7b3cfd49e14a",
         "right": "44b0a1638171279dbb9665983d79bcf68d6b6f1052244ccd146d23bbd8a77d52"
       },
       "backStandSha256": "76396f9507aa874f2667831eec83cd8e2e8076080ae7766ec5a831f3c737986a"
+    },
+    "writing": {
+      "name": "Fumi",
+      "composite": "ref-22.png",
+      "grid": {
+        "blockSize": 4,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "swatchBox": [
+        49,
+        5,
+        60,
+        8
+      ],
+      "background": {
+        "color": "#ffffff",
+        "removal": "exterior"
+      },
+      "dropRows": [],
+      "shift": [
+        0,
+        -5
+      ],
+      "feetRow": 56,
+      "joyEyeBox": [
+        23,
+        26,
+        39,
+        30
+      ],
+      "frontStepColumns": [
+        [
+          18,
+          27
+        ],
+        [
+          36,
+          45
+        ]
+      ],
+      "rightMirrorColumns": [
+        0,
+        1,
+        2
+      ],
+      "sideStandSha256": {
+        "left": "d05043f6fef57909acc82fc2d8e210f61b29e0f092991e2f5d6c166f244375d4",
+        "right": "bbcba8f49eea3eb00543377eb8102050bc938d982228a4c15cd215f81ac69396"
+      },
+      "backStandSha256": "27de819c922ac581ededd47cb8419f20f61c7e55f438676d16d8bd7d8f0a3871"
     }
   }
 }
