@@ -1,7 +1,9 @@
+import { HELP_FITS } from '../src/helpday.js';
+import { expectedEnergy } from '../src/chain.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ACTIVITIES } from '../src/ui/registry.js';
-import { encounterReady } from '../src/encounters.js';
+import { ACTIVITIES, activityFor } from '../src/ui/registry.js';
+import { encounterReady, gradeBand, normalizeEncounterSnapshot } from '../src/encounters.js';
 import { arrangeCommands } from '../src/ui/menu.js';
 
 // [chapter, grade] for Kindergarten and grades 1 to 5.
@@ -17,8 +19,15 @@ const READY = {
   writing: { kind: 'writing', text: 'Hello!' },
   community: { kind: 'community', tried: true, placements: [{ item: 'bench', x: 50, y: 90 }, { item: 'quiet', x: 10, y: 10 }, { item: 'sign', x: 90, y: 10 }] },
 };
-// Reading's menu holds four picture choices while packing, so it alone may hide the finish until ready.
-const MAY_HIDE_FINISH_UNTIL_READY = new Set(['reading']);
+const readyFor = (kind, grade) => {
+  if (grade < 3) return READY[kind];
+  return {
+    math: { kind, activity: 'pizza', slices: 8, halves: false, plates: [4, 4, 4, 4], tried: true },
+    science: { kind, activity: 'chain', chain: ['plant', 'fish', 'otter'], energy: expectedEnergy(grade), shone: true },
+    community: { kind, activity: 'helpday', crew: Object.entries(HELP_FITS).map(([job, helper]) => ({ job, helper })) },
+    reading: { kind, activity: 'tales', deck: 0, solved: ['momo-kitchen', 'taro-pier', 'kiko-stage'] },
+  }[kind] ?? READY[kind];
+};
 
 const where = (kind, grade) => `${kind} ${grade === 0 ? 'K' : `grade ${grade}`}`;
 const finishesOf = commands => commands.filter(c => c.finish);
@@ -28,14 +37,15 @@ test('every subject but music has an activity module', () => {
 });
 
 test('every activity has the contract shape at every grade', () => {
-  for (const [kind, activity] of Object.entries(ACTIVITIES)) for (const [chapter, grade] of SCOPES) {
+  for (const kind of Object.keys(ACTIVITIES)) for (const [chapter, grade] of SCOPES) {
+    const activity = activityFor(kind, grade);
     const at = where(kind, grade);
     const { state, ui } = activity.start(null, { chapter, grade });
     assert.equal(activity.kind, kind, at); assert.equal(state.kind, kind, at);
     assert.equal(typeof activity.title, 'string', at); assert.equal(typeof activity.mountField, 'function', at);
     assert.ok(activity.help.length >= 1 && activity.help.length <= 4, `${at} help has 1–4 steps`);
     assert.equal(typeof activity.opening(state, ui, grade), 'string', at);
-    const ready = activity.start(READY[kind], { chapter, grade });
+    const ready = activity.start(readyFor(kind, grade), { chapter, grade });
     for (const opening of [activity.opening(state, ui, grade), activity.opening(ready.state, ready.ui, grade)]) {
       for (const sentence of opening.split(/(?<=[.!?…])\s+/)) assert.ok(sentence.length <= 56, `${at} opening sentence fits one Bigger words page: "${sentence}"`);
     }
@@ -45,7 +55,8 @@ test('every activity has the contract shape at every grade', () => {
 
 // One subtest per activity, so a failing subject names itself (Phase 2 lanes fix each activity in turn).
 test('commands at the start: at most four, unique ids, short pictured labels, one disabled finish last', async t => {   // plan 1A
-  for (const [kind, activity] of Object.entries(ACTIVITIES)) await t.test(kind, () => { for (const [chapter, grade] of SCOPES) {
+  for (const kind of Object.keys(ACTIVITIES)) await t.test(kind, () => { for (const [chapter, grade] of SCOPES) {
+    const activity = activityFor(kind, grade);
     const at = where(kind, grade);
     const { state, ui } = activity.start(null, { chapter, grade });
     assert.equal(encounterReady(state), false, `${at} starts unfinished`);
@@ -58,7 +69,7 @@ test('commands at the start: at most four, unique ids, short pictured labels, on
     }
     const finishes = finishesOf(commands);
     assert.ok(finishes.length <= 1, `${at} has at most one finish`);
-    if (!MAY_HIDE_FINISH_UNTIL_READY.has(kind)) assert.equal(finishes.length, 1, `${at} shows the finish from the start`);
+    if (!(kind === 'reading' && grade < 3)) assert.equal(finishes.length, 1, `${at} shows the finish from the start`);
     if (finishes.length) {
       assert.equal(finishes[0].id, 'finish', `${at} finish id is "finish" (the only id the encounter sends to finish())`);
       assert.equal(finishes[0].icon, 'check', `${at} finish icon is check`);
@@ -69,12 +80,18 @@ test('commands at the start: at most four, unique ids, short pictured labels, on
 });
 
 test('a ready creation gives exactly one enabled finish, last, at every grade', async t => {
-  for (const [kind, activity] of Object.entries(ACTIVITIES)) await t.test(kind, () => { for (const [chapter, grade] of SCOPES) {
+  for (const kind of Object.keys(ACTIVITIES)) await t.test(kind, () => { for (const [chapter, grade] of SCOPES) {
+    const activity = activityFor(kind, grade);
     const at = where(kind, grade);
-    const { state, ui } = activity.start(READY[kind], { chapter, grade });
+    const { state, ui } = activity.start(readyFor(kind, grade), { chapter, grade });
     assert.equal(encounterReady(state), true, `${at} saved creation loads ready`);
     const commands = activity.commands(state, ui, grade);
     assert.ok(commands.length <= 4, `${at} has at most 4 commands`);
+    assert.equal(new Set(commands.map(c => c.id)).size, commands.length, `${at} ids are unique`);
+    for (const command of commands) {
+      assert.ok(command.label.length <= 12, `${at} ready label fits`);
+      assert.ok(command.icon || command.art, `${at} ready command has a picture`);
+    }
     const finishes = finishesOf(commands);
     assert.equal(finishes.length, 1, `${at} has exactly one finish`);
     assert.equal(finishes[0].id, 'finish', `${at} finish id is "finish"`);
@@ -93,14 +110,59 @@ test('a ready creation gives exactly one enabled finish, last, at every grade', 
 });
 
 test('the encounter frame renders every finish bottom-right, whatever the activity returned', () => {
-  for (const [kind, activity] of Object.entries(ACTIVITIES)) for (const grade of GRADES) {
-    for (const snapshot of [null, READY[kind]]) {
+  for (const kind of Object.keys(ACTIVITIES)) for (const grade of GRADES) {
+    const activity = activityFor(kind, grade);
+    for (const snapshot of [null, readyFor(kind, grade)]) {
       const { state, ui } = activity.start(snapshot, { chapter: grade === 0 ? 0 : 1, grade });
       const arranged = arrangeCommands(activity.commands(state, ui, grade));
       const finishes = finishesOf(arranged.filter(Boolean));
       if (!finishes.length) continue;
       assert.equal(arranged.length, 4, `${where(kind, grade)} menu fills four slots`);
       assert.equal(arranged[3], finishes[0], `${where(kind, grade)} finish is in slot 4`);
+    }
+  }
+});
+
+
+test('grade bands select new activities only in grades 3–5', () => {
+  assert.deepEqual(GRADES.map(gradeBand), [0, 1, 1, 3, 3, 3]);
+  const banded = { math: 'pizza', science: 'chain', community: 'helpday', reading: 'tales' };
+  for (const kind of Object.keys(ACTIVITIES)) for (const grade of GRADES) {
+    const activity = activityFor(kind, grade);
+    if (grade < 3 || !banded[kind]) assert.equal(activity, ACTIVITIES[kind]);
+    else assert.equal(activity.start(null, { grade, chapter: 1 }).state.activity, banded[kind]);
+  }
+  const cart = ACTIVITIES.math;
+  const options = { grade: 1, chapter: 1 };
+  assert.deepEqual(cart.start(readyFor('math', 3), options), cart.start(null, options));
+});
+
+test('legacy snapshots retain their old shape and readiness at every grade', () => {
+  for (const [chapter, grade] of SCOPES) for (const kind of Object.keys(READY)) {
+    const input = { ...READY[kind], grade, chapter };
+    assert.deepEqual(normalizeEncounterSnapshot(kind, input, grade, chapter), input);
+    assert.equal(encounterReady(input), true);
+  }
+});
+
+test('the encounter resolves the saved grade at mount, including Kindergarten chapter scope', async () => {
+  const { createEncounterScene } = await import('../src/ui/screens/encounter.js');
+  const { createState } = await import('../src/progress.js');
+  const stopBeforeDOM = new Error('start observed');
+  for (const kind of Object.keys(ACTIVITIES)) for (const [chapter, grade] of SCOPES) {
+    // Construction can happen before a grade change; mount must read the latest state.
+    let app = { ...createState(), chapter: 1, grade: grade === 3 ? 1 : 3 };
+    const scene = createEncounterScene({ getState: () => app }, { id: kind });
+    app = { ...app, chapter, grade: chapter === 0 ? 5 : grade };
+    const chosen = activityFor(kind, grade);
+    const original = chosen.start;
+    let observed;
+    chosen.start = (snapshot, options) => { observed = { snapshot, options }; throw stopBeforeDOM; };
+    try {
+      assert.throws(() => scene.mount(), error => error === stopBeforeDOM);
+      assert.deepEqual(observed, { snapshot: null, options: { chapter, grade } });
+    } finally {
+      chosen.start = original;
     }
   }
 });

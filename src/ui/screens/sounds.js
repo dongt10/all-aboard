@@ -4,7 +4,7 @@ import { CAST } from '../../music.js';
 import { PATTERNS } from '../../audio.js';
 import { MUSICIAN_COLORS, leadTrack, editorMode, setPattern, toggleBeat, cycleNote, noteLabel, patternGlyphs } from '../band.js';
 
-// The Sounds window (it replaced Tunes): one tab per musician, Tune 1 / Tune 2, the beat editor for the
+// The Sounds window: one tab per musician, Tune 1 / Tune 2, the beat editor for the
 // musicians who are not on the lanterns, and the volumes. Every row is counted so the window fits the
 // 960×540 stage with Bigger words on. The pure helpers at the top run under node --test.
 

@@ -1,7 +1,7 @@
 import { CHARACTERS } from '../../data.js';
 import { encounterReady } from '../../encounters.js';
 import { getDraft, saveDraft, publishCreation } from '../../progress.js';
-import { ACTIVITIES } from '../registry.js';
+import { ACTIVITIES, activityFor } from '../registry.js';
 import { withScope } from '../save.js';
 import { creationMarkup } from '../creations.js';
 import { figureMarkup, playerFigureId } from '../figures/index.js';
@@ -35,7 +35,7 @@ export function readinessLine(activity, commands, wasReady, isReady) {
 // The Pokémon-battle frame: plate, neighbor on its platform, the player's back, the field, dialogue and menu.
 export function createEncounterScene(ctx, { id } = {}) {
   const character = CHARACTERS.find(item => item.id === id);
-  const activity = ACTIVITIES[id];
+  let activity = ACTIVITIES[id];
   if (!character || !activity) throw new RangeError(`No encounter for ${id}`);
   const theme = SUBJECT_THEME[id];
   let root, field, menu, dialogue, state, ui, grade, finishing = false, dirty = false;
@@ -72,7 +72,7 @@ export function createEncounterScene(ctx, { id } = {}) {
     finishing = true;
     saveNow();
     await showItemGet(ctx.stage, {
-      name: character.reward.label,
+      name: activity.rewardLabel ?? character.reward.label,
       artHTML: creationMarkup(id, scoped()),
       figureHTML: figureMarkup(id, { pose: 'joy', scale: 2 }),
     });
@@ -89,6 +89,7 @@ export function createEncounterScene(ctx, { id } = {}) {
     mount() {
       const app = ctx.getState();
       grade = app.chapter === 0 ? 0 : app.grade;
+      activity = activityFor(id, grade);
       ({ state, ui } = activity.start(getDraft(app, id), { chapter: app.chapter, grade }));
 
       root = document.createElement('div');

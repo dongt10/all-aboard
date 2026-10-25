@@ -46,7 +46,8 @@ Open **[http://127.0.0.1:4173](http://127.0.0.1:4173)** in your browser. Keep Te
 - **Pip says hello at the pier:** “Welcome to Willow Bay! Tap a neighbor to help them make something.” He says it on every visit until you make your first thing in that grade.
 - **Walk around Willow Bay.** The seven neighbors stroll near their stalls. Tap one, or walk up and press Enter, to start their activity. A stall marked **!** has something new to make; **...** means you started it and can continue. Pip and Nori wander between the stalls and say hello.
 - **Open the Guide** (top right) to meet the whole cast. It is the Matsuri Guide, “the town’s character book.” Each neighbor’s page says what you’ll learn, and shows the stamp once you make their thing. Choose **Find** for an arrow that leads you to them, or **Visit** to go straight to their activity. The header counts your stamps, “0 of 7 stamps.”
-- **Help each neighbor make something** in a handheld-style encounter: balance Taro’s cart, shade Momo’s ice, pack Sora’s story bag, stamp Yuki’s banner, plan Hana’s square, write Fumi’s sign, or make a band with Kiko. Every encounter has at most four commands, and the green finish command (**Send cart**, **Serve ice**, **Share story**, **Hang banner**, **Open square**, **Put up sign**, **Send band**) is always the last one. It stays gray until your creation is ready. A wrong try explains why and keeps your work. Finishing shows what you made, then puts it at that neighbor’s stall.
+- **Help each neighbor make something.** Kindergarten and grades 1–2 balance Taro’s cart, shade Momo’s ice, pack Sora’s story bag, and plan Hana’s square. Grades 3–5 share pizza with Taro, build Momo’s sunbeam chart, name Sora’s tales with evidence, and match helpers to jobs for Hana. Every grade can stamp Yuki’s banner, write Fumi’s sign, and make a band with Kiko. The grade table below explains each task.
+- **Finish your creation.** Each encounter shows at most four commands. The green finish command is last and stays gray until the work is ready: **Send cart**, **Serve ice**, **Share story**, **Open square**, **Serve pizza**, **Pin chart**, **Share tales**, **Start day**, **Hang banner**, **Put up sign**, or **Send band**. In the story bag, **Share story** appears after all three things are packed. Help names the steps and the finish. A wrong try explains why and keeps your work. Finishing shows what you made, then puts it at that neighbor’s stall.
 - **Festival board** (bottom left) reads “Festival board · 0 of 7” and fills in as you make things. After your first creation, the **Parade** button appears beside it.
 - **Parade.** Everyone who helped marches with what you made. **Play band** plays your band if you made one with Kiko. After two laps (right away with Calm motion) the line stops and the dialogue says “The parade is over. Make more, and march again!” **March again** restarts it.
 - **The finale at seven.** With all seven made, the board says “7 of 7 · Festival complete!” and the parade ends with “Everyone marched! You made the whole festival.”
@@ -61,9 +62,9 @@ Everything saves in this browser, separately for Kindergarten and each grade.
 | Move | Arrow keys or WASD | Tap a neighbor to walk over |
 | Choose (A) | Enter, Space, or Z | Tap a command |
 | Back (B) | Esc, X, or Backspace | ← Village, or a window’s close button |
-| Next page | A | Tap the dialogue |
+| Next page | Enter, Space, or Z (the A action) | Tap the dialogue |
 
-Every dialogue box has a **Hear** tab that reads the current line and a **Help** tab with numbered steps for that screen. In a text field (Fumi’s sign), only Esc acts as Back; every other key types.
+Every dialogue box has a **Hear** tab that reads the current line and a **Help** tab with numbered steps for that screen. In Fumi’s text field, Esc moves focus to the commands; press it again to return to the village. Other keys stay in the field.
 
 ### Comfort settings
 
@@ -77,7 +78,7 @@ On the title screen and in **Comfort** (top right in the village):
 
 ### Kiko’s music stage, by grade
 
-Choose Kiko to open the Sound Garden. The four commands are the same at every grade: **Play** (then **Stop**), **See beat** (lights the lanterns with no sound, then **Stop**), **Sounds** (opens the window below), and **Send band**, the finish, which stays gray until you change something or press Play once. Tap a friend to invite or rest them. The **Speed** sign in the top row cycles **Slow · Steady · Fast** at every grade. What the eight lanterns do depends on the grade:
+Choose Kiko to open the Sound Garden. The four commands are the same at every grade: **Play** (then **Stop**), **See beat** (lights the lanterns with no sound, then **Stop**), **Sounds** (opens the window below), and **Send band**, the finish, which stays gray until you change a friend’s part, volume, Speed or Form, or start Play or See beat once. Tap a friend to invite or rest them. The **Speed** sign in the top row cycles **Slow · Steady · Fast** at every grade. What the eight lanterns do depends on the grade:
 
 | Grade | What the child does on the stage | Kiko’s opening line |
 | :--- | :--- | :--- |
@@ -90,25 +91,25 @@ Choose Kiko to open the Sound Garden. The four commands are the same at every gr
 
 **Help** on the stage has four steps per grade, and the last one always names Send band.
 
-**Sounds window:** one tab per friend. Each tab has **Tune 1 / Tune 2** (with a small preview of the beats) and that friend’s volume. Kindergarten gets **Loud / Soft** buttons instead of a slider and no beat grid. From grade 1, a friend who is not on the lanterns gets a beat editor in the window: sound or rest at grades 1–2 (and always for Cricket), the note staircase for Sora and Nori at grades 3–5. The friend who is on the lanterns (Cricket at 1–2, Kiko at 3–5) only gets a line, “Edit Cricket’s rhythm on the lanterns,” so the window never wipes the lantern work.
+**Sounds window:** one tab per friend. Each tab has that friend’s volume. Friends not edited on the lanterns also have **Tune 1 / Tune 2**, with a small preview of the beats. Kindergarten gets **Loud / Soft** buttons instead of a slider and no beat grid. From grade 1, a friend who is not on the lanterns gets a beat editor in the window: sound or rest at grades 1–2 (and always for Cricket), the note staircase for Sora and Nori at grades 3–5. The friend who is on the lanterns (Cricket at 1–2, Kiko at 3–5) gets “Edit Cricket’s rhythm on the lanterns.” or “Edit Kiko’s tune on the lanterns.” instead of tune buttons or a beat editor. A **Band volume** slider controls the whole band at every grade.
 
-**Recording:** the WAV download is no longer in the kid’s window. Open the **Guide**, choose **Kiko**, and once a band has been sent, **Save recording** downloads two phrases of the band as `my-festival-band.wav`.
+**Recording:** the WAV download is no longer in the kid’s window. Open the **Guide**, choose **Kiko**, and once a band has been sent, **Save recording** downloads `my-festival-band.wav`: two runs of A, one run of A B, or one run of A B A, following the saved form.
 
 ### What changes by grade
 
-Grades come in three bands tonight: Kindergarten, grades 1–2, and grades 3–5. Music also tells grades 4 and 5 apart. The Guide’s “You’ll learn” stamp changes with the band too.
+Activities are selected in three bands: Kindergarten, grades 1–2, and grades 3–5. Some tasks also change within a band, as shown below. The Guide’s “You’ll learn” text follows the grade; finishing earns that neighbor’s stamp.
 
-| Subject | Kindergarten | Grades 1–2 | Grades 3–5 |
+| Subject | K | 1–2 | 3–5 |
 | :--- | :--- | :--- | :--- |
-| Math · Taro’s cart | Taro loads two crates on the left. Load the same on the right. Crates weigh 1. | The left side starts at 3 (a 2 and a 1). Crates of 1 and 2. | The left side starts at 8 (a 5 and a 3). Crates of 1, 2, 3 and 5, so several sums work. |
-| Science · Momo’s ice | Ice in words: Lots of ice, Less ice, Water. | Same words. Grade 2 adds the number beside them. | Momo asks which tray will keep more ice. Your first Shade pick is your guess, and after 10 minutes she says whether it matched. |
-| Reading · Sora’s story | One word to read: Key, Umbrella, Book. | A short line that names the thing to pack. | Clues that only imply it: “Gray clouds roll over the bay. Sora does not want to get wet.” |
-| Writing · Fumi’s sign | Four word tiles, no typing box. | Eight word tiles, plus a box to type your own. | Five phrase tiles, plus typing. Remove word takes back a whole tile. The goal is the same at every grade. |
-| Art · Yuki’s banner | The same at every grade: six paints, four stamps, Turn, Fill cloth, Undo. | Same | Same |
-| Community · Hana’s square | A bench off the path. | A bench, plus a garden by the quiet trees. | A bench, a garden, and a sign next to the stage. |
-| Music · Kiko’s band | See the table above. | | |
+| Math | **Taro’s cart:** match the two crates on the left with single crates, then **Roll it!** and **Send cart**. | **Taro’s cart:** use crates of 1 and 2 to match the left side’s weight of 3, then roll and send it. | **Taro’s pizza party:** share slices equally among four friends, check with **Dig in!**, then **Serve pizza**. Grade 3 starts with 8 slices; grade 4 starts with 12. Grade 5 starts with 6 and lets you tap the pizza to cut leftovers into halves. |
+| Science | **Momo’s ice test:** shade one tray, choose **Wait 5 min** twice, compare “Lots of ice,” “Less ice,” or “Water,” then **Serve ice**. | **Momo’s ice test:** shade, wait and compare the trays. Grade 2 adds numbers beside the words. | **Momo’s sunbeam chart:** arrange Sea plant → Little fish → Otter or Gull, then choose the energy numbers. The chart uses one tenth at each step: 1000 → 100 → 10 → 1; grade 5 uses 5000 → 500 → 50 → 5 and says “10%.” Choose **Shine!**, then **Pin chart**. |
+| Reading | **Pack for the festival:** read Key, Umbrella and Book, choose each picture, then **Next part** and **Share story**. | **Pack for the festival:** read short lines that name what Sora needs and pack the three things. | **Whose tale is this?** Read three lines, choose the neighbor, and tap the line that proves it. Name all three tales, then **Share tales**. Each grade starts with a different deck; **Start over** cycles to the next. |
+| Writing | **A sign from you:** make Fumi’s sign with four word tiles, then **Put up sign**. No typing box. | **A sign from you:** eight word tiles and a box to type your own message. | **A sign from you:** five phrase tiles and typing. **Remove word** takes back a whole tile. The goal is still any nonempty sign. |
+| Art | **Your colors, flying high:** stamp Yuki’s banner with six paints and four shapes; use **Turn**, **Fill cloth** or **Undo**, then **Hang banner**. | **Your colors, flying high:** the same banner tools and goal. | **Your colors, flying high:** the same banner tools and goal. |
+| Community | **Room for every neighbor:** place a bench off the path, choose **Try it**, then **Open square**. | **Room for every neighbor:** add a bench and a garden by the quiet trees, keep the path clear, then try and open the square. | **Hana’s Help Day:** tap a helper, then a job; match four strengths to four jobs. **Ask** and **Next job** give clues; **Start day** finishes when all four fit. Grade 5 hides the strength labels, so the child asks or infers them. |
+| Music | **Kiko’s Sound Garden:** invite friends, try Slow and Fast, and choose Loud or Soft; **Send band** finishes. | **Kiko’s Sound Garden:** edit Cricket’s sounds and rests. Grade 2 adds **Echo** to copy an eight-beat rhythm. | **Kiko’s Sound Garden:** make a tune with Do, Re, Mi, Sol and La. Grade 4 adds Cricket’s steady part under A B; grade 5 lets the child choose Form A B A. See the per-grade table above. |
 
-Art and Writing have no grade goal yet. The roadmap lists what each grade should learn there.
+Art and Writing still have the same goal at every grade, though Writing changes its tiles and typing controls. Grades 4–5 share grade 3’s activity types outside music, with the number, text and hint changes above. The [roadmap](ROADMAP.md) lists the deeper goals still planned.
 
 <details>
 <summary><strong>Build, checks, and where to make changes</strong></summary>
@@ -123,16 +124,19 @@ The build produces a static site in `dist/`, ready for a static web server. Serv
 | File | Purpose |
 | :--- | :--- |
 | `src/main.js` | Starts the game and connects the screens |
-| `src/ui/stage.js`, `tokens.css`, `kit.css`, `palette.js` | The 960×540 stage, colors, fonts, and pixel windows |
+| `src/ui/stage.js`, `src/ui/tokens.css`, `src/ui/kit.css`, `src/ui/palette.js` | The 960×540 stage, colors, fonts, and pixel windows |
 | `src/ui/figures/` and `assets/figures/` | Character sprite sheets and how they are drawn |
-| `src/ui/input.js`, `menu.js`, `dialogue.js`, `window.js`, `scenes.js`, `voice.js` | Keys, the command menu, dialogue, windows, scene changes, and read aloud |
+| `src/ui/input.js`, `src/ui/menu.js`, `src/ui/dialogue.js`, `src/ui/window.js`, `src/ui/scenes.js`, `src/ui/voice.js` | Keys, the command menu, dialogue, windows, scene changes, and read aloud |
 | `src/ui/screens/` | Title, village, encounter, music, sounds (the Sounds window), parade, and windows (Comfort, Pause, Guide, Help) |
-| `src/ui/activities/` | The six subject activities: cart, ice, story, banner, square, sign |
-| `src/ui/registry.js` | Which activity each neighbor opens |
+| `src/ui/activities/` | Cart, ice, story, square, banner and sign screens |
+| `src/ui/activities/pizza.js`, `src/ui/activities/chain.js`, `src/ui/activities/helpday.js`, `src/ui/activities/tales.js` | The four grade 3–5 activity screens |
+| `src/ui/screens/sounds.js` | The music stage’s Sounds window |
+| `src/ui/registry.js` | Which activity each neighbor opens at each grade band |
 | `src/ui/band.js` | Music rules by grade: lead musician, speed, form, melody shape, echo, Kiko’s lines |
-| `src/ui/village-map.js`, `parade-lineup.js` | Stall states, the festival board label, who marches and when the parade ends |
+| `src/ui/village-map.js`, `src/ui/parade-lineup.js` | Stall states, the festival board label, who marches and when the parade ends |
 | `src/ui/guide.js` | The Matsuri Guide’s entries and stamps |
 | `src/data.js`, `src/encounters.js`, `src/reading.js` | Neighbors, activity rules by grade band, and the packing story |
+| `src/pizza.js`, `src/chain.js`, `src/helpday.js`, `src/tales.js` | Rules, dialogue, saved creations and completion checks for the grade 3–5 activities |
 | `src/progress.js` | Saving, drafts, creations, and grade scopes |
 | `src/music.js` and `src/audio.js` | Band playback, tempo and form, and WAV export |
 | `tests/` | Logic, save, art, and interface checks |
@@ -141,7 +145,9 @@ The build produces a static site in `dist/`, ready for a static web server. Serv
 
 ### [Read the Character and Art Plan](docs/All_Aboard_Character_and_Art_Plan.md)
 
-The plan covers the **10-character cast**, village layout, front-end screens, sprite sizes, and the first batch of artwork to create.
+The plan covers the cast, village layout, front-end screens, sprite sizes, and the first batch of artwork to create.
+
+Taro and Momo are rebuilt from the team’s reference art in [docs/art/source/neighbors](docs/art/source/neighbors), on the shared cast body. Their sprite sheets are `assets/figures/math.png` and `assets/figures/science.png`.
 
 ## Our first chapters
 

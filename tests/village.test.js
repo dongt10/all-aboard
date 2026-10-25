@@ -233,3 +233,26 @@ test('a started neighbor button shows three dots and says "Started. Tap to conti
   assert.doesNotMatch(made, /Started/);
   assert.equal(typeof neighborMarkup(math), 'string', 'no progress at all still renders');
 });
+
+test('banded creations use their own safe drawings and preserve legacy fallbacks', async () => {
+  const { pizzaCreationMarkup } = await import('../src/pizza.js');
+  const { chainCreationMarkup } = await import('../src/chain.js');
+  const { helpdayCreationMarkup, HELP_FITS } = await import('../src/helpday.js');
+  const { talesCreationMarkup } = await import('../src/tales.js');
+  const cases = [
+    ['math', { kind: 'math', activity: 'pizza', chapter: 1, grade: 3, slices: 8, halves: false, plates: [4, 4, 4, 4], tried: true }, pizzaCreationMarkup],
+    ['science', { activity: 'chain', chain: ['plant', 'fish', 'gull'], energy: [100, 10, 1] }, chainCreationMarkup],
+    ['community', { activity: 'helpday', crew: Object.entries(HELP_FITS).map(([job, helper]) => ({ job, helper })) }, helpdayCreationMarkup],
+    ['reading', { activity: 'tales', deck: 0, solved: ['momo-kitchen'] }, talesCreationMarkup],
+  ];
+  for (const [kind, snapshot, render] of cases) assert.equal(creationMarkup(kind, snapshot), render(snapshot));
+  const pizza = creationMarkup(cases[0][0], cases[0][1]);
+  assert.match(pizza, /aria-label="Your pizza party, 2 slices each"/);
+  assert.equal((pizza.match(/A6 6/g) ?? []).length, 4);
+  const chart = creationMarkup('science', { chain: ['<script>'], energy: [Infinity] });
+  assert.match(chart, /creation--chain/);
+  assert.doesNotMatch(chart, /<script|Infinity/);
+  assert.match(creationMarkup('science', { canopy: 'left', time: 10 }), /world-ices/);
+  assert.match(creationMarkup('reading', { activity: 'tales', solved: [] }), /world-book/);
+  assert.match(creationMarkup('reading', { found: ['key'] }), /world-book/);
+});

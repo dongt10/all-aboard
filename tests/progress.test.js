@@ -161,3 +161,50 @@ test('a saved band keeps its speed and form, and unknown values fall back to Ste
   assert.equal(old.tempo, 90); assert.equal(old.form, 'A', 'a save from before forms still loads');
   for (const value of ['60', 0, null, 121]) assert.equal(cleanCreation('music', { kind: 'music', tempo: value }).tempo, 90);
 });
+
+test('all four banded creations repair junk and round-trip through drafts and published saves', async () => {
+  const { HELP_FITS } = await import('../src/helpday.js');
+  const { expectedEnergy } = await import('../src/chain.js');
+  const crew = Object.entries(HELP_FITS).map(([job, helper]) => ({ job, helper }));
+  for (const grade of [3, 4, 5]) {
+    const cases = [
+      ['math', 'pizza', [
+        { slices: 7, halves: 'yes', plates: [99, -1, 'x', 3, 3], tried: true },
+        { slices: 8, halves: false, plates: [4, 4, 4, 4], tried: true },
+      ]],
+      ['science', 'chain', [
+        { chain: ['<script>', 'fish', 'gull'], energy: [Infinity, -1, 'x'], shone: true },
+        { chain: ['plant', 'fish', 'gull'], energy: expectedEnergy(grade), shone: true },
+      ]],
+      ['community', 'helpday', [
+        { crew: [null, { job: 'bad', helper: 'pip' }, ...crew, crew[0]] },
+        { crew },
+      ]],
+      ['reading', 'tales', [
+        { deck: 1, found: ['key'], solved: ['hana-path', 'momo-kitchen'] },
+        { deck: 0, solved: ['momo-kitchen', 'taro-pier', 'kiko-stage'] },
+      ]],
+    ];
+    for (const [kind, activity, inputs] of cases) for (const values of inputs) {
+      const snapshot = cleanCreation(kind, { kind, activity, chapter: 1, grade, ...values });
+      assert.equal(snapshot.activity, activity);
+      assert.deepEqual(normalizeEncounterSnapshot(kind, snapshot, grade, 1), snapshot);
+      const storage = memoryStorage();
+      const published = publishCreation({ ...createState(), chapter: 1, grade }, kind, snapshot);
+      assert.equal(saveState(published, storage), true);
+      const loaded = loadState(storage);
+      assert.deepEqual(loaded, published);
+      assert.deepEqual(getDraft(loaded, kind), snapshot);
+      assert.deepEqual(getCreations(loaded)[kind], snapshot);
+      assert.deepEqual(getCreations({ ...loaded, grade: grade === 3 ? 4 : 3 }), {});
+      if (activity === 'tales' && values.deck === 1) assert.deepEqual(snapshot.solved, ['hana-path']);
+      if (activity === 'helpday') assert.deepEqual(snapshot.crew, crew);
+      if (activity === 'chain' && values.chain[0] === '<script>') {
+        assert.deepEqual(snapshot.chain, [null, null, null]);
+        assert.equal(snapshot.shone, false);
+      }
+    }
+    const ice = { kind: 'science', chapter: 1, grade, canopy: 'left', time: 10 };
+    assert.deepEqual(cleanCreation('science', ice), ice, 'legacy ice is never migrated by grade');
+  }
+});

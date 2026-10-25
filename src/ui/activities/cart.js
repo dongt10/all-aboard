@@ -59,7 +59,7 @@ function roll(state, ui) {
   return { state: { ...state, rolled: true }, ui: next, line };
 }
 
-const isSaved = snapshot => Boolean(snapshot) && typeof snapshot === 'object' && snapshot.kind === 'math';
+const isSaved = snapshot => Boolean(snapshot) && typeof snapshot === 'object' && snapshot.kind === 'math' && snapshot.activity === undefined && snapshot.game === undefined;
 
 const cart = {
   kind: 'math',

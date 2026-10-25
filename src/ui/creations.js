@@ -1,3 +1,7 @@
+import { pizzaCreationMarkup } from '../pizza.js';
+import { chainCreationMarkup } from '../chain.js';
+import { helpdayCreationMarkup } from '../helpday.js';
+import { talesCreationMarkup, solvedCount } from '../tales.js';
 // A saved creation drawn small for its stall, the parade, and the item-get card.
 // Every saved value is either validated (colors, numbers, shapes) or escaped (text) before it is written.
 import { INK, PAPER, PAPER_SHADE, WOOD, LANTERN, FINISH, SKY, GRASS, GRASS_DARK, PATH, SUBJECT_THEME } from './palette.js';
@@ -17,6 +21,10 @@ function stampShape(shape) {
 
 export function creationMarkup(id, s = {}) {
   s = s && typeof s === 'object' ? s : {};
+  if (id === 'math' && s.activity === 'pizza') return pizzaCreationMarkup(s);
+  if (id === 'science' && (s.activity === 'chain' || Array.isArray(s.chain))) return chainCreationMarkup(s);
+  if (id === 'community' && s.activity === 'helpday') return helpdayCreationMarkup(s);
+  if (id === 'reading' && s.activity === 'tales' && solvedCount(s) > 0) return talesCreationMarkup(s);
   if (id === 'art') {
     const stamps = Array.isArray(s.stamps) ? s.stamps : [];
     return `<svg class="creation creation--art" viewBox="0 0 100 65" aria-label="Your painted festival banner"><path d="M1 1h98v57L88 64 76 58 64 64 52 58 40 64 28 58 16 64 1 58z" fill="${color(s.background, PAPER_SHADE)}" stroke="${INK}" stroke-width="2"/>${stamps.slice(0, 60).map(t => {

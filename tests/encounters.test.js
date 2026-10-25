@@ -302,3 +302,28 @@ test('every reading line at every grade fits a Bigger-words page, sentence by se
   shortSentences(readingChoice(found,'key',grade).message,`bag ready grade ${grade}`);
  }
 });
+
+test('banded snapshots delegate normalization, readiness and opening by activity', async () => {
+  const { encounterOpeningDialogue } = await import('../src/encounters.js');
+  const cases = [
+    ['math', 'pizza', 'Pizza', { slices: 8, plates: [4, 4, 4, 4], tried: true }, { tried: false }],
+    ['science', 'chain', 'Chain', { chain: ['plant', 'fish', 'otter'], shone: true }, { shone: false }],
+    ['community', 'helpday', 'Helpday', {}, { crew: [] }],
+    ['reading', 'tales', 'Tales', { deck: 0, found: ['key', 'umbrella', 'book'], solved: ['momo-kitchen', 'taro-pier', 'kiko-stage'] }, { solved: [] }],
+  ];
+  for (const [kind, activity, cap, values, unfinished] of cases) {
+    const rules = await import(`../src/${activity}.js`);
+    for (const grade of [3, 4, 5]) {
+      const input = { kind, activity, ...values };
+      if (activity === 'chain') input.energy = rules.expectedEnergy(grade);
+      if (activity === 'helpday') input.crew = Object.entries(rules.HELP_FITS).map(([job, helper]) => ({ job, helper }));
+      for (const [snapshot, ready] of [[input, true], [{ ...input, ...unfinished }, false]]) {
+        const state = normalizeEncounterSnapshot(kind, snapshot, grade, 1);
+        assert.deepEqual(state, rules[`normalize${cap}`](snapshot, grade, 1));
+        assert.equal(encounterReady(state), ready, `${activity} grade ${grade}`);
+        assert.equal(encounterReady(state), rules[`${activity}Ready`](state));
+        assert.equal(encounterOpeningDialogue(state), rules[`${activity}Opening`](state));
+      }
+    }
+  }
+});

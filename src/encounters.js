@@ -1,3 +1,7 @@
+import { normalizePizza, pizzaReady, pizzaOpening } from './pizza.js';
+import { normalizeChain, chainReady, chainOpening } from './chain.js';
+import { normalizeHelpday, helpdayReady, helpdayOpening } from './helpday.js';
+import { normalizeTales, talesReady, talesOpening } from './tales.js';
 import { READING_ITEMS, normalizeReadingFound } from './reading.js';
 
 export const ENCOUNTER_COLORS = ['#e96163', '#f4bf4f', '#6dbea0', '#559fc7', '#9d7fbd', '#fff1cf'];
@@ -17,6 +21,11 @@ export function gradeBand(grade) {
 export function normalizeEncounterSnapshot(kind, input = {}, grade = 1, chapter = 0) {
   const s = input && typeof input === 'object' && input.kind === kind ? input : {};
   const base = {kind, grade:clamp(grade,0,5), chapter:clamp(chapter,0,99)};
+  if (kind === 'math' && s.activity === 'pizza') return normalizePizza(s, base.grade, base.chapter);
+  if (kind === 'science' && s.activity === 'chain') return normalizeChain(s, base.grade, base.chapter);
+  if (kind === 'community' && s.activity === 'helpday') return normalizeHelpday(s, base.grade, base.chapter);
+  if (kind === 'reading' && s.activity === 'tales') return normalizeTales(s, base.grade, base.chapter);
+
   if (kind === 'math') return {...base, left:Array.isArray(s.left)?s.left.filter(n=>[1,2,3,5].includes(n)).slice(0,8):[], right:Array.isArray(s.right)?s.right.filter(n=>[1,2,3,5].includes(n)).slice(0,8):[], rolled:s.rolled===true};
   if (kind === 'science') return {...base, canopy:['left','right'].includes(s.canopy)?s.canopy:'none',time:clamp(s.time,0,20)};
   if (kind === 'art') return {...base,background:ENCOUNTER_COLORS.includes(s.background)?s.background:'#fff1cf',stamps:(Array.isArray(s.stamps)?s.stamps:[]).filter(x=>x&&SHAPES.includes(x.shape)&&ENCOUNTER_COLORS.includes(x.color)).slice(0,30).map(x=>({shape:x.shape,color:x.color,x:clamp(x.x,5,95),y:clamp(x.y,5,95),rotation:clamp(x.rotation,0,359)}))};
@@ -68,6 +77,11 @@ export function squareSteps(s) {
   return steps;
 }
 export function encounterReady(s) {
+  if (s.kind === 'math' && s.activity === 'pizza') return pizzaReady(s);
+  if (s.kind === 'science' && s.activity === 'chain') return chainReady(s);
+  if (s.kind === 'community' && s.activity === 'helpday') return helpdayReady(s);
+  if (s.kind === 'reading' && s.activity === 'tales') return talesReady(s);
+
   if(s.kind==='math')return s.rolled&&cartBalance(s).balanced;
   if(s.kind==='science')return s.time>=10&&s.canopy!=='none';
   if(s.kind==='art')return s.stamps.length>0;
@@ -126,6 +140,11 @@ const COMMUNITY_OPENING = {
  3:'Add a bench and a garden by the quiet trees. Then put a sign by the stage.',
 };
 export function encounterOpeningDialogue(state) {
+  if (state.kind === 'math' && state.activity === 'pizza') return pizzaOpening(state);
+  if (state.kind === 'science' && state.activity === 'chain') return chainOpening(state);
+  if (state.kind === 'community' && state.activity === 'helpday') return helpdayOpening(state);
+  if (state.kind === 'reading' && state.activity === 'tales') return talesOpening(state);
+
  const band=gradeBand(state.grade);
  if(encounterReady(state)&&state.kind==='math')return 'Your balanced cart is ready to send. You can still change the crates.';
  if(encounterReady(state)&&state.kind==='science')return 'Your ice test is ready. Serve ice, or try fresh ice.';

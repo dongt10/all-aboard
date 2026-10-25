@@ -1,3 +1,7 @@
+import { STAMP_PIZZA, STAMP_PIZZA_HALVES } from '../pizza.js';
+import { STAMP_CHAIN } from '../chain.js';
+import { STAMP_HELPDAY } from '../helpday.js';
+import { STAMP_TALES } from '../tales.js';
 // The Matsuri Guide: the town's character index and the child's stamp book. Pure, no DOM.
 import { CHARACTERS } from '../data.js';
 import { getCompleted } from '../progress.js';
@@ -5,12 +9,12 @@ import { SUBJECT_THEME } from './palette.js';
 
 // What each stamp says, by the lowest grade it applies to (0 is Kindergarten). The last row at or below the grade wins.
 const STAMPS = {
-  math: [[0, 'Same number on both sides is equal.'], [1, 'Different crates can weigh the same.'], [3, 'Sums can match in more than one way.']],
-  science: [[0, 'Shade keeps the sun off the ice.'], [2, 'Shade makes ice melt slower.']],
-  reading: [[0, 'Letters make a word you can read.'], [1, 'The story tells you what to pack.'], [3, 'Clues in a story tell you what is needed.']],
+  math: [[0, 'Same number on both sides is equal.'], [1, 'Different crates can weigh the same.'], [3, STAMP_PIZZA], [5, STAMP_PIZZA_HALVES]],
+  science: [[0, 'Shade keeps the sun off the ice.'], [2, 'Shade makes ice melt slower.'], [3, STAMP_CHAIN]],
+  reading: [[0, 'Letters make a word you can read.'], [1, 'The story tells you what to pack.'], [3, STAMP_TALES]],
   writing: [[0, 'Words welcome your neighbors.']],
   art: [[0, 'Shapes and colors make a design.']],
-  community: [[0, 'A bench gives a tired neighbor a rest.'], [1, 'A good plan works for everyone.'], [3, 'A plan has room for every need.']],
+  community: [[0, 'A bench gives a tired neighbor a rest.'], [1, 'A good plan works for everyone.'], [3, STAMP_HELPDAY]],
   music: [[0, 'Music can be fast or slow, high or low.'], [1, 'Rests are part of a rhythm.'], [3, 'A tune can go up, down, or stay the same.'], [4, 'A steady part holds up a changing tune.']],
 };
 

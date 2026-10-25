@@ -108,7 +108,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   function say(id, words) {
     if (!dialogue) return;
     const host = root.querySelector('.village-dialogue'), feet = actors.get(id)?.pos;
-    host.classList.toggle('village-dialogue--top', Boolean(feet && feet.x > 440 && feet.y > 330));
+    // Pip's welcome also goes to the top, so the first thing a new player reads never hides Kiko's stall.
+    host.classList.toggle('village-dialogue--top', Boolean(feet && feet.x > 440 && feet.y > 330) || words === WELCOME_LINE);
     host.hidden = false;
     dialogue.say(nameOf(id), words);
   }

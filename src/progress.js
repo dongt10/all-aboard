@@ -1,3 +1,7 @@
+import { cleanPizzaCreation } from './pizza.js';
+import { cleanChainCreation } from './chain.js';
+import { cleanHelpdayCreation } from './helpday.js';
+import { cleanTalesCreation } from './tales.js';
 import { CHARACTERS } from './data.js';
 import { TEMPOS, FORMS } from './audio.js';
 
@@ -25,6 +29,10 @@ export function scopeKey(chapter, grade) {
 export function cleanCreation(subjectId, input) {
   if (!IDS.has(subjectId) || !isObject(input) || input.kind !== subjectId) return null;
   const base = { kind: subjectId, chapter: input.chapter === 1 ? 1 : 0, grade: input.chapter === 1 ? Math.round(finite(input.grade, 1, 5, 1)) : 0 };
+  if (subjectId === 'math' && input.activity === 'pizza') return cleanPizzaCreation({ ...input, ...base });
+  if (subjectId === 'science' && input.activity === 'chain') return cleanChainCreation({ ...input, ...base });
+  if (subjectId === 'community' && input.activity === 'helpday') return cleanHelpdayCreation({ ...input, ...base });
+  if (subjectId === 'reading' && input.activity === 'tales') return cleanTalesCreation({ ...input, ...base });
   if (subjectId === 'math') {
     const cargo = values => Array.isArray(values) ? values.filter(value => [1, 2, 3, 5].includes(value)).slice(0, 8) : [];
     return { ...base, left: cargo(input.left), right: cargo(input.right), rolled: input.rolled === true };
