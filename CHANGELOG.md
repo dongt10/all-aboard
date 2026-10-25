@@ -18,6 +18,8 @@ Changes to All Aboard, grouped by release.
 
 ### Changed
 
+- The team’s hand-drawn village background replaces the old drawn map with a cobblestone crossroads.
+- All characters—the player, Pip, Nori and the seven neighbors—walk only on the road, using the road mask and path finding for taps.
 - Send band waits for each grade’s music lesson: a changed sound/rest rhythm at grade 1, a matched Echo at grade 2, and a changed melody at grades 3–5. Kindergarten keeps its play-or-edit rule, and published bands stay ready.
 - Food-chain energy starts at the plant, with ÷10 arrows between feeding levels. The Sun supplies sunlight without a number. The three placed numbers are 1000 → 100 → 10 in grade 3, 2000 → 200 → 20 in grade 4, and 5000 → 500 → 50 in grade 5.
 - Grade 5 pizzas use six or ten slices and require a cut into halves before Serve pizza; older saved pizzas still load and render.

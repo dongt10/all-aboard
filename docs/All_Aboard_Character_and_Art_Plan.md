@@ -141,13 +141,7 @@ Pip and Nori can appear in multiple subject quests. **Every request must work in
 
 ## Village
 
-Arrange the village around a central festival square, with open paths between all subject locations.
-
-![Village layout with Hana, Sora, and Fumi along the top; Taro, the central festival square, and Yuki in the middle; Momo, the arrival pier, and Kiko along the bottom.](assets/village-layout.svg)
-
-- **Festival square:** The player’s stall displays their creations as they progress.
-- **Surroundings:** Trees, a shoreline, flower beds, benches, and a quiet resting nook. Keep the main paths visually clear.
-- **First buildings:** Taro’s workshop, Momo’s kitchen, and Yuki’s studio. The other locations can be outdoor stalls or small gathering spaces.
+The village is now the team’s drawing of a cobblestone crossroads. The road is the only walkable ground for the player, Pip, Nori and the seven neighbors, and the stalls stand along the road’s edges.
 
 ## Screens
 
@@ -160,7 +154,7 @@ The rough front end needs five views.
 
 ### Village exploration
 
-**Shows:** Human player, seven subject locations, recurring neighbors, and the festival square.  
+**Shows:** Human player, seven subject locations, recurring neighbors, and the cobblestone crossroads.\
 **Art needed:** Environment, character sprites, props, and subject icons.
 
 ### Conversation

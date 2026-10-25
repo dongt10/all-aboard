@@ -43,7 +43,7 @@ Each decision has a recommendation, and the rest of this roadmap assumes it.
 | Decision | Recommended | Alternative |
 | :--- | :--- | :--- |
 | **Who v1 is for** | Kindergarten–grade 3, about ages 5–9, matching the brief’s ages 6–9. The grade 4 and 5 tiles stay, labeled **Preview**, so existing saves keep working. | Full K–5 in v1, which adds two more grades of content to every subject. |
-| **The player’s stall** | After the demo, add the brief’s empty stall in the festival square, so the whole game has one thing to fill. | Keep creations at neighbors’ stalls with the remake’s festival board, and update the plan. |
+| **The player’s stall** | After the demo, add the brief’s empty stall on the grass beside the crossroads, so the whole game has one thing to fill. | Keep creations at neighbors’ stalls with the remake’s festival board, and update the plan. |
 | **Standards** | Use the US anchors in the tables below as starting points, reviewed by an educator. | Another framework, if the first pilots happen outside the US. |
 | **Backend** | None in v1. A content file fills the plan’s “backend supplies content” role. | Revisit if teachers need to assign or track work. |
 
@@ -285,7 +285,7 @@ Make words and tasks into data, as the art plan asks.
 
 ### M4 · Festival loop
 
-- An empty player’s stall in the festival square that fills with each creation.
+- An empty player’s stall on the grass beside the crossroads that fills with each creation.
 - Neighbors mention creations the player has actually made.
 - Pip quests from the art plan: balancing parcels (math), reading an address (reading), and finding a route (community).
 - A lantern-night finale when all seven pips on the festival board are full.

@@ -43,8 +43,8 @@ Open **[http://127.0.0.1:4173](http://127.0.0.1:4173)** in your browser. Keep Te
 ## How to play
 
 - **Pick who you are** (boy or girl) and your grade: **Kindergarten** or **1–5**. Then press **▶ Start**.
-- **Pip says hello at the pier:** “Welcome to Willow Bay! Tap a neighbor to help them make something.” He says it on every visit until you make your first thing in that grade.
-- **Walk around Willow Bay.** The seven neighbors stroll near their stalls. Tap one, or walk up and press Enter, to start their activity. A stall marked **!** has something new to make; **...** means you started it and can continue. Pip and Nori wander between the stalls and say hello.
+- **Pip says hello at the crossroads:** “Welcome to Willow Bay! Tap a neighbor to help them make something.” He says it on every visit until you make your first thing in that grade.
+- **Walk around Willow Bay’s cobblestone crossroads.** Everyone stays on the road; the seven neighbors stroll beside their stalls along the road. Tap one, or walk up and press Enter, to start their activity. A stall marked **!** has something new to make; **...** means you started it and can continue. Pip and Nori wander along the road and say hello.
 - **Open the Guide** (top right) to meet the whole cast. It is the Matsuri Guide, “the town’s character book.” Each neighbor’s page says what you’ll learn, and shows the stamp once you make their thing. Choose **Find** for an arrow that leads you to them, or **Visit** to go straight to their activity. The header counts your stamps, “0 of 7 stamps.”
 - **Help each neighbor make something.** Kindergarten and grade 1 balance Taro’s cart, shade Momo’s ice, pack Sora’s story bag, and plan Hana’s square. Grade 2 builds Taro’s crate rows, compares cups in Momo’s bean test, follows Hana’s compass errands, and puts Sora’s story ribbon in order. Grades 3–5 share pizza, build a food-chain chart, name tales with evidence, and match helpers to jobs. Every grade also stamps Yuki’s banner, writes Fumi’s sign, and makes a band with Kiko, with goals that grow by grade. The table below explains each task.
 - **Finish your creation.** Each encounter shows at most four commands. The green finish command is last and stays gray until the work is ready: **Send cart**, **Serve ice**, **Share story**, **Open square**, **Plant bed**, **Hang map**, **Share ribbon**, **Serve pizza**, **Pin chart**, **Share tales**, **Start day**, **Hang banner**, **Put up sign**, or **Send band**. In the story bag, **Share story** appears after all three things are packed. Help names the steps and the finish. A wrong try explains why and keeps your work. Finishing shows what you made, then puts it at that neighbor’s stall.
@@ -59,14 +59,14 @@ Everything saves in this browser, separately for Kindergarten and each grade.
 
 | Action | Keyboard | Touch or mouse |
 | :--- | :--- | :--- |
-| Move | Arrow keys or WASD | Tap a neighbor to walk over |
+| Move | Arrow keys or WASD along the road | Tap the road to walk there, or a neighbor to walk over |
 | Choose (A) | Enter, Space, or Z | Tap a command |
 | Back (B) | Esc, X, or Backspace | ← Village, or a window’s close button |
 | Next page | Enter, Space, or Z (the A action) | Tap the dialogue |
 
 Every dialogue box has a **Hear** tab that reads the current line and a **Help** tab with numbered steps for that screen. In Fumi’s text field, Esc moves focus to the commands; press it again to return to the village. Other keys stay in the field.
 
-With nobody nearby, Enter shows a walking hint that closes after three seconds and moves above the player when needed. Read to me finishes the spoken hint before the closing delay.
+Tap a house or grass and you stop at the road’s edge. With nobody nearby, Enter shows a walking hint that closes after three seconds and moves above the player when needed. Read to me finishes the spoken hint before the closing delay.
 
 ### Comfort settings
 
@@ -183,6 +183,8 @@ Both chapters share the same village and cast. Players can choose among **math, 
 
 ## The village
 
-![Village layout with the festival square and player’s stall at the center, surrounded by the seven subject locations and the arrival pier.](docs/assets/village-layout.svg)
+Willow Bay is the team’s hand-drawn cobblestone crossroads. The road is the only walkable ground; the stalls stand along its edges.
+
+![The team’s drawing of Willow Bay’s cobblestone crossroads.](assets/village/background.png)
 
 See the [full art guide](docs/All_Aboard_Character_and_Art_Plan.md#asset-guide) for export sizes and the [first art batch](docs/All_Aboard_Character_and_Art_Plan.md#first-art-batch) for the initial checklist.
