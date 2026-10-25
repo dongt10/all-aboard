@@ -170,16 +170,12 @@
           45
         ]
       ],
-      "rightMirrorColumns": [
-        0,
-        1,
-        2
-      ],
+      "rightMirrorColumns": null,
       "sideStandSha256": {
-        "left": "6d03d332006b1f10dcc386ee9e46de2b4a05a6778358cac5ceaf7b3cfd49e14a",
-        "right": "44b0a1638171279dbb9665983d79bcf68d6b6f1052244ccd146d23bbd8a77d52"
+        "left": "4dd0a2220d1e1ec190127e927f63fac1e84dccf7f56232fde149f5e3f8e96f50",
+        "right": "192b69d7ad1d52ee199a4da55067c6f0806cafb415b95d32b7aa1bbf84bdb4c0"
       },
-      "backStandSha256": "76396f9507aa874f2667831eec83cd8e2e8076080ae7766ec5a831f3c737986a"
+      "backStandSha256": "105183d8f54a4442e72d2e483ad633f909865f3ddfaff9266109ef7a09f0813b"
     },
     "writing": {
       "name": "Fumi",
