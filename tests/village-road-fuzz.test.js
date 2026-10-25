@@ -1,8 +1,8 @@
-import test from 'node:test';
+import test, { describe, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { readPNG } from './helpers/png.js';
 import { createWalkable, maskFromRGBA } from '../src/ui/walkable.js';
-import { ROAD_MASK, STAGE } from '../src/ui/village-layout.js';
+import { ROAD_MASK, STAGE, EASELS } from '../src/ui/village-layout.js';
 import {
   setRoad, road, clampWalk, stepPlayer, wanderTarget, roadPath, talkGoal,
   nearestNeighbor, stepToward, PLAYER_START, VILLAGE_SPOTS, SIDE_SPOTS,
@@ -15,7 +15,9 @@ function seeded(seed) {
   return () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 0x100000000);
 }
 const png = readPNG(new URL(`../${ROAD_MASK}`, import.meta.url));
-setRoad(createWalkable(maskFromRGBA(png)));
+for (const allBlocked of [false, true]) describe(`road fuzz with all easels blocked=${allBlocked}`, () => {
+const blocked = allBlocked ? Object.values(EASELS) : [];
+before(() => setRoad(createWalkable(maskFromRGBA(png), { blocked })));
 const cast = { ...VILLAGE_SPOTS, ...SIDE_SPOTS };
 const pointText = p => JSON.stringify(p);
 function fail(reason, context, position, extra = {}) {
@@ -28,6 +30,7 @@ function footprintOracle(p) {
   const x = Math.floor(p.x), y = Math.floor(p.y);
   for (let py = y - 3; py <= y; py++) for (let px = x - 6; px <= x + 6; px++) {
     if (px < 0 || py < 0 || px >= png.width || py >= png.height) return false;
+    if (blocked.some(r => px >= r.x - 2 && px < r.x + r.w + 2 && py >= r.y - 2 && py < r.y + r.h + 2)) return false;
     const i = (py * png.width + px) * 4;
     if (png.rgba[i] !== 255 || png.rgba[i + 1] !== 255 || png.rgba[i + 2] !== 255 || png.rgba[i + 3] !== 255) return false;
   }
@@ -293,4 +296,6 @@ test('road fuzz: exhaustive keyboard flood has a graph route to every talk goal'
   }
   assert.ok(slides > 0, 'Flood includes corner sliding');
   t.diagnostic(`${queue.length} keyboard-reachable positions × ${Object.keys(cast).length} talk goals proven connected; ${slides} slide edges`);
+});
+
 });

@@ -11,7 +11,7 @@ import {
   SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, nearestNeighbor,
   setRoad, road, loadRoad, roadPath, talkGoal, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, stallSVG, easelRect,
 } from '../village-map.js';
-import { BACKGROUND, STALLS } from '../village-layout.js';
+import { BACKGROUND, STALLS, EASELS } from '../village-layout.js';
 
 const SIDE = {
   pip: { name: 'Pip', line: 'I delivered every invitation! Except this one. Oh. It’s mine.' },
@@ -198,7 +198,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const { x, y } = STALLS[c.id];
     const creation = made.creations[c.id], easel = easelRect(c.id);
     return `<div class="village-stall" data-id="${c.id}" style="left:${x}px;top:${y}px">${stallSVG(c.id)}<span class="village-sparkle" aria-hidden="true"></span></div>
-      <div class="village-easel${creation ? '' : ' village-easel--empty'}" data-id="${c.id}" style="left:${easel.x}px;top:${easel.y}px">${creation ? creationMarkup(c.id, creation) : ''}</div>`;
+      ${creation ? `<div class="village-easel" data-id="${c.id}" style="left:${easel.x}px;top:${easel.y}px">${creationMarkup(c.id, creation)}</div>` : ''}`;
   }
   function boardMarkup(made) {
     const count = Object.keys(made.creations).length;
@@ -494,7 +494,10 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (retry) { retry.disabled = true; retry.textContent = 'Loading…'; }
     try {
       if (ctx.walkable) setRoad(ctx.walkable);
-      else await loadRoad();
+      else {
+        const creations = getCreations(state());
+        await loadRoad(undefined, { blocked: Object.entries(EASELS).filter(([id]) => creations[id]).map(([, rect]) => rect) });
+      }
       if (!alive) return;
       mapFailed = false;
       if (retry) { root.querySelector('.village-map-error')?.remove(); hush(); }

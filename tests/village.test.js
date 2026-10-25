@@ -387,7 +387,9 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
 }
 
 test('the scene uses the fixed-size background and the supplied furniture geometry', t => {
-  const f = villageFixture(t);
+  let state = createState();
+  for (const id of Object.keys(EASELS)) state = publishCreation(state, id, { kind: id });
+  const f = villageFixture(t, { state });
   const image = f.root.querySelector('.village-map');
   assert.equal(image.tagName, 'IMG');
   assert.equal(image.getAttribute('src'), BACKGROUND);
@@ -1249,15 +1251,32 @@ for (const failure of ['error', 'timeout', 'size', 'empty']) test(`map ${failure
   assert.notDeepEqual(f.pos(), PLAYER_START);
 });
 
-test('every reserved empty easel is a visible wooden frame; creations retain their markup', t => {
-  const f = villageFixture(t);
-  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
-  const empty = cssBlock(css, '.village-easel--empty');
-  assert.doesNotMatch(empty, /display:\s*none|visibility:\s*hidden|opacity:\s*0/);
-  assert.match(empty, /var\(--wood\)/);
-  for (const id of Object.keys(EASELS)) {
-    assert.ok(f.root.querySelector(`.village-easel--empty[data-id="${id}"]`));
-  }
+test('empty easels have no markup or collision; a creation appears and blocks on remount without decoding again', async t => {
+  const images = pendingRoad(t), f = villageFixture(t, { walkable: null });
+  supplyRoadPixels(t, f.doc);
+  images[0].onload();
+  await f.mounted;
+  for (const id of Object.keys(EASELS)) assert.equal(f.root.querySelector(`.village-easel[data-id="${id}"]`), null);
+  const r = EASELS.writing, point = { x: r.x + r.w / 2, y: r.y + r.h / 2 };
+  assert.ok(road().isWalkable(point), 'empty easel area is road');
+  f.scene.destroy();
+  const state = publishCreation(createState(), 'writing', { kind: 'writing' });
+  const g = villageFixture(t, { walkable: null, state });
+  await g.mounted;
+  assert.equal(images.length, 1, 'remount uses the cached decoded bitset');
+  const easel = g.root.querySelector('.village-easel[data-id="writing"]');
+  assert.ok(easel);
+  const sign = easel.querySelector('.creation--writing.world-sign');
+  assert.ok(sign);
+  assert.equal(sign.textContent, 'Hello, friend!');
+  assert.equal(g.root.querySelectorAll('.village-easel').length, 1);
+  assert.equal(road().isWalkable(point), false);
+  g.scene.destroy();
+  const h = villageFixture(t, { walkable: null, state: { ...state, chapter: 1, grade: 2 } });
+  await h.mounted;
+  assert.equal(h.root.querySelectorAll('.village-easel').length, 0, 'another grade has no creations');
+  assert.ok(road().isWalkable(point), 'another grade restores the hidden easel area');
+  assert.equal(images.length, 1);
 });
 
 for (const calm of [false, true]) test(`review tap, Left, Down still allows every neighbor route (calm=${calm})`, t => {

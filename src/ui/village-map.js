@@ -4,26 +4,36 @@ import { VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, HUD_ZONES, EASELS, ROA
 import { maskFromRGBA, createWalkable } from './walkable.js';
 export { VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, HUD_ZONES } from './village-layout.js';
 
-let current = null, playerRoad = null, loading = null;
+let current = null, playerRoad = null, loading = null, cachedMask = null, cachedSrc = null;
 export const road = () => current;
 export function setRoad(walkable) {
+  if (!walkable) { cachedMask = null; cachedSrc = null; }
   if (current === walkable) return;
   current = walkable;
   playerRoad = null;
 }
 
-export async function loadRoad(src = ROAD_MASK) {
-  if (current) return current;
+export async function loadRoad(src = ROAD_MASK, { blocked } = {}) {
+  if (blocked === undefined && current && (!cachedSrc || cachedSrc === src)) return current;
+  const build = mask => {
+    const walkable = createWalkable(mask, { blocked });
+    if (![PLAYER_START, ...Object.values(VILLAGE_SPOTS), ...Object.values(SIDE_SPOTS)].every(walkable.isWalkable)) {
+      throw new Error('The village map has no safe starting places.');
+    }
+    setRoad(walkable);
+    return walkable;
+  };
+  if (cachedMask && cachedSrc === src) return build(cachedMask);
   if (!loading) loading = new Promise((resolve, reject) => {
     const img = new Image();
     let settled = false;
-    const finish = (error, walkable) => {
+    const finish = (error, mask) => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
       img.onload = img.onerror = null;
       if (error) reject(error);
-      else { setRoad(walkable); resolve(walkable); }
+      else { cachedMask = mask; cachedSrc = src; resolve(mask); }
     };
     const timer = setTimeout(() => finish(new Error('The village map took too long to load.')), 3000);
     img.onload = () => {
@@ -36,17 +46,18 @@ export async function loadRoad(src = ROAD_MASK) {
         context.drawImage(img, 0, 0);
         const { width, height, data } = context.getImageData(0, 0, canvas.width, canvas.height);
         if (width !== STAGE.width || height !== STAGE.height) throw new Error('The village map has the wrong size.');
-        const walkable = createWalkable(maskFromRGBA({ width, height, rgba: data }));
+        const mask = maskFromRGBA({ width, height, rgba: data });
+        const walkable = createWalkable(mask);
         if (![PLAYER_START, ...Object.values(VILLAGE_SPOTS), ...Object.values(SIDE_SPOTS)].every(walkable.isWalkable)) {
           throw new Error('The village map has no safe starting places.');
         }
-        finish(null, walkable);
+        finish(null, mask);
       } catch (error) { finish(error); }
     };
     img.onerror = () => finish(new Error('The village road could not be loaded.'));
     img.src = src;
   }).finally(() => { loading = null; });
-  return loading;
+  return build(await loading);
 }
 
 // Reserve the 64×64 figure and the 44×36 Find chip beside it, even when Find is off.

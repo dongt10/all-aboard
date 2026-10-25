@@ -20,7 +20,17 @@ const same = (a, b) => a.x === b.x && a.y === b.y;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
 export function createWalkable(mask, options = {}) {
-  const { width, height, bits } = mask;
+  const { width, height } = mask;
+  // Reuse the decoded mask across visits; scene furniture never mutates its bits.
+  const bits = options.blocked?.length ? mask.bits.slice() : mask.bits;
+  for (const { x, y, w, h } of options.blocked ?? []) {
+    for (let py = Math.max(0, Math.floor(y - 2)); py < Math.min(height, Math.ceil(y + h + 2)); py++) {
+      for (let px = Math.max(0, Math.floor(x - 2)); px < Math.min(width, Math.ceil(x + w + 2)); px++) {
+        const i = py * width + px;
+        bits[i >> 3] &= ~(1 << (i & 7));
+      }
+    }
+  }
   const footprint = (options.footprint ?? FOOTPRINT).map(p => Array.isArray(p) ? { x: p[0], y: p[1] } : p);
   // Erode once by every footprint pixel. All movement queries share this bitset.
   const clearance = new Uint8Array(Math.ceil(width * height / 8));

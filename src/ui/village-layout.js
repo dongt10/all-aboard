@@ -22,7 +22,7 @@ export const VILLAGE_SPOTS = {
   music: { x: 690, y: 386 },
 };
 
-// Lamp-safe furniture; rectangles plus a two-pixel border are carved from the road.
+// Lamp-safe stalls; rectangles plus a two-pixel border are baked into the road mask.
 // Upper stalls sit between the lamp silhouettes; neighbors remain within 24px.
 export const STALLS = {
   community: { x: 400, y: 72, w: 128, h: 80, side: 'above' },
@@ -35,7 +35,7 @@ export const STALLS = {
 };
 
 // Easels stay within 100px of their stalls, outside lamp metal and the junction.
-// Unusable gaps are closed in the mask; all feet positions share a 28px-clear core.
+// Only made creations block these rectangles, with a two-pixel margin, on each village mount.
 export const EASELS = {
   community: { x: 270, y: 72, w: 80, h: 56 },
   reading: { x: 550, y: 72, w: 80, h: 56 },

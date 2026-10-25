@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as layout from '../src/ui/village-layout.js';
 import { readPNG } from './helpers/png.js';
+import { createWalkable, maskFromRGBA } from '../src/ui/walkable.js';
+import { setRoad, talkGoal, roadPath } from '../src/ui/village-map.js';
 
 const { BACKGROUND, ROAD_MASK, STAGE, HUD_ZONES, VILLAGE_SPOTS, STALLS, EASELS, SIDE_SPOTS, WANDER, PLAYER_START, NEAR_LAMPS } = layout;
 const background = readPNG(new URL(`../${BACKGROUND}`, import.meta.url));
@@ -19,6 +21,12 @@ const onRoad = (x, y) => x >= 0 && y >= 0 && x < STAGE.width && y < STAGE.height
 const figure = (p, player = false) => ({ x: p.x - 32, y: p.y - 57, w: player ? 102 : 64, h: 64 });
 const footprint = (x, y) => {
   for (let dy = -3; dy <= 0; dy++) for (let dx = -6; dx <= 6; dx++) if (!onRoad(x + dx, y + dy)) return false;
+  return true;
+};
+const blocks = Object.values(EASELS).map(grown);
+const blockedRoad = (x, y) => onRoad(x, y) && !blocks.some(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h);
+const createBlockedFootprint = (x, y) => {
+  for (let dy = -3; dy <= 0; dy++) for (let dx = -6; dx <= 6; dx++) if (!blockedRoad(x + dx, y + dy)) return false;
   return true;
 };
 function flood(canWalk) {
@@ -134,8 +142,8 @@ test('all figures clear the stage and HUD, including the player Find chip', () =
   }
 });
 
-test('all furniture and its two-pixel border are carved out of the road', () => {
-  for (const [id, r] of furniture) {
+test('only stalls and their two-pixel border are baked out of the road', () => {
+  for (const [id, r] of Object.entries(STALLS)) {
     const g = grown(r);
     for (let y = Math.max(0, g.y); y < Math.min(540, g.y + g.h); y++) {
       for (let x = Math.max(0, g.x); x < Math.min(960, g.x + g.w); x++) assert.ok(!onRoad(x, y), `${id}: ${x},${y}`);
@@ -177,7 +185,7 @@ test('furniture does not overlap and short gaps between facing edges are closed'
     for (const [axis, gap] of gaps.entries()) {
       if (gap.w <= 0 || gap.h <= 0 || (axis === 0 ? gap.w : gap.h) >= 28) continue;
       for (let y = gap.y; y < gap.y + gap.h; y++) for (let x = gap.x; x < gap.x + gap.w; x++) {
-        assert.ok(!footprint(x, y), `${aid} / ${bid}: unsealed narrow gap at ${x},${y}`);
+        assert.ok(!createBlockedFootprint(x, y), `${aid} / ${bid}: unsealed narrow gap at ${x},${y}`);
       }
     }
   }
@@ -266,31 +274,42 @@ function diskTransform(bits, radius, erode) {
   return result;
 }
 
-test('ALL full 13 by 4 footprint positions form one component containing every home', () => {
-  const { count, seen } = flood((x, y) => fullFeet[y * 960 + x] === 1);
-  assert.equal(count, population(fullFeet), 'no untested footprint pocket anywhere on the stage');
-  for (const [id, p] of Object.entries(points)) assert.equal(seen[p.y * 960 + p.x], 1, id);
-});
+for (const allBlocked of [false, true]) {
+  const pixels = allBlocked ? blockedRoad : onRoad;
+  const feet = allBlocked ? Uint8Array.from(fullFeet, (_, i) => Number(createBlockedFootprint(i % 960, Math.floor(i / 960)))) : fullFeet;
+  const walk = createWalkable(maskFromRGBA(road), { blocked: allBlocked ? Object.values(EASELS) : [] });
+  test(`all full-footprint positions form one component with every spot (all easels blocked=${allBlocked})`, t => {
+    const { count, seen } = flood((x, y) => feet[y * 960 + x] === 1);
+    assert.equal(count, population(feet), 'no disconnected footprint pocket anywhere');
+    for (let y = 0; y < 540; y++) for (let x = 0; x < 960; x++) assert.equal(walk.isWalkable({ x, y }), Boolean(feet[y * 960 + x]));
+    for (const [id, p] of Object.entries(points)) {
+      assert.equal(seen[p.y * 960 + p.x], 1, id);
+      for (const r of blocks) assert.ok(!(p.x >= r.x && p.x < r.x + r.w && p.y >= r.y && p.y < r.y + r.h), `${id} outside blocked easels`);
+    }
+    setRoad(walk);
+    for (const id of Object.keys({ ...VILLAGE_SPOTS, ...SIDE_SPOTS })) {
+      const goal = talkGoal(id), path = roadPath(PLAYER_START, goal, 0);
+      assert.ok(goal && path, `${id} talk goal reachable`);
+      assert.deepEqual(path.at(-1), goal);
+      for (let i = 1; i < path.length; i++) assert.ok(walk.straightClear(path[i - 1], path[i]));
+    }
+    t.diagnostic(`${count} full-footprint positions; one component; all 10 spots and 9 talk goals reachable`);
+  });
 
-test('28px passage clearance preserves connectivity and leaves no thin road appendages', () => {
-  const core = diskTransform(fullFeet, 14, true);
-  const { count } = flood((x, y) => core[y * 960 + x] === 1);
-  assert.ok(count > 0);
-  assert.equal(count, population(core), '14px disk erosion must not split the feet component');
-
-  // Stronger than component counting: all retained road must be backed by
-  // a complete foot rectangle swept through this connected disk-clear area.
-  // An arbitrarily thin dead-end tail would otherwise disappear in erosion
-  // without changing the component count, and would escape that test alone.
-  const sweptFeet = diskTransform(core, 14, false), supported = new Uint8Array(fullFeet.length);
-  for (let y = 3; y < 540; y++) for (let x = 6; x < 954; x++) {
-    if (!sweptFeet[y * 960 + x]) continue;
-    for (let dy = -3; dy <= 0; dy++) for (let dx = -6; dx <= 6; dx++) supported[(y + dy) * 960 + x + dx] = 1;
-  }
-  for (let i = 0; i < supported.length; i++) {
-    assert.equal(supported[i], Number(onRoad(i % 960, Math.floor(i / 960))), `unsupported road or obstacle intrusion at ${i % 960},${Math.floor(i / 960)}`);
-  }
-});
+  test(`28px passage clearance preserves connectivity with no thin appendages (all easels blocked=${allBlocked})`, t => {
+    const core = diskTransform(feet, 14, true);
+    const { count } = flood((x, y) => core[y * 960 + x] === 1);
+    assert.ok(count > 0);
+    assert.equal(count, population(core), '14px disk erosion must not split the feet component');
+    const sweptFeet = diskTransform(core, 14, false), supported = new Uint8Array(feet.length);
+    for (let y = 3; y < 540; y++) for (let x = 6; x < 954; x++) {
+      if (!sweptFeet[y * 960 + x]) continue;
+      for (let dy = -3; dy <= 0; dy++) for (let dx = -6; dx <= 6; dx++) supported[(y + dy) * 960 + x + dx] = 1;
+    }
+    for (let i = 0; i < supported.length; i++) assert.equal(supported[i], Number(pixels(i % 960, Math.floor(i / 960))), `unsupported road at ${i % 960},${Math.floor(i / 960)}`);
+    t.diagnostic(`${count} centers in the connected 14px-radius core; every road pixel supported by its swept full footprint`);
+  });
+}
 
 test('every wander envelope keeps the sprite, badge and status mark on stage below the HUD', () => {
   for (const [id, p] of Object.entries({ ...VILLAGE_SPOTS, ...SIDE_SPOTS })) {
