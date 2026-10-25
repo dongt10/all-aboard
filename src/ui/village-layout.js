@@ -10,42 +10,45 @@ export const HUD_ZONES = [
   { x: 0, y: 452, w: 440, h: 88 },
 ];
 
-// Feet stay on stone. Neighbors leave room for each other and the festival board.
+// Feet stay on stone; the full wander range reserves sprite, badge and status space.
+// Reading and Music use the upper junction and the approach above the lower lamps.
 export const VILLAGE_SPOTS = {
-  community: { x: 420, y: 156 },
-  reading: { x: 610, y: 157 },
+  community: { x: 420, y: 172 },
+  reading: { x: 560, y: 260 },
   writing: { x: 104, y: 350 },
   math: { x: 314, y: 350 },
-  art: { x: 631, y: 315 },
-  science: { x: 896, y: 350 },
-  music: { x: 715, y: 440 },
+  art: { x: 631, y: 322 },
+  science: { x: 844, y: 350 },
+  music: { x: 690, y: 386 },
 };
 
-// Furniture hugs the road edges; its two-pixel border is cut out of the walk mask.
+// Lamp-safe furniture; rectangles plus a two-pixel border are carved from the road.
+// Upper stalls sit between the lamp silhouettes; neighbors remain within 24px.
 export const STALLS = {
-  community: { x: 270, y: 72, w: 128, h: 80, side: 'left' },
-  reading: { x: 581, y: 72, w: 128, h: 80, side: 'above' },
+  community: { x: 400, y: 72, w: 128, h: 80, side: 'above' },
+  reading: { x: 510, y: 164, w: 128, h: 80, side: 'above' },
   writing: { x: 40, y: 254, w: 128, h: 80, side: 'above' },
-  math: { x: 250, y: 264, w: 128, h: 80, side: 'above' },
-  art: { x: 640, y: 254, w: 128, h: 80, side: 'right' },
-  science: { x: 832, y: 254, w: 128, h: 80, side: 'above' },
-  music: { x: 724, y: 362, w: 128, h: 80, side: 'right' },
+  math: { x: 256, y: 264, w: 128, h: 80, side: 'above' },
+  art: { x: 640, y: 244, w: 128, h: 80, side: 'right' },
+  science: { x: 815, y: 248, w: 128, h: 80, side: 'above' },
+  music: { x: 702, y: 366, w: 128, h: 80, side: 'right' },
 };
 
-// Creations sit beside the stalls, with clear passages between all furniture.
+// Easels stay within 100px of their stalls, outside lamp metal and the junction.
+// Unusable gaps are closed in the mask; all feet positions share a 28px-clear core.
 export const EASELS = {
-  community: { x: 310, y: 180, w: 80, h: 56 },
-  reading: { x: 536, y: 180, w: 80, h: 56 },
-  writing: { x: 168, y: 372, w: 80, h: 56 },
-  math: { x: 317, y: 372, w: 80, h: 56 },
-  art: { x: 733, y: 170, w: 80, h: 56 },
-  science: { x: 880, y: 362, w: 80, h: 56 },
-  music: { x: 880, y: 446, w: 80, h: 56 },
+  community: { x: 270, y: 72, w: 80, h: 56 },
+  reading: { x: 550, y: 72, w: 80, h: 56 },
+  writing: { x: 172, y: 254, w: 80, h: 56 },
+  math: { x: 260, y: 180, w: 80, h: 56 },
+  art: { x: 715, y: 170, w: 80, h: 56 },
+  science: { x: 715, y: 95, w: 80, h: 56 },
+  music: { x: 880, y: 340, w: 80, h: 56 },
 };
 
 export const SIDE_SPOTS = {
-  pip: { x: 475, y: 300 },
-  nori: { x: 583, y: 425 },
+  pip: { x: 475, y: 350 },
+  nori: { x: 583, y: 475 },
 };
 
 export const WANDER = { x: 36, y: 4 };
