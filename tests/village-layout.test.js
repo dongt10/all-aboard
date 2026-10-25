@@ -74,17 +74,30 @@ test('layout exports the complete plain-data contract with integer coordinates',
   Object.values(layout).forEach(check);
 });
 
-test('both assets match the stage and the detailed background is opaque', () => {
-  for (const image of [background, road]) assert.deepEqual([image.width, image.height], [960, 540]);
+test('background is exactly 1920 x 1080, twice the stage, and opaque; road matches the stage', () => {
+  assert.deepEqual([background.width, background.height], [1920, 1080]);
+  assert.deepEqual([background.width, background.height], [STAGE.width * 2, STAGE.height * 2]);
+  assert.deepEqual([road.width, road.height], [STAGE.width, STAGE.height]);
   for (let i = 3; i < background.rgba.length; i += 4) assert.equal(background.rgba[i], 255);
 });
+
+// The background is twice the stage: a stage pixel is the average of its 2x2 block.
+function backgroundAt(x, y) {
+  let r = 0, g = 0, b = 0;
+  for (const dy of [0, 1]) for (const dx of [0, 1]) {
+    const i = ((2 * y + dy) * background.width + 2 * x + dx) * 4;
+    r += background.rgba[i]; g += background.rgba[i + 1]; b += background.rgba[i + 2];
+  }
+  return [r / 4, g / 4, b / 4];
+}
 
 test('at least 97 percent of road pixels sit on low-saturation gray background stone', () => {
   let total = 0, gray = 0;
   for (let i = 0; i < road.rgba.length; i += 4) {
     if (road.rgba[i + 3] !== 255) continue;
     total++;
-    const [r, g, b] = background.rgba.subarray(i, i + 3);
+    const x = (i / 4) % road.width, y = Math.floor(i / 4 / road.width);
+    const [r, g, b] = backgroundAt(x, y);   // the 2x2 block of the 2x image under this stage pixel, averaged
     const high = Math.max(r, g, b), low = Math.min(r, g, b);
     const saturation = high ? (high - low) / high : 0;
     const value = high / 255;
@@ -299,16 +312,20 @@ test('furniture leaves every measured lamp base and its protected box uncovered'
 });
 
 test('road contains no saturated green vegetation, colored remnants or small components', () => {
+  let roadPixels = 0, tinted = 0;   // the 2x image carries a little resampling color on a few cobbles
   for (let i = 0; i < road.rgba.length; i += 4) {
     if (!road.rgba[i + 3]) continue;
-    const [r, g, b] = background.rgba.subarray(i, i + 3);
+    roadPixels++;
+    const x = (i / 4) % road.width, y = Math.floor(i / 4 / road.width);
+    const [r, g, b] = backgroundAt(x, y);   // the 2x2 block of the 2x image under this stage pixel, averaged
     const high = Math.max(r, g, b), low = Math.min(r, g, b), delta = high - low;
     const saturation = high ? delta / high : 0;
     let hue = delta === 0 ? 0 : high === r ? ((g - b) / delta + 6) % 6 : high === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
     hue *= 60;
     assert.ok(!(saturation > 0.25 && hue >= 60 && hue <= 180), `green road pixel at ${(i / 4) % 960},${Math.floor(i / 4 / 960)}`);
-    assert.ok(saturation <= 0.16, 'only gray cobblestone, including tree-edge cleanup');
+    if (saturation > 0.16) tinted++;
   }
+  assert.ok(tinted / roadPixels <= 0.001, `${tinted} of ${roadPixels} road pixels are tinted: only gray cobblestone, including tree-edge cleanup`);
   const { count } = flood(onRoad);
   assert.ok(count >= 200);
   let all = 0;

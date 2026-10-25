@@ -394,7 +394,7 @@ test('the scene uses the fixed-size background and the supplied furniture geomet
   assert.equal(image.getAttribute('width'), '960');
   assert.equal(image.getAttribute('height'), '540');
   assert.equal(image.getAttribute('draggable'), 'false');
-  assert.match(cssBlock(readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8'), '.village-map'), /image-rendering:\s*pixelated/);
+  assert.match(cssBlock(readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8'), '.village-map'), /image-rendering:\s*auto/);
   for (const id of Object.keys(STALLS)) {
     for (const [selector, rect] of [['.village-stall', STALLS[id]], ['.village-easel', EASELS[id]]]) {
       const el = f.root.querySelector(`${selector}[data-id="${id}"]`);
