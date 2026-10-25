@@ -1,5 +1,6 @@
-import { HELP_FITS } from '../src/helpday.js';
+import { helpSetFor } from '../src/helpday.js';
 import { expectedEnergy } from '../src/chain.js';
+import { stampPosition } from '../src/ui/activities/banner.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ACTIVITIES, activityFor } from '../src/ui/registry.js';
@@ -16,15 +17,26 @@ const READY = {
   science: { kind: 'science', canopy: 'left', time: 10 },
   art: { kind: 'art', background: '#fff1cf', stamps: [{ shape: 'star', color: '#e96163', x: 50, y: 50, rotation: 0 }] },
   reading: { kind: 'reading', found: ['key', 'umbrella', 'book'] },
-  writing: { kind: 'writing', text: 'Hello!' },
+  writing: { kind: 'writing', text: 'Hello friend!' },
   community: { kind: 'community', tried: true, placements: [{ item: 'bench', x: 50, y: 90 }, { item: 'quiet', x: 10, y: 10 }, { item: 'sign', x: 90, y: 10 }] },
 };
+const patternFor = grade => grade === 1
+  ? [{ shape: 'star', color: '#e96163' }, { shape: 'circle', color: '#e96163' }]
+  : [{ shape: 'flower', color: '#e96163' }, { shape: 'flower', color: '#559fc7' }];
+const stamp = (cell, shape = 'star', color = '#e96163') => ({ ...stampPosition(cell), shape, color, rotation: 0 });
 const readyFor = (kind, grade) => {
+  if (kind === 'art' && grade > 0) {
+    const [a, b] = patternFor(grade);
+    const stamps = grade < 3 ? [b, a, b].map((value, i) => stamp(i + 3, value.shape, value.color))
+      : [6, 11, 7, 10].map(cell => stamp(cell)).concat(grade >= 4 ? [12, 17].map(cell => stamp(cell, 'circle', '#559fc7')) : []);
+    return { ...READY.art, stamps };
+  }
+  if (kind === 'writing') return { kind, text: grade === 0 ? 'Hello friend!' : grade < 3 ? 'Hello!' : 'Welcome, neighbors! The lanterns are bright.' };
   if (grade < 3) return READY[kind];
   return {
-    math: { kind, activity: 'pizza', slices: 8, halves: false, plates: [4, 4, 4, 4], tried: true },
-    science: { kind, activity: 'chain', chain: ['plant', 'fish', 'otter'], energy: expectedEnergy(grade), shone: true },
-    community: { kind, activity: 'helpday', crew: Object.entries(HELP_FITS).map(([job, helper]) => ({ job, helper })) },
+    math: { kind, activity: 'pizza', ...(grade === 5 ? { slices: 6, halves: true, plates: [3, 3, 3, 3] } : { slices: 8, halves: false, plates: [4, 4, 4, 4] }), tried: true },
+    science: { kind, activity: 'chain', chain: grade === 4 ? ['pondweed', 'snail', 'koi'] : ['plant', 'fish', 'otter'], energy: expectedEnergy(grade), shone: true },
+    community: { kind, activity: 'helpday', crew: Object.entries(helpSetFor(grade).fits).map(([job, helper]) => ({ job, helper })) },
     reading: { kind, activity: 'tales', deck: 0, solved: ['momo-kitchen', 'taro-pier', 'kiko-stage'] },
   }[kind] ?? READY[kind];
 };
@@ -139,7 +151,7 @@ test('grade bands select new activities only in grades 3–5', () => {
 
 test('legacy snapshots retain their old shape and readiness at every grade', () => {
   for (const [chapter, grade] of SCOPES) for (const kind of Object.keys(READY)) {
-    const input = { ...READY[kind], grade, chapter };
+    const input = { ...(['art', 'writing'].includes(kind) ? readyFor(kind, grade) : READY[kind]), grade, chapter };
     assert.deepEqual(normalizeEncounterSnapshot(kind, input, grade, chapter), input);
     assert.equal(encounterReady(input), true);
   }

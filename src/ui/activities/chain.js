@@ -1,6 +1,6 @@
 import {
   normalizeChain, chainReady, chainOpening, chainComplete, CHAIN_CARDS,
-  CARD_WORDS, CARD_GLYPHS, ENERGY_TILES, sunEnergy, energyTiles,
+  CARD_WORDS, CARD_GLYPHS, ENERGY_TILES, chainFor, energyTiles,
   placeCard, placeEnergy, LINES, nextNeedLine, tenthWord, cardLine, energyLine,
 } from '../../chain.js';
 import { icon } from '../icons.js';
@@ -9,16 +9,18 @@ import { INK, PAPER, PAPER_SHADE, SKY, SEA, GRASS, GRASS_DARK, WOOD, LANTERN } f
 
 export { LINES, nextNeedLine, tenthWord, cardLine, energyLine };
 export const CARDS = CHAIN_CARDS.map(id => ({ id, ...CARD_WORDS[id], glyph: CARD_GLYPHS[id] }));
-export const HELP = [
+export const cardsFor = grade => chainFor(grade).cards.map(id => ({ id, ...CARD_WORDS[id], glyph: CARD_GLYPHS[id] }));
+export const helpFor = grade => [
   'Tap a card: who gets the sun’s energy next?',
-  'Tap a number: how much energy moves up?',
+  `Tap a number: each step keeps ${tenthWord(grade)}.`,
   'Fill every plate, then choose Shine!',
   'Choose Pin chart.',
 ];
+export const HELP = helpFor(3);
 // Small field-card illustrations, independent of the cast's sprite sheets.
 // The nested viewport keeps the existing 24px SVG contract while painting on the
 // actual 16px rail / 36px plate grid, including a one-pixel exterior ink outline.
-const CARD_PIXELS = {
+export const CARD_PIXELS = {
   plant: [
     '................', '.......h........', '......hbs.......', '......hbs.......',
     '..hb..hbs.......', '..hbs.hbs..hb...', '...hbsbbs..hbs..', '...hbbbbshhbs...',
@@ -43,12 +45,40 @@ const CARD_PIXELS = {
     '...hbsbbbbbs....', '....bbsssss.....', '.....bbsss......', '......t..t......',
     '.....tt.tt......', '................', '................', '................',
   ],
+  pondweed: [
+    '................', '.......hb.......', '..hhh..hbs......', '..hbbb.hbs......',
+    '...hbbbbbs......', '....hbbbbs.hh...', '.......hbshbb...', '.......hbbbbb...',
+    '..hhhh.hbbbs....', '..hbbbbhbs......', '...hbbbbbs......', '.....hbbbs.hh...',
+    '.......hbshbbs..', '.......hbbbbs...', '.......hbss.....', '................',
+  ],
+  snail: [
+    '................', '................', '....hhhh........', '...hbbbbh.......',
+    '..hbbssbbh......', '..hbshhsbb......', '..hbshbsbb......', '..hbbsssbb......',
+    '...hbbbbbs..n.n.', '....bssss...h.h.', '..hhhhhhhhhhhbh.', '.hbbbbbbbbbbbbh.',
+    '..bsssssssssss..', '................', '................', '................',
+  ],
+  koi: [
+    '................', '................', '.......hh.......', '......hpp.......',
+    '.....hpppbbb....', '.hp..hppbbbpp...', '.hpphppbbbpnpp..', '..hppppbpppppp..',
+    '..hppbbppppps...', '.hpphppppbbss...', '.ps..hppbss.....', '......bss.......',
+    '.......s........', '................', '................', '................',
+  ],
+  frog: [
+    '................', '...hhh...hhh....', '..hpnpb.hpnph...', '..hbbbhhbbbbh...',
+    '...hbbbbbbbh....', '...hbbnbnbbh....', '....hbbbbbbs....', '..hhhbpppbhhh...',
+    '.hbbbhpppbhbbh..', '.hbbbhpppbhbbh..', '..bbbhpppbbbbs..', '...bbhbbbbsbs...',
+    '..hbbb...hbbb...', '.hbbbs...hbbbs..', '................', '................',
+  ],
 };
 const CARD_TONES = {
   plant: { h: '#b1e895', b: GRASS, s: GRASS_DARK },
   fish: { h: SKY, b: SEA, s: '#26789e' },
   otter: { h: '#dda074', b: WOOD, s: '#895236' },
   gull: { h: '#ffffff', b: PAPER, s: PAPER_SHADE },
+  pondweed: { h: '#b1e895', b: GRASS, s: GRASS_DARK },
+  snail: { h: '#dda074', b: WOOD, s: '#895236' },
+  koi: { h: '#ffffff', b: '#e96163', s: '#b53b42' },
+  frog: { h: '#b1e895', b: GRASS, s: GRASS_DARK },
 };
 const glyphCache = new Map();
 function glyph(id, size = 24) {
@@ -119,6 +149,7 @@ function act(state, ui, action) {
 }
 
 function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
+  const contentCards = cardsFor(grade);
   const node = (tag, cls, parent) => {
     const el = document.createElement(tag);
     el.className = cls;
@@ -129,10 +160,14 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
   const row = node('div', 'chain-row', root);
   // All cards, glyphs and blocks are built once. Updates change text and visibility only.
   const plates = Array.from({ length: 4 }, (_, i) => {
-    if (i) {
+    if (i > 1) {
       const arrow = node('span', 'chain-arrow', row);
       arrow.innerHTML = ARROW_ART;
-      arrow.setAttribute('aria-hidden', 'true');
+      node('span', 'chain-step', arrow).textContent = '÷10';
+      arrow.setAttribute('role', 'img');
+      arrow.setAttribute('aria-label', 'Divide by 10.');
+    } else if (i === 1) {
+      node('span', 'chain-source-gap', row).setAttribute('aria-hidden', 'true');
     }
     const plate = node('div', i ? 'chain-plate chain-plate--empty' : 'chain-sun-card', row);
     plate.setAttribute('role', 'group');
@@ -148,7 +183,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
     } else {
       empty = node('span', 'chain-empty', picture);
       empty.textContent = '?';
-      for (const card of CARDS) {
+      for (const card of contentCards) {
         const art = node('span', 'chain-creature', picture);
         art.innerHTML = glyph(card.id, 36);
         art.hidden = true;
@@ -156,6 +191,10 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
       }
     }
     const word = node('span', 'chain-word', plate);
+    if (!i) {
+      node('span', 'chain-source', plate).textContent = 'sunlight';
+      return { plate, word };
+    }
     const energy = node('span', 'chain-energy px-chip', plate);
     const bar = node('span', 'chain-bar', plate);
     bar.setAttribute('aria-hidden', 'true');
@@ -165,7 +204,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
   const cardsRail = node('div', 'chain-cards', root);
   cardsRail.setAttribute('role', 'group');
   cardsRail.setAttribute('aria-label', 'Who eats what');
-  const cards = CARDS.map(card => {
+  const cards = contentCards.map(card => {
     const b = node('button', 'chain-card', cardsRail);
     b.type = 'button';
     b.dataset.card = card.id;
@@ -230,10 +269,10 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
     update(state, ui) {
       const focusedCard = cards.includes(document.activeElement) ? document.activeElement : null;
       cards.forEach((b, i) => {
-        const used = state.chain.includes(CARDS[i].id);
+        const used = state.chain.includes(contentCards[i].id);
         b.disabled = used;
         b.classList.toggle('chain-card--placed', used);
-        b.setAttribute('aria-label', `${CARDS[i].word}${used ? ', placed' : ''}`);
+        b.setAttribute('aria-label', `${contentCards[i].word}${used ? ', placed' : ''}`);
         b.querySelector('.chain-card-check').hidden = !used;
       });
       if (cardCursor.disabled) cardCursor = cards.find(b => !b.disabled);
@@ -241,16 +280,17 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
       if (focusedCard?.disabled) cardCursor?.focus();
       plates.forEach((parts, i) => {
         const card = i ? state.chain[i - 1] : null;
-        const value = i ? state.energy[i - 1] : sunEnergy(state.grade);
         parts.word.textContent = i ? fieldWord(card) : 'Sun';
-        parts.plate.setAttribute('aria-label', i ? (CARD_WORDS[card]?.word ?? 'Empty plate') : 'Sun');
+        parts.plate.setAttribute('aria-label', i ? (CARD_WORDS[card]?.word ?? 'Empty plate') : 'Sun. Sunlight.');
+        if (!i) return;
+        const value = state.energy[i - 1];
         parts.energy.textContent = ENERGY_TILES.includes(value) ? String(value) : '—';
         if (i) {
           parts.plate.classList.toggle('chain-plate--empty', !card);
           parts.empty.hidden = Boolean(card);
           for (const [id, art] of Object.entries(parts.pictures)) art.hidden = card !== id;
         }
-        const count = ENERGY_TILES.includes(value) && (!i || card) ? String(value).length : 0;
+        const count = ENERGY_TILES.includes(value) && card ? String(value).length : 0;
         parts.blocks.forEach((block, j) => {
           block.hidden = j >= count;
           block.classList.toggle('chain-block--lit', state.shone);
@@ -275,7 +315,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
 export default {
   kind: 'science',
   title: 'Momo’s sunbeam chart', rewardLabel: 'Sunbeam chart',
-  help: HELP,
+  help: HELP, helpFor,
   notReadyLine: LINES.notReady,
   start(snapshot, { grade = 3, chapter = 1 } = {}) {
     return { state: normalizeChain(snapshot, grade, chapter), ui: { shine: 0 } };

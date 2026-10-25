@@ -8,12 +8,17 @@ import {
   cleanHelpdayCreation, helpdayReady, helpDayReady, helpdayOpening,
   helpDayOpening, helpdayCreationMarkup, normalizeCrew, assignHelper,
   undoAssignment, helpDayFitCount, helpDayNextJob,
+  HELP_SETS, helpSetFor, helpSetOfCrew, JOB_SHORT, helperById, fits,
 } from '../src/helpday.js';
 import { ICON_NAMES } from '../src/ui/icons.js';
 import { arrangeCommands, nextCursorIndex } from '../src/ui/menu.js';
-import { createState, saveDraft, saveState, loadState, getDraft } from '../src/progress.js';
+import { createState, saveDraft, saveState, loadState, getDraft, publishCreation, getCreations } from '../src/progress.js';
+import { PAGE_CHARS, paginate } from '../src/ui/dialogue.js';
+import { declarations } from './helpers/css.js';
+import { Doc, Event } from './helpers/dom.js';
 
 const pairs = Object.entries(HELP_FITS).map(([job, helper]) => ({ job, helper }));
+const pairsFor = grade => Object.entries(helpSetFor(grade).fits).map(([job, helper]) => ({ job, helper }));
 
 test('job names stay on the field scale when Bigger words is enabled', () => {
   const css = readFileSync(new URL('../src/ui/activities/helpday.css', import.meta.url), 'utf8');
@@ -37,6 +42,7 @@ test('two large job-name lines and the helper slot fit each card and the board',
   assert.ok(board + 10 <= px('.helpday-field', 'height'), 'board fits with the field padding');
 });
 const fixture = { kind: 'community', activity: 'helpday', chapter: 1, grade: 3, crew: pairs };
+const fixtureFor = grade => ({ ...fixture, grade, crew: pairsFor(grade) });
 const fresh = grade => activity.start(null, { grade, chapter: 1 });
 const freeze = value => {
   if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); }
@@ -48,6 +54,11 @@ const short = line => {
   for (const sentence of line.split(/(?<=[.!?…]["'”’)\]]*)\s+/)) {
     assert.ok(sentence.length <= 56, `${sentence.length}: ${sentence}`);
   }
+  for (const limit of Object.values(PAGE_CHARS)) {
+    const pages = paginate(line, limit);
+    assert.ok(pages.every(page => page.length <= limit));
+    assert.equal(pages.join(' '), line);
+  }
 };
 
 test('starts independently at grades 3, 4, 5; legacy and other activities start fresh', () => {
@@ -58,24 +69,24 @@ test('starts independently at grades 3, 4, 5; legacy and other activities start 
   for (const grade of GRADES_HELPDAY) {
     const { state, ui } = fresh(grade);
     assert.deepEqual(state, { kind: 'community', activity: 'helpday', grade, chapter: 1, crew: [] });
-    assert.deepEqual(ui, { helper: 'kiko' });
+    assert.deepEqual(ui, { helper: helpSetFor(grade).helperIds[0] });
     assert.equal(helpdayReady(state), false);
     assert.equal(activity.opening(state), HELPDAY_LINES.opening);
     for (const snapshot of [null, {}, { ...fixture, activity: undefined }, { ...fixture, activity: 'square' }, { ...fixture, kind: 'math' }]) {
       assert.deepEqual(activity.start(snapshot, { grade, chapter: 1 }).state.crew, []);
     }
-    assert.equal(helpdayReady(activity.start(fixture, { grade, chapter: 1 }).state), true);
+    assert.equal(helpdayReady(activity.start(fixtureFor(grade), { grade, chapter: 1 }).state), true);
   }
   assert.equal(activity.help, HELP);
   assert.equal(HELP.length, 4);
   assert.match(HELP.at(-1), /Start day/);
   assert.equal(activity.rewardLabel, 'Help Day team');
   assert.equal(typeof activity.mountField, 'function');
-  assert.deepEqual(Object.keys(GLYPHS), ['lantern', 'gate', 'envelope']);
+  assert.deepEqual(Object.keys(GLYPHS), ['lantern', 'gate', 'envelope', 'pot', 'book', 'brush', 'pen']);
 });
 
 test('four stable short commands, pictured, with the disabled finish always last', () => {
-  for (const grade of GRADES_HELPDAY) for (const helper of HELPER_IDS) for (const crew of [[], pairs.slice(0, 2), pairs]) {
+  for (const grade of GRADES_HELPDAY) for (const helper of helpSetFor(grade).helperIds) for (const crew of [[], pairsFor(grade).slice(0, 2), pairsFor(grade)]) {
     const state = normalizeHelpday({ crew }, grade, 1), ui = { helper };
     const commands = activity.commands(state, ui, grade);
     assert.equal(commands.length, 4);
@@ -87,8 +98,8 @@ test('four stable short commands, pictured, with the disabled finish always last
     assert.equal(commands.at(-1).disabled, !helpdayReady(state));
     assert.equal(arrangeCommands(commands)[3], commands.at(-1));
     assert.equal(commands[2].disabled, crew.length === 0);
-    assert.equal(commands[0].label, `Ask ${HELP_HELPERS.find(h => h.id === helper).name}`);
-    assert.equal(nextCursorIndex(activity.commands(state, { helper: 'kiko' }), commands, 0), 0);
+    assert.equal(commands[0].label, `Ask ${helperById(helper).name}`);
+    assert.equal(nextCursorIndex(activity.commands(state, { helper: helpSetFor(grade).helperIds[0] }), commands, 0), 0);
   }
 });
 
@@ -127,8 +138,8 @@ test('normalizer bounds scope, keeps first valid unique pairs, and strips all ex
 test('clean saved objects reject junk and preserve valid scoped snapshots', () => {
   for (const junk of [null, undefined, [], 'bad', 5, {}, { ...fixture, kind: 'math' }, { ...fixture, activity: undefined }]) assert.equal(cleanHelpdayCreation(junk), null);
   for (const grade of GRADES_HELPDAY) {
-    const clean = cleanHelpdayCreation({ ...fixture, grade, crew: [...pairs, { job: '<script>', helper: 'pip' }] });
-    assert.deepEqual(clean, { ...fixture, grade });
+    const clean = cleanHelpdayCreation({ ...fixtureFor(grade), crew: [...pairsFor(grade), { job: '<script>', helper: 'pip' }] });
+    assert.deepEqual(clean, fixtureFor(grade));
     assert.deepEqual(normalizeHelpday(clean, grade, 1), clean);
   }
   assert.equal(cleanHelpdayCreation({ ...fixture, grade: 99 }).grade, 5);
@@ -158,15 +169,15 @@ test('assignment replaces and moves helpers, keeps immutable work, and Undo foll
   }
 });
 
-test('all 16 live assignments explain the fit or mismatch without losing work', () => {
-  for (const job of JOB_IDS) for (const helper of HELPER_IDS) {
-    const { state, ui } = fresh(3); freeze(state); freeze(ui);
+test('all live assignments in both sets explain the fit or mismatch without losing work', () => {
+  for (const grade of GRADES_HELPDAY) for (const job of helpSetFor(grade).jobIds) for (const helper of helpSetFor(grade).helperIds) {
+    const { state, ui } = fresh(grade); freeze(state); freeze(ui);
     const pick = activity.act(state, ui, { type: 'field', helper });
     assert.equal(pick.state, state); assert.equal(pick.ui.helper, helper);
     assert.equal(pick.line, HELPDAY_LINES.pick(helper));
     const put = activity.act(state, freeze(pick.ui), { type: 'field', job });
     assert.deepEqual(put.state.crew, [{ job, helper }]);
-    assert.equal(put.line, HELP_FITS[job] === helper ? HELPDAY_LINES.fit(job) : HELPDAY_LINES.mismatch(job, helper));
+    assert.equal(put.line, helpSetFor(grade).fits[job] === helper ? HELPDAY_LINES.fit(job) : HELPDAY_LINES.mismatch(job, helper));
     assert.doesNotMatch(put.line, /cannot|can't|failed/i);
     short(put.line);
     const same = activity.act(freeze(put.state), pick.ui, { type: 'field', job });
@@ -177,7 +188,7 @@ test('all 16 live assignments explain the fit or mismatch without losing work', 
 test('helper then job flow reaches ready, celebrates, and Undo reopens a job', () => {
   for (const grade of GRADES_HELPDAY) {
     let result = fresh(grade);
-    for (const { job, helper } of pairs) {
+    for (const { job, helper } of pairsFor(grade)) {
       result = activity.act(freeze(result.state), freeze(result.ui), { type: 'field', helper });
       result = activity.act(freeze(result.state), freeze(result.ui), { type: 'field', job });
       short(result.line);
@@ -187,7 +198,7 @@ test('helper then job flow reaches ready, celebrates, and Undo reopens a job', (
     assert.equal(activity.opening(result.state), HELPDAY_LINES.openingReady);
     assert.equal(activity.act(result.state, result.ui, { type: 'command', id: 'next' }).line, HELPDAY_LINES.allSet);
     const undo = activity.act(result.state, result.ui, { type: 'command', id: 'undo' });
-    assert.equal(undo.line, HELPDAY_LINES.undo('pip'));
+    assert.equal(undo.line, HELPDAY_LINES.undo(pairsFor(grade).at(-1).helper));
     assert.equal(helpdayReady(undo.state), false);
     assert.equal(activity.opening(undo.state), HELPDAY_LINES.openingPartial);
     assert.equal(activity.commands(undo.state, undo.ui).at(-1).disabled, true);
@@ -214,20 +225,21 @@ test('Next job follows board order, Ask follows selection, partial wrong teams r
 test('Undo restores both displaced helpers, including after saving and reopening a draft', () => {
   for (const grade of GRADES_HELPDAY) {
     let result = fresh(grade);
+    const pairs = pairsFor(grade), helper = pairs[0].helper;
     for (const { job, helper } of pairs) result = { ...result, state: assignHelper(result.state, job, helper).state };
     const complete = freeze(result.state);
-    const moved = assignHelper(complete, 'drum', 'kiko').state;
+    const moved = assignHelper(complete, pairs[1].job, helper).state;
     assert.equal(moved.crew.length, 3);
     const values = new Map();
     const storage = { setItem: (key, value) => values.set(key, value), getItem: key => values.get(key) ?? null };
     assert.equal(saveState(saveDraft({ ...createState(), chapter: 1, grade }, 'community', moved), storage), true);
     const reopened = activity.start(getDraft(loadState(storage), 'community'), { grade, chapter: 1 });
     for (const state of [moved, reopened.state]) {
-      const undone = activity.act(freeze(state), { helper: 'kiko' }, { type: 'command', id: 'undo' });
+      const undone = activity.act(freeze(state), { helper }, { type: 'command', id: 'undo' });
       assert.deepEqual(undone.state, complete);
       assert.equal(helpdayReady(undone.state), true);
       assert.equal(activity.commands(undone.state, undone.ui).at(-1).disabled, false);
-      assert.match(undone.line, /Kiko is back on the lanterns/);
+      assert.ok(undone.line.startsWith(`${helperById(helper).name} is back on ${JOB_SHORT[pairs[0].job]}.`));
       assert.doesNotMatch(undone.line, /bench|open/);
       short(undone.line);
       assert.equal(undoAssignment(undone.state).state.crew.length, 3);
@@ -258,7 +270,8 @@ test('assignment history is bounded, sanitized, immutable and reversible through
 
 test('a fully occupied wrong team resumes with a prompt to check each job', () => {
   for (const grade of GRADES_HELPDAY) {
-    const crew = JOB_IDS.map((job, i) => ({ job, helper: HELPER_IDS[(i + 1) % 4] }));
+    const set = helpSetFor(grade);
+    const crew = set.jobIds.map((job, i) => ({ job, helper: set.helperIds[(i + 1) % 4] }));
     const resumed = activity.start({ ...fixture, crew }, { grade, chapter: 1 });
     assert.equal(resumed.state.crew.length, 4);
     assert.equal(helpDayFitCount(resumed.state), 0);
@@ -270,11 +283,13 @@ test('a fully occupied wrong team resumes with a prompt to check each job', () =
 test('every possible dialogue sentence, including help and completion suffix, fits 56 characters', () => {
   HELP.forEach(short); short(STAMP_HELPDAY); short(activity.notReadyLine);
   Object.values(HELPDAY_LINES).filter(v => typeof v === 'string').forEach(short);
-  for (const job of JOB_IDS) {
-    short(HELPDAY_LINES.fit(job)); short(`${HELPDAY_LINES.fit(job)} ${HELPDAY_LINES.allSet}`); short(HELPDAY_LINES.next(job));
-    for (const helper of HELPER_IDS) { short(HELPDAY_LINES.mismatch(job, helper)); short(HELPDAY_LINES.same(job, helper)); }
+  for (const set of Object.values(HELP_SETS)) {
+    for (const job of set.jobIds) {
+      short(HELPDAY_LINES.fit(job)); short(`${HELPDAY_LINES.fit(job)} ${HELPDAY_LINES.allSet}`); short(HELPDAY_LINES.next(job));
+      for (const helper of set.helperIds) { short(HELPDAY_LINES.mismatch(job, helper)); short(HELPDAY_LINES.same(job, helper)); }
+    }
+    for (const helper of set.helperIds) { short(HELPDAY_LINES.ask(helper)); short(HELPDAY_LINES.pick(helper)); short(HELPDAY_LINES.undo(helper)); }
   }
-  for (const helper of HELPER_IDS) { short(HELPDAY_LINES.ask(helper)); short(HELPDAY_LINES.pick(helper)); short(HELPDAY_LINES.undo(helper)); }
   short(HELPDAY_LINES.next(null));
 });
 
@@ -284,6 +299,124 @@ test('grade 5 helper aria labels omit strengths while Ask still provides each cl
     assert.match(helperLabel(fixture, person.id, 3), new RegExp(person.strength.toLowerCase()));
     assert.doesNotMatch(helperLabel(fixture, person.id, 5), new RegExp(person.strength.toLowerCase()));
   }
+});
+
+test('grade 4 uses the four set-B jobs and helpers; grades 3 and 5 keep set A', () => {
+  assert.equal(helpSetFor(3), HELP_SETS.A); assert.equal(helpSetFor(5), HELP_SETS.A);
+  assert.equal(helpSetFor(4), HELP_SETS.B);
+  assert.deepEqual(HELP_SETS.B.jobs.map(job => [job.id, job.name, job.need, job.glyph]), [
+    ['stew', 'Cook stew', 'Big pot', 'pot'], ['tale', 'Tell a tale', 'Loud voice', 'book'],
+    ['banner', 'Paint banner', 'Steady hand', 'brush'], ['signs', 'Write signs', 'Neat words', 'pen'],
+  ]);
+  assert.deepEqual(HELP_SETS.B.helpers.map(person => [person.id, person.name, person.strength, person.figure]), [
+    ['momo', 'Momo', 'Cook', 'science'], ['sora', 'Sora', 'Storyteller', 'reading'],
+    ['yuki', 'Yuki', 'Steady hand', 'art'], ['fumi', 'Fumi', 'Neat writer', 'writing'],
+  ]);
+  assert.deepEqual(HELP_SETS.B.fits, { stew: 'momo', tale: 'sora', banner: 'yuki', signs: 'fumi' });
+  assert.equal(HELPDAY_LINES.fit('stew'), 'Momo stirs a stew that smells amazing. Great match!');
+  assert.equal(HELPDAY_LINES.ask('sora'), 'Sora says: I know a hundred tales by heart!');
+  assert.equal(helpSetOfCrew(pairs), HELP_SETS.A);
+  assert.equal(helpSetOfCrew(pairsFor(4)), HELP_SETS.B);
+  for (const junk of [null, {}, [null], [{ job: '__proto__', helper: 'momo' }]]) assert.equal(helpSetOfCrew(junk), HELP_SETS.A);
+});
+
+test('set B requires every unique fit and rejects other-set actions without saving', () => {
+  const pairs = pairsFor(4), complete = fixtureFor(4);
+  assert.equal(helpdayReady(complete), true);
+  for (let i = 0; i < 4; i++) {
+    assert.equal(helpdayReady({ ...complete, crew: pairs.filter((_, j) => j !== i) }), false);
+    for (let j = i + 1; j < 4; j++) {
+      const crew = pairs.map(pair => ({ ...pair }));
+      [crew[i].helper, crew[j].helper] = [crew[j].helper, crew[i].helper];
+      assert.equal(helpdayReady({ ...complete, crew }), false);
+    }
+  }
+  assert.equal(helpdayReady({ ...complete, crew: [...pairs, pairs[0]] }), false);
+  assert.equal(helpdayReady({ ...fixture, grade: 4 }), false);
+  assert.equal(helpdayReady({ ...complete, grade: 5 }), false);
+  for (const grade of GRADES_HELPDAY) {
+    const { state, ui } = fresh(grade); freeze(state); freeze(ui);
+    const other = grade === 4 ? HELP_SETS.A : HELP_SETS.B;
+    for (const job of other.jobIds) {
+      assert.equal(assignHelper(state, job, other.helperIds[0]).status, 'invalid');
+      assert.deepEqual(activity.act(state, ui, { type: 'field', job }), { state, ui });
+    }
+    for (const helper of other.helperIds) assert.deepEqual(activity.act(state, ui, { type: 'field', helper }), { state, ui });
+    for (let i = 0; i <= 4; i++) {
+      const s = normalizeHelpday({ crew: pairsFor(grade).slice(0, i) }, grade, 1);
+      const job = helpSetFor(grade).jobIds[i] ?? null;
+      assert.equal(helpDayFitCount(s), i); assert.equal(helpDayNextJob(s), job);
+      assert.equal(activity.act(s, ui, { type: 'command', id: 'next' }).line, HELPDAY_LINES.next(job));
+    }
+    for (const helper of helpSetFor(grade).helperIds) {
+      assert.equal(activity.act(state, { helper }, { type: 'command', id: 'ask' }).line, HELPDAY_LINES.ask(helper));
+    }
+  }
+});
+
+test('both saved boards retain their pictures after reload; grade 4 opens old set A as a fresh set B', () => {
+  const legacy = { ...fixture, grade: 4, history: [[], pairs.slice(0, 3)] };
+  const values = new Map();
+  const storage = { setItem: (key, value) => values.set(key, value), getItem: key => values.get(key) ?? null };
+  for (const snapshot of [legacy, fixtureFor(4)]) {
+    const clean = cleanHelpdayCreation(snapshot);
+    assert.deepEqual(clean, snapshot); assert.deepEqual(cleanHelpdayCreation(clean), clean);
+    const published = publishCreation({ ...createState(), chapter: 1, grade: 4 }, 'community', snapshot);
+    assert.equal(saveState(published, storage), true);
+    const saved = getCreations(loadState(storage)).community;
+    assert.deepEqual(saved, snapshot);
+    const set = helpSetOfCrew(snapshot.crew), markup = helpdayCreationMarkup(saved);
+    for (const job of set.jobIds) assert.ok(markup.includes(`data-job="${job}"`));
+    assert.equal((markup.match(/l3 3 6-6/g) ?? []).length, 4);
+    assert.doesNotMatch(markup, /<script|onload|undefined|NaN|Infinity/);
+    const reopened = activity.start(saved, { grade: 4, chapter: 1 });
+    assert.deepEqual(reopened.state, set === HELP_SETS.A ? fresh(4).state : fixtureFor(4));
+    assert.equal(reopened.ui.helper, 'momo');
+  }
+  const bad = cleanHelpdayCreation({ ...fixtureFor(4), crew: [...pairsFor(4), { job: '<script>', helper: 'fumi' }], payload: 'bad' });
+  assert.deepEqual(bad, fixtureFor(4));
+});
+
+test('set-B controls keep their nodes, visible clues and text tokens with Bigger words', () => {
+  const previous = globalThis.document, doc = new Doc(); globalThis.document = doc;
+  const css = readFileSync(new URL('../src/ui/activities/helpday.css', import.meta.url), 'utf8');
+  try {
+    for (const grade of [3, 4, 5]) for (const large of [false, true]) {
+      const host = doc.createElement('section'); doc.body.append(host); host.className = large ? 'large-text' : '';
+      let result = fresh(grade);
+      const view = activity.mountField(host, { grade, dispatch(action) {
+        result = activity.act(result.state, result.ui, action); view.update(result.state, result.ui);
+      } });
+      view.update(result.state, result.ui);
+      const jobs = host.querySelectorAll('.helpday-job'), helpers = host.querySelectorAll('.helpday-helper');
+      const strengths = helpers.map(button => button.querySelector('.helpday-strength'));
+      assert.deepEqual(strengths.map(span => span.textContent), helpSetFor(grade).helpers.map(person => person.strength));
+      assert.ok(strengths.every(span => span.hidden === (grade === 5)));
+      for (const button of helpers) {
+        short(button.getAttribute('aria-label'));
+        assert.equal(button.querySelector('.figure--missing'), null);
+      }
+      helpers[0].focus(); helpers[0].dispatchEvent(new Event('keydown', { key: 'ArrowDown' }));
+      assert.equal(doc.activeElement, helpers[1]);
+      assert.deepEqual(helpers.map(button => button.tabIndex), [-1, 0, -1, -1]);
+      for (let i = 0; i < 4; i++) {
+        helpers[i].click(); jobs[i].click();
+        for (const button of [...jobs, ...helpers]) short(button.getAttribute('aria-label'));
+      }
+      assert.equal(helpdayReady(result.state), true);
+      assert.deepEqual(host.querySelectorAll('.helpday-job'), jobs);
+      assert.deepEqual(host.querySelectorAll('.helpday-helper'), helpers);
+      const strength = helpers[0].querySelector('.helpday-strength');
+      assert.equal(strength, strengths[0]);
+      view.destroy(); assert.equal(host.children.length, 0); host.remove();
+    }
+    const px = (selector, prop) => Number.parseFloat(declarations(css, selector)[prop]);
+    assert.equal(declarations(css, '.helpday-helper-words')['font-size'], 'var(--text-small)');
+    assert.equal(declarations(css, '.helpday-job-name')['font-size'], 'var(--text-field)');
+    assert.ok(px('.helpday-board', 'width') + px('.helpday-field', 'gap') + px('.helpday-bench', 'width') <= px('.helpday-field', 'width'));
+    const wordsWidth = px('.helpday-helper', 'width') - 2 * px('.helpday-helper', 'border') - 48 - px('.helpday-helper', 'gap');
+    for (const helper of HELP_SETS.B.helpers) assert.ok(helper.strength.length * 20 / 2 <= wordsWidth, helper.strength);
+  } finally { if (previous === undefined) delete globalThis.document; else globalThis.document = previous; }
 });
 
 test('small creation markup rejects injected text and numbers; tokens show shape and fit cues', () => {
@@ -351,6 +484,7 @@ test('field keeps nodes and focus, supports grid/radio arrows and native clicks,
   globalThis.document = doc;
   try {
     for (const grade of GRADES_HELPDAY) {
+      const set = helpSetFor(grade);
       const host = doc.createElement('section');
       let result = fresh(grade);
       const field = activity.mountField(host, { grade, dispatch(action) { result = activity.act(result.state, result.ui, action); field.update(result.state, result.ui); } });
@@ -363,7 +497,7 @@ test('field keeps nodes and focus, supports grid/radio arrows and native clicks,
         assert.ok(name.length <= 12, `${name} exceeds 12 characters`);
         assert.ok(need.length <= 12, `${need} exceeds 12 characters`);
         assert.ok(job.querySelector('.helpday-glyph').querySelector('svg'), 'each job has an icon');
-        const full = ['Hang lanterns', 'Carry the drum', 'Greet at the gate', 'Deliver invitations'][i];
+        const full = set.jobs[i].description;
         assert.ok(job.getAttribute('aria-label').startsWith(full), 'full job description remains accessible');
       }
       assert.deepEqual(jobs.map(b => b.tabIndex), [0, -1, -1, -1]);
@@ -378,15 +512,15 @@ test('field keeps nodes and focus, supports grid/radio arrows and native clicks,
       assert.equal(jobs[3].fire('keydown', { key: 'Enter' }).defaultPrevented, false, 'native button activation remains available');
       assert.equal(jobs[3].fire('keydown', { key: ' ' }).defaultPrevented, false);
       radios[0].focus(); radios[0].fire('keydown', { key: 'ArrowRight' });
-      assert.equal(result.ui.helper, 'taro'); assert.equal(doc.activeElement, radios[1]);
+      assert.equal(result.ui.helper, set.helperIds[1]); assert.equal(doc.activeElement, radios[1]);
       assert.deepEqual(radios.map(b => b.tabIndex), [-1, 0, -1, -1]);
-      radios[1].fire('keydown', { key: 'ArrowLeft' }); assert.equal(result.ui.helper, 'kiko');
+      radios[1].fire('keydown', { key: 'ArrowLeft' }); assert.equal(result.ui.helper, set.helperIds[0]);
       radios[0].fire('keydown', { key: 'ArrowDown' }); radios[1].fire('keydown', { key: 'ArrowDown' });
-      assert.equal(result.ui.helper, 'nori');
+      assert.equal(result.ui.helper, set.helperIds[2]);
       jobs[0].fire('click');
-      assert.equal(jobs[0].dataset.fit, 'no'); assert.match(jobs[0].getAttribute('aria-label'), /Nori is here, try again/);
+      assert.equal(jobs[0].dataset.fit, 'no'); assert.ok(jobs[0].getAttribute('aria-label').includes(`${set.helpers[2].name} is here, try again`));
       assert.equal(jobs[0].querySelector('.helpday-badge').innerHTML, '?');
-      assert.equal(radios[2].querySelector('.helpday-at').textContent, 'lanterns');
+      assert.equal(radios[2].querySelector('.helpday-at').textContent, set.jobs[0].at);
       for (let i = 0; i < 4; i++) { radios[i].fire('click'); jobs[i].fire('click'); }
       assert.equal(helpdayReady(result.state), true);
       assert.equal(root.querySelector('.helpday-count').textContent, 'Help Day · 4 of 4');
@@ -408,7 +542,7 @@ test('lanterns describe reaching up high and use a compact helper caption with a
   const previous = globalThis.document;
   globalThis.document = { createElement(tag) { return new Element(tag, this); }, activeElement: null };
   try {
-    for (const grade of GRADES_HELPDAY) {
+    for (const grade of [3, 5]) {
       const host = document.createElement('section');
       host.className = 'large-text';
       const view = activity.mountField(host, { grade });

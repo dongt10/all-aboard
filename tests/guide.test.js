@@ -59,14 +59,14 @@ test('an earned guide page shows what the child made there', async () => {
 });
 
 // --- Stamps per band (plan 1C and Part 2) ---
-test('learnedText gives one sentence per band for every subject', () => {
+test('learnedText gives the planned sentence at every grade for every subject', () => {
   const expect = {
-    math: ['Same number on both sides is equal.', 'Different crates can weigh the same.', 'Different crates can weigh the same.', 'Sharing equally is dividing: 8 ÷ 4 = 2 each.', 'Sharing equally is dividing: 8 ÷ 4 = 2 each.', 'A leftover can be split: 6 ÷ 4 = 1 and a half.'],
-    science: ['Shade keeps the sun off the ice.', 'Shade keeps the sun off the ice.', 'Shade makes ice melt slower.', STAMP_CHAIN, STAMP_CHAIN, STAMP_CHAIN],
+    math: ['Same number on both sides is equal.', 'Different crates can weigh the same.', 'Different crates can weigh the same.', 'Sharing equally is dividing: 8 ÷ 4 = 2 each.', 'Sharing equally is dividing: 12 ÷ 4 = 3 each.', 'A leftover can be split: 6 ÷ 4 = 1 and a half.'],
+    science: ['Shade keeps the sun off the ice.', 'Shade keeps the sun off the ice.', 'Shade makes ice melt slower.', STAMP_CHAIN, 'A pond chain keeps one tenth at each step too.', 'Only 10% of energy moves up each step of a chain.'],
     reading: ['Letters make a word you can read.', 'The story tells you what to pack.', 'The story tells you what to pack.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.'],
-    writing: Array(6).fill('Words welcome your neighbors.'),
-    art: Array(6).fill('Shapes and colors make a design.'),
-    community: ['A bench gives a tired neighbor a rest.', 'A good plan works for everyone.', 'A good plan works for everyone.', 'Different strengths get every job done together.', 'Different strengths get every job done together.', 'Different strengths get every job done together.'],
+    writing: ['Words welcome your neighbors.', ...Array(2).fill('A sentence starts big and ends with a mark.'), ...Array(3).fill('Describing words paint a picture for readers.')],
+    art: ['Shapes and colors make a design.', ...Array(2).fill('A pattern repeats: star, circle, star, circle.'), ...Array(3).fill('A mirror design is the same on both sides.')],
+    community: ['A bench gives a tired neighbor a rest.', 'A good plan works for everyone.', 'A good plan works for everyone.', 'Different strengths get every job done together.', 'Every job needs the strength that fits it.', 'Ask about a strength before you hand out a job.'],
     music: ['Music can be fast or slow, high or low.', 'Rests are part of a rhythm.', 'Rests are part of a rhythm.', 'A tune can go up, down, or stay the same.', 'A steady part holds up a changing tune.', 'A steady part holds up a changing tune.'],
   };
   for (const subject of SUBJECTS) assert.deepEqual([0, 1, 2, 3, 4, 5].map(grade => learnedText(subject, grade)), expect[subject], subject);
@@ -88,7 +88,10 @@ test('the guide reads stamps with the current grade: chapter 0 is Kindergarten e
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 1 }).science, 'Shade keeps the sun off the ice.');
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 3 }).music, 'A tune can go up, down, or stay the same.');
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 5 }).music, 'A steady part holds up a changing tune.');
-  assert.equal(learnedAt({ ...k, chapter: 1, grade: 5 }).community, 'Different strengths get every job done together.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 4 }).science, 'A pond chain keeps one tenth at each step too.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 4 }).math, 'Sharing equally is dividing: 12 ÷ 4 = 3 each.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 4 }).community, 'Every job needs the strength that fits it.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 5 }).community, 'Ask about a strength before you hand out a job.');
 });
 test('the music reward reads like the others on the item-get card', () => {
   const music = CHARACTERS.find(c => c.id === 'music');
