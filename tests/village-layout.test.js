@@ -144,11 +144,24 @@ test('furniture avoids the houses, gardens and fence in the drawing', () => {
   }
 });
 
-test('all furniture pairs leave at least 24 pixels between their carved borders', () => {
+test('furniture does not overlap and short gaps between facing edges are closed', () => {
   for (let i = 0; i < furniture.length; i++) for (let j = i + 1; j < furniture.length; j++) {
     const [aid, a] = furniture[i], [bid, b] = furniture[j];
     assert.ok(!overlaps(a, b), `${aid} overlaps ${bid}`);
-    assert.ok(separation(grown(a), grown(b)) >= 24, `${aid} / ${bid}: narrow passage`);
+    // A sealed gap is allowed. The whole-mask disk proof below checks open
+    // passages, including diagonal gaps and gaps against background obstacles.
+    const left = a.x <= b.x ? a : b, right = left === a ? b : a;
+    const top = a.y <= b.y ? a : b, bottom = top === a ? b : a;
+    const gaps = [
+      { x: left.x + left.w, y: Math.max(a.y, b.y), w: right.x - left.x - left.w, h: Math.min(a.y + a.h, b.y + b.h) - Math.max(a.y, b.y) },
+      { x: Math.max(a.x, b.x), y: top.y + top.h, w: Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x), h: bottom.y - top.y - top.h },
+    ];
+    for (const [axis, gap] of gaps.entries()) {
+      if (gap.w <= 0 || gap.h <= 0 || (axis === 0 ? gap.w : gap.h) >= 28) continue;
+      for (let y = gap.y; y < gap.y + gap.h; y++) for (let x = gap.x; x < gap.x + gap.w; x++) {
+        assert.ok(!footprint(x, y), `${aid} / ${bid}: unsealed narrow gap at ${x},${y}`);
+      }
+    }
   }
 });
 
@@ -171,10 +184,15 @@ test('easels are within 100 pixels of their stalls and clear every figure', () =
   }
 });
 
-test('neighbors are 150 pixels apart and side characters have their own space', () => {
+test('neighbors have separate figures and side characters have their own space', () => {
   const neighbors = Object.entries(VILLAGE_SPOTS);
   for (let i = 0; i < neighbors.length; i++) for (let j = i + 1; j < neighbors.length; j++) {
-    assert.ok(distance(neighbors[i][1], neighbors[j][1]) >= 150, `${neighbors[i][0]} / ${neighbors[j][0]}`);
+    const [aid, a] = neighbors[i], [bid, b] = neighbors[j];
+    // These two pairs now use the broad junction approaches instead of the
+    // lamp-side pockets. Preserve the original spacing for every other pair.
+    const approachPair = (aid === 'reading' && bid === 'art') || (aid === 'art' && bid === 'music');
+    assert.ok(distance(a, b) >= (approachPair ? 87 : 150), `${aid} / ${bid}`);
+    assert.ok(!overlaps(figure(a), figure(b)), `${aid} / ${bid}: figures overlap`);
   }
   assert.ok(distance(SIDE_SPOTS.pip, SIDE_SPOTS.nori) >= 100);
   for (const [id, p] of Object.entries(SIDE_SPOTS)) for (const [other, q] of neighbors) assert.ok(distance(p, q) >= 120, `${id} / ${other}`);
@@ -201,4 +219,97 @@ test('all spots are reachable with the complete walking footprint and HUD cleara
 test('visible lamp bases remain non-walkable', () => {
   assert.equal(NEAR_LAMPS.length, 11);
   for (const p of NEAR_LAMPS) assert.ok(!onRoad(p.x, p.y), `${p.x},${p.y}`);
+});
+
+const fullFeet = Uint8Array.from({ length: 960 * 540 }, (_, i) => Number(footprint(i % 960, Math.floor(i / 960))));
+const population = bits => bits.reduce((sum, bit) => sum + bit, 0);
+
+// Exact integer disk, using per-row prefix sums rather than a square erosion.
+// This oracle is independent of the runtime's footprint and path planner.
+function diskTransform(bits, radius, erode) {
+  const prefix = new Uint32Array(540 * 961), result = new Uint8Array(bits.length);
+  for (let y = 0; y < 540; y++) for (let x = 0; x < 960; x++) {
+    prefix[y * 961 + x + 1] = prefix[y * 961 + x] + bits[y * 960 + x];
+  }
+  const rows = Array.from({ length: radius * 2 + 1 }, (_, i) => {
+    const dy = i - radius;
+    return [dy, Math.floor(Math.sqrt(radius * radius - dy * dy))];
+  });
+  for (let y = 0; y < 540; y++) for (let x = 0; x < 960; x++) {
+    let value = erode;
+    for (const [dy, half] of rows) {
+      const yy = y + dy, left = x - half, right = x + half;
+      const count = yy < 0 || yy >= 540 ? 0 : prefix[yy * 961 + Math.min(960, right + 1)] - prefix[yy * 961 + Math.max(0, left)];
+      if (erode && count !== half * 2 + 1) { value = false; break; }
+      if (!erode && count > 0) { value = true; break; }
+    }
+    result[y * 960 + x] = Number(value);
+  }
+  return result;
+}
+
+test('ALL full 13 by 4 footprint positions form one component containing every home', () => {
+  const { count, seen } = flood((x, y) => fullFeet[y * 960 + x] === 1);
+  assert.equal(count, population(fullFeet), 'no untested footprint pocket anywhere on the stage');
+  for (const [id, p] of Object.entries(points)) assert.equal(seen[p.y * 960 + p.x], 1, id);
+});
+
+test('28px passage clearance preserves connectivity and leaves no thin road appendages', () => {
+  const core = diskTransform(fullFeet, 14, true);
+  const { count } = flood((x, y) => core[y * 960 + x] === 1);
+  assert.ok(count > 0);
+  assert.equal(count, population(core), '14px disk erosion must not split the feet component');
+
+  // Stronger than component counting: all retained road must be backed by
+  // a complete foot rectangle swept through this connected disk-clear area.
+  // An arbitrarily thin dead-end tail would otherwise disappear in erosion
+  // without changing the component count, and would escape that test alone.
+  const sweptFeet = diskTransform(core, 14, false), supported = new Uint8Array(fullFeet.length);
+  for (let y = 3; y < 540; y++) for (let x = 6; x < 954; x++) {
+    if (!sweptFeet[y * 960 + x]) continue;
+    for (let dy = -3; dy <= 0; dy++) for (let dx = -6; dx <= 6; dx++) supported[(y + dy) * 960 + x + dx] = 1;
+  }
+  for (let i = 0; i < supported.length; i++) {
+    assert.equal(supported[i], Number(onRoad(i % 960, Math.floor(i / 960))), `unsupported road or obstacle intrusion at ${i % 960},${Math.floor(i / 960)}`);
+  }
+});
+
+test('every wander envelope keeps the sprite, badge and status mark on stage below the HUD', () => {
+  for (const [id, p] of Object.entries({ ...VILLAGE_SPOTS, ...SIDE_SPOTS })) {
+    assert.ok(p.x - WANDER.x - 32 >= 0, `${id}: left`);
+    assert.ok(p.x + WANDER.x + 60 <= 960, `${id}: right badge/status`);
+    assert.ok(p.y - WANDER.y - 96 >= 72, `${id}: top badge/status`);
+    assert.ok(p.y + WANDER.y + 7 <= 540, `${id}: bottom`);
+  }
+});
+
+test('furniture leaves every measured lamp base and all detected lamp metal uncovered', () => {
+  for (const [id, r] of furniture) {
+    for (const p of NEAR_LAMPS) assert.ok(!overlaps(r, { ...p, w: 1, h: 1 }), `${id}: lamp base ${p.x},${p.y}`);
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
+      const i = (y * 960 + x) * 4;
+      // The five green-black metal colors in the drawing have luminance <50;
+      // even its darkest gray cobblestone is >74. This includes lamp edges.
+      const luminance = background.rgba[i] * 0.2126 + background.rgba[i + 1] * 0.7152 + background.rgba[i + 2] * 0.0722;
+      assert.ok(luminance >= 50, `${id}: dark lamp metal at ${x},${y}`);
+    }
+  }
+});
+
+test('road contains no saturated green vegetation, colored remnants or small components', () => {
+  for (let i = 0; i < road.rgba.length; i += 4) {
+    if (!road.rgba[i + 3]) continue;
+    const [r, g, b] = background.rgba.subarray(i, i + 3);
+    const high = Math.max(r, g, b), low = Math.min(r, g, b), delta = high - low;
+    const saturation = high ? delta / high : 0;
+    let hue = delta === 0 ? 0 : high === r ? ((g - b) / delta + 6) % 6 : high === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+    hue *= 60;
+    assert.ok(!(saturation > 0.25 && hue >= 60 && hue <= 180), `green road pixel at ${(i / 4) % 960},${Math.floor(i / 4 / 960)}`);
+    assert.ok(saturation <= 0.16, 'only gray cobblestone, including tree-edge cleanup');
+  }
+  const { count } = flood(onRoad);
+  assert.ok(count >= 200);
+  let all = 0;
+  for (let i = 3; i < road.rgba.length; i += 4) all += Number(road.rgba[i] !== 0);
+  assert.equal(count, all, 'no separate component of any size, including <200px remnants');
 });
