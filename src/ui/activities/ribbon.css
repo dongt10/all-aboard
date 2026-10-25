@@ -1,0 +1,84 @@
+/* Five story lines above one changing strip, inside the 520 × 268 activity field. */
+.ribbon-field { position: relative; width: 100%; height: 100%; font-family: var(--font-read); color: var(--ink); }
+.ribbon-field [hidden] { display: none; }
+.ribbon-story {
+  position: absolute; left: 10px; top: 6px; width: 500px; height: 168px; box-sizing: border-box;
+  display: flex; flex-direction: column; gap: 2px; padding: 4px;
+  overflow-x: hidden; overflow-y: auto; background: var(--paper); border: 1px solid var(--ink);
+  box-shadow: -3px 0 0 var(--reading), 2px 2px 0 var(--ink), inset 0 -2px 0 var(--paper-shade);
+}
+.ribbon-heading { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.ribbon-head, .ribbon-question { margin: 0; font-family: var(--font-pixel); font-size: var(--text-small); line-height: 1.1; }
+.ribbon-head { flex: none; color: var(--ink-soft); }
+.ribbon-question { min-width: 0; color: var(--ink); }
+.ribbon-lines { display: flex; flex: none; flex-direction: column; gap: 2px; }
+.ribbon-line {
+  position: relative; display: flex; flex: none; align-items: flex-start; gap: 4px;
+  width: 100%; min-height: 24px; padding: 0; margin: 0; box-sizing: border-box;
+  border: 0; border-radius: 0; background: var(--paper); color: var(--ink);
+  font: inherit; font-size: var(--text-field); line-height: 1.1; text-align: left; cursor: pointer;
+}
+.ribbon-line:hover { background: var(--paper-shade); }
+.ribbon-line__tag {
+  flex: none; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; box-sizing: border-box;
+  background: var(--reading); color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink);
+  font-family: var(--font-pixel); font-size: var(--text-small); line-height: 1;
+}
+.ribbon-line__text { min-width: 0; overflow-wrap: break-word; }
+.ribbon-line:focus-visible, .ribbon-choice:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; }
+
+.ribbon-strip { position: absolute; left: 10px; top: 180px; width: 500px; height: 84px; }
+.ribbon-phase { display: flex; justify-content: space-between; align-items: center; width: 100%; height: 100%; }
+.ribbon-choice {
+  position: relative; display: flex; flex: none; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px; width: 118px; height: 84px; margin: 0; padding: 3px; box-sizing: border-box;
+  border: 1px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink);
+  box-shadow: inset 1px 1px 0 var(--white), inset -2px -2px 0 var(--paper-shade), 2px 2px 0 var(--ink);
+  font: inherit; font-size: var(--text-small); line-height: 1; text-align: center; cursor: pointer;
+}
+.ribbon-choice:hover { background: var(--paper-shade); }
+.ribbon-choice__pic { display: flex; flex: none; align-items: center; justify-content: center; height: 32px; }
+.ribbon-choice__pic svg { display: block; flex: none; }
+.ribbon-choice__text { min-width: 0; max-width: 100%; overflow-wrap: break-word; }
+.ribbon-choice__check { position: absolute; top: 1px; right: 2px; background: var(--paper); color: var(--ink); font-size: var(--text-small); }
+.ribbon-card { width: 96px; }
+.ribbon-card:disabled { cursor: default; opacity: 1; background: var(--reading); color: var(--ink); }
+.ribbon-lesson { gap: 2px; }
+.ribbon-lesson .ribbon-choice__pic { height: 16px; }
+.ribbon-lesson .icon { width: 16px; height: 16px; }
+.ribbon-band {
+  display: flex; flex: none; align-items: center; justify-content: space-evenly;
+  width: 180px; height: 84px; padding: 2px; box-sizing: border-box;
+  background: var(--reading); border: 1px solid var(--ink);
+  box-shadow: inset 0 3px 0 #acd9ff, inset 0 -3px 0 #3977b8, 2px 2px 0 var(--ink);
+}
+.ribbon-slot {
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  flex: none; width: 48px; height: 48px; box-sizing: border-box;
+  border: 1px dashed var(--ink); background: var(--paper-shade); color: var(--ink);
+}
+.ribbon-slot--filled { border-style: solid; background: var(--paper); }
+.ribbon-slot__number { font-family: var(--font-pixel); font-size: var(--text-small); line-height: 1; }
+.ribbon-slot__pic { display: flex; align-items: center; justify-content: center; height: 24px; }
+.ribbon-slot__pic:empty { display: none; }
+.ribbon-slot__pic svg { flex: none; width: 24px; height: 24px; }
+/* A composite picture keeps its full silhouette inside the numbered square. */
+.ribbon-slot__pic { transform: scale(.5); width: 80px; margin: -4px -16px; }
+.ribbon-lesson-tag {
+  display: flex; align-items: center; gap: 8px; width: 304px; height: 72px; padding: 8px; box-sizing: border-box;
+  background: var(--lantern); border: 1px solid var(--ink); box-shadow: 2px 2px 0 var(--ink);
+  color: var(--ink); font-size: var(--text-field); line-height: 1.1;
+}
+.ribbon-lesson-tag__pic { display: flex; flex: none; }
+.ribbon-lesson-tag__text { min-width: 0; overflow-wrap: break-word; }
+
+/* Keep the question and all five lines; only the repeated story title disappears. */
+.large-text .ribbon-story { padding: 1px 3px; }
+.large-text .ribbon-head { display: none; }
+.large-text .ribbon-line__tag { width: 20px; height: 20px; }
+.large-text .ribbon-line__text { letter-spacing: -.3px; }
+.large-text .ribbon-choice { gap: 2px; padding: 2px; }
+.large-text .ribbon-lesson { gap: 1px; }
+.large-text .ribbon-lesson .ribbon-choice__pic { height: 16px; }
+.large-text .ribbon-lesson .ribbon-choice__text { letter-spacing: -1px; }
