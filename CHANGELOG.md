@@ -33,6 +33,7 @@ Changes to All Aboard, grouped by release.
 
 ### Fixed
 
+- Read-aloud selects a preferred local English voice and uses a calm pace with neutral pitch.
 - The Enter walking hint closes after three seconds and chooses a clear dialogue position when available, otherwise the position with less player overlap. Read to me finishes speaking before the closing delay.
 - Taro’s starting crates stay tied to the cart; crates added by the child can still be removed.
 - Older grade-4 bands that load with Form A open as A B, preserving notes and mix settings. Form stays locked.
