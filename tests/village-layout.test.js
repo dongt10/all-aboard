@@ -74,19 +74,24 @@ test('layout exports the complete plain-data contract with integer coordinates',
   Object.values(layout).forEach(check);
 });
 
-test('both assets match the stage and background pixels remain exact 3 by 3 blocks', () => {
+test('both assets match the stage and the detailed background is opaque', () => {
   for (const image of [background, road]) assert.deepEqual([image.width, image.height], [960, 540]);
-  const colors = new Set();
-  for (let y = 0; y < 540; y += 3) for (let x = 0; x < 960; x += 3) {
-    const first = (y * 960 + x) * 4;
-    colors.add(`${background.rgba[first]},${background.rgba[first + 1]},${background.rgba[first + 2]}`);
-    for (let dy = 0; dy < 3; dy++) for (let dx = 0; dx < 3; dx++) {
-      const index = ((y + dy) * 960 + x + dx) * 4;
-      for (let c = 0; c < 4; c++) assert.equal(background.rgba[index + c], background.rgba[first + c]);
-      assert.equal(background.rgba[index + 3], 255);
-    }
+  for (let i = 3; i < background.rgba.length; i += 4) assert.equal(background.rgba[i], 255);
+});
+
+test('at least 97 percent of road pixels sit on low-saturation gray background stone', () => {
+  let total = 0, gray = 0;
+  for (let i = 0; i < road.rgba.length; i += 4) {
+    if (road.rgba[i + 3] !== 255) continue;
+    total++;
+    const [r, g, b] = background.rgba.subarray(i, i + 3);
+    const high = Math.max(r, g, b), low = Math.min(r, g, b);
+    const saturation = high ? (high - low) / high : 0;
+    const value = high / 255;
+    if (saturation < 0.25 && value >= 0.15 && value <= 0.75) gray++;
   }
-  assert.ok(colors.size <= 128, `${colors.size} colors`);
+  assert.ok(total > 0, 'road mask must not be empty');
+  assert.ok(gray / total >= 0.97, `${gray}/${total} road pixels (${100 * gray / total}%) sit on gray stone`);
 });
 
 test('road mask is pure white-opaque or black-transparent and covers 15 to 55 percent', () => {
@@ -283,15 +288,12 @@ test('every wander envelope keeps the sprite, badge and status mark on stage bel
   }
 });
 
-test('furniture leaves every measured lamp base and all detected lamp metal uncovered', () => {
+test('furniture leaves every measured lamp base and its protected box uncovered', () => {
   for (const [id, r] of furniture) {
     for (const p of NEAR_LAMPS) assert.ok(!overlaps(r, { ...p, w: 1, h: 1 }), `${id}: lamp base ${p.x},${p.y}`);
-    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) {
-      const i = (y * 960 + x) * 4;
-      // The five green-black metal colors in the drawing have luminance <50;
-      // even its darkest gray cobblestone is >74. This includes lamp edges.
-      const luminance = background.rgba[i] * 0.2126 + background.rgba[i + 1] * 0.7152 + background.rgba[i + 2] * 0.0722;
-      assert.ok(luminance >= 50, `${id}: dark lamp metal at ${x},${y}`);
+    for (const p of NEAR_LAMPS) {
+      const lamp = { x: p.x - 12, y: p.y - 64, w: 24, h: 68 };
+      assert.ok(!overlaps(r, lamp), `${id}: lamp box at base ${p.x},${p.y}`);
     }
   }
 });

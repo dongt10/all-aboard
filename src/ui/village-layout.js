@@ -14,10 +14,10 @@ export const HUD_ZONES = [
 // Reading and Music use the upper junction and the approach above the lower lamps.
 export const VILLAGE_SPOTS = {
   community: { x: 420, y: 172 },
-  reading: { x: 560, y: 260 },
+  reading: { x: 536, y: 268 },
   writing: { x: 104, y: 350 },
   math: { x: 314, y: 350 },
-  art: { x: 631, y: 322 },
+  art: { x: 648, y: 274 },
   science: { x: 844, y: 350 },
   music: { x: 690, y: 386 },
 };
@@ -29,9 +29,9 @@ export const STALLS = {
   reading: { x: 510, y: 164, w: 128, h: 80, side: 'above' },
   writing: { x: 40, y: 254, w: 128, h: 80, side: 'above' },
   math: { x: 256, y: 264, w: 128, h: 80, side: 'above' },
-  art: { x: 640, y: 244, w: 128, h: 80, side: 'right' },
-  science: { x: 815, y: 248, w: 128, h: 80, side: 'above' },
-  music: { x: 702, y: 366, w: 128, h: 80, side: 'right' },
+  art: { x: 659, y: 244, w: 128, h: 80, side: 'right' },
+  science: { x: 832, y: 248, w: 128, h: 80, side: 'above' },
+  music: { x: 702, y: 364, w: 128, h: 80, side: 'right' },
 };
 
 // Easels stay within 100px of their stalls, outside lamp metal and the junction.
@@ -42,12 +42,12 @@ export const EASELS = {
   writing: { x: 172, y: 254, w: 80, h: 56 },
   math: { x: 260, y: 180, w: 80, h: 56 },
   art: { x: 715, y: 170, w: 80, h: 56 },
-  science: { x: 715, y: 95, w: 80, h: 56 },
+  science: { x: 715, y: 100, w: 80, h: 56 },
   music: { x: 880, y: 340, w: 80, h: 56 },
 };
 
 export const SIDE_SPOTS = {
-  pip: { x: 475, y: 350 },
+  pip: { x: 475, y: 372 },
   nori: { x: 583, y: 475 },
 };
 
