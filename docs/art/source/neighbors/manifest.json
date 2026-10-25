@@ -6,7 +6,8 @@
     "ref-08.png": "3463e112e33c806ba1fe23eecfde52caa5ff5c9df8354781a6e114de6ca82e3b",
     "ref-21.png": "0edae8b269af0ac2f27994a6de2c6c96a1d54b982902077083699433f6481565",
     "ref-22.png": "d6cff08375b8d119f187c34ae559c6051ac198dc8c54f2adc3aa662d77ec8b0e",
-    "ref-27.png": "2f0a844bfaf8357ca7f4205d8dc2f2cf78a8cf90fd035366dcf35572d36253b0"
+    "ref-27.png": "2f0a844bfaf8357ca7f4205d8dc2f2cf78a8cf90fd035366dcf35572d36253b0",
+    "ref-25.png": "34315b18abf13a69674862255edae0193fc33c107a58995d98d65ee3ed504988"
   },
   "frameSize": 64,
   "alphaThreshold": 128,
@@ -275,6 +276,58 @@
         "right": "48d55f81af24dba900df9653e462f01811c167ee5abb7c5aa4dd1517b3828e88"
       },
       "backStandSha256": "408aaef0f3217e42d804cd05c0ad76007e2bab5731a0e79959f588d04fd372d5"
+    },
+    "community": {
+      "name": "Hana",
+      "composite": "ref-25.png",
+      "grid": {
+        "blockSize": 4,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "swatchBox": [
+        63,
+        63,
+        63,
+        63
+      ],
+      "background": {
+        "color": "#ffffff",
+        "removal": "exterior"
+      },
+      "dropRows": [
+        56,
+        57
+      ],
+      "shift": [
+        0,
+        -4
+      ],
+      "feetRow": 56,
+      "joyEyeBox": [
+        24,
+        26,
+        39,
+        30
+      ],
+      "frontStepColumns": [
+        [
+          20,
+          26
+        ],
+        [
+          37,
+          43
+        ]
+      ],
+      "rightMirrorColumns": null,
+      "sideStandSha256": {
+        "left": "8f7bc2e60f93f7e01c874815b54466f333f8d6cd05b8734bbf1ef3671ecb3c1f",
+        "right": "b77f2151c06580d4038d17cee45f21c17406e2f33451eb9280f99f6434a2acf2"
+      },
+      "backStandSha256": "7265533b6e172e2e719637175999d0f0ace60883c0437a8048e7691606ab2513"
     }
   }
 }
