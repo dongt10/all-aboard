@@ -18,7 +18,7 @@ export const HELP = [
 const PLACE_NAMES = { kiosk: 'Kiosk', bakery: 'Bakery', stage: 'Stage', shed: 'Lantern shed', workshop: 'Taro’s workshop', pond: 'Pond' };
 const CARDS = {
   north: { picture: 'flour', title: 'Flour', clues: [{ text: '↑ 1', label: 'North 1' }] },
-  west: { picture: 'drum', title: 'Drum', clues: [{ text: '← 1', label: 'West 1' }] },
+  west: { picture: 'drum', title: 'Drum', clues: [{ text: '← 2', label: 'West 2' }] },
   lantern: { picture: 'shed', title: 'Lantern', clues: [{ text: '→ 2', label: 'East 2' }, { text: '↓ 1', label: 'South 1' }] },
 };
 const ROSE = `<svg viewBox="0 0 24 24" shape-rendering="crispEdges" aria-hidden="true" focusable="false">`

@@ -328,13 +328,23 @@ test('banded snapshots delegate normalization, readiness and opening by activity
     ['science', 'chain', 'Chain', { chain: ['plant', 'fish', 'otter'], shone: true }, { shone: false }],
     ['community', 'helpday', 'Helpday', {}, { crew: [] }],
     ['reading', 'tales', 'Tales', { deck: 0, found: ['key', 'umbrella', 'book'], solved: ['momo-kitchen', 'taro-pier', 'kiko-stage'] }, { solved: [] }],
+    ['math', 'rows', 'Rows', { target: 12, crates: [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13] }, { crates: [0, 1] }],
+    ['science', 'beans', 'Beans', { change: 'water', weeks: 2, bed: ['seed', 'sun', 'water', 'bee'] }, { weeks: 1 }],
+    ['community', 'compass', 'Compass', { done: ['north', 'west', 'lantern'] }, { done: ['north'] }],
+    ['reading', 'ribbon', 'Ribbon', { story: 0, why: true, steps: 3, lesson: true }, { lesson: false }],
   ];
   for (const [kind, activity, cap, values, unfinished] of cases) {
     const rules = await import(`../src/${activity}.js`);
-    for (const grade of [3, 4, 5]) {
+    for (const grade of rules[`GRADES_${activity.toUpperCase()}`]) {
       const input = { kind, activity, ...values };
-      if (activity === 'chain') input.energy = rules.expectedEnergy(grade);
-      if (activity === 'helpday') input.crew = Object.entries(rules.HELP_FITS).map(([job, helper]) => ({ job, helper }));
+      if (activity === 'pizza' && grade === 5) {
+        Object.assign(input, { slices: 6, halves: true, plates: [3, 3, 3, 3], tried: true });
+      }
+      if (activity === 'chain') {
+        input.chain = grade === 4 ? ['pondweed', 'snail', 'koi'] : ['plant', 'fish', 'otter'];
+        input.energy = rules.expectedEnergy(grade);
+      }
+      if (activity === 'helpday') input.crew = Object.entries(rules.helpSetFor(grade).fits).map(([job, helper]) => ({ job, helper }));
       for (const [snapshot, ready] of [[input, true], [{ ...input, ...unfinished }, false]]) {
         const state = normalizeEncounterSnapshot(kind, snapshot, grade, 1);
         assert.deepEqual(state, rules[`normalize${cap}`](snapshot, grade, 1));
@@ -349,7 +359,7 @@ test('banded snapshots delegate normalization, readiness and opening by activity
 test('lower-grade controllers never restore upper-grade activity shapes', async () => {
   const { activityFor } = await import('../src/ui/registry.js');
   for (const [kind, activity, field] of [['math', 'pizza', 'left'], ['science', 'chain', 'canopy'], ['reading', 'tales', 'found'], ['community', 'helpday', 'placements']]) {
-    for (const [chapter, grade] of [[0, 0], [1, 1], [1, 2]]) {
+    for (const [chapter, grade] of [[0, 0], [1, 1]]) {
       const input = { kind, activity, chapter, grade, crew: [{ job: 'lanterns', helper: 'kiko' }] };
       const state = normalizeEncounterSnapshot(kind, input, grade, chapter);
       assert.equal(Object.hasOwn(state, 'activity'), false);
@@ -359,6 +369,29 @@ test('lower-grade controllers never restore upper-grade activity shapes', async 
       assert.doesNotThrow(() => controller.commands(opened.state, opened.ui, grade));
       assert.doesNotThrow(() => controller.opening(opened.state, opened.ui, grade));
     }
+  }
+});
+
+test('grade-2 controllers start fresh from legacy and upper-grade snapshots', async () => {
+  const { activityFor } = await import('../src/ui/registry.js');
+  const cases = [
+    ['math', 'rows', 'pizza', { left: [2, 1], right: [2, 1], rolled: true }],
+    ['science', 'beans', 'chain', { canopy: 'left', time: 10 }],
+    ['community', 'compass', 'helpday', { placements: [{ item: 'bench', x: 10, y: 90 }], tried: true }],
+    ['reading', 'ribbon', 'tales', { found: ['key', 'umbrella', 'book'] }],
+  ];
+  for (const [kind, activity, upper, legacy] of cases) {
+    const controller = activityFor(kind, 2), options = { chapter: 1, grade: 2 };
+    const fresh = controller.start(null, options);
+    assert.equal(fresh.state.activity, activity);
+    assert.equal(encounterReady(fresh.state), false);
+    for (const values of [legacy, { activity: upper }, { activity: 'constructor' }, { activity: '__proto__' }]) {
+      const input = { kind, ...options, ...values };
+      assert.deepEqual(controller.start(input, options), fresh);
+      assert.doesNotThrow(() => normalizeEncounterSnapshot(kind, input, 2, 1));
+    }
+    assert.doesNotThrow(() => controller.commands(fresh.state, fresh.ui, 2));
+    assert.doesNotThrow(() => controller.opening(fresh.state, fresh.ui, 2));
   }
 });
 

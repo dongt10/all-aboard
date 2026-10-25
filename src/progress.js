@@ -2,9 +2,13 @@ import { cleanPizzaCreation } from './pizza.js';
 import { cleanChainCreation } from './chain.js';
 import { cleanHelpdayCreation } from './helpday.js';
 import { cleanTalesCreation } from './tales.js';
+import { cleanRowsCreation } from './rows.js';
+import { cleanBeansCreation } from './beans.js';
+import { cleanCompassCreation } from './compass.js';
+import { cleanRibbonCreation } from './ribbon.js';
 import { CHARACTERS } from './data.js';
 import { TEMPOS, FORMS, normalizePreset } from './audio.js';
-import { normalizeCommunityMap, normalizeSign } from './encounters.js';
+import { normalizeCommunityMap, normalizeSign, ACTIVITY_GRADES } from './encounters.js';
 
 export const STORAGE_KEY = 'all-aboard-demo-v2';
 const LEGACY_KEY = 'all-aboard-demo-v1';
@@ -29,12 +33,16 @@ export function scopeKey(chapter, grade) {
 // Saved creations contain only the small set of fields each scene understands.
 export function cleanCreation(subjectId, input) {
   if (!IDS.has(subjectId) || !isObject(input) || input.kind !== subjectId) return null;
-  if (Object.hasOwn(input, 'activity') && (input.chapter !== 1 || ![3, 4, 5].includes(input.grade))) return null;
+  if (Object.hasOwn(input, 'activity') && (input.chapter !== 1 || !(ACTIVITY_GRADES[input.activity] ?? []).includes(input.grade))) return null;
   const base = { kind: subjectId, chapter: input.chapter === 1 ? 1 : 0, grade: input.chapter === 1 ? Math.round(finite(input.grade, 1, 5, 1)) : 0 };
   if (subjectId === 'math' && input.activity === 'pizza') return cleanPizzaCreation({ ...input, ...base });
   if (subjectId === 'science' && input.activity === 'chain') return cleanChainCreation({ ...input, ...base });
   if (subjectId === 'community' && input.activity === 'helpday') return cleanHelpdayCreation({ ...input, ...base });
   if (subjectId === 'reading' && input.activity === 'tales') return cleanTalesCreation({ ...input, ...base });
+  if (subjectId === 'math' && input.activity === 'rows') return cleanRowsCreation({ ...input, ...base });
+  if (subjectId === 'science' && input.activity === 'beans') return cleanBeansCreation({ ...input, ...base });
+  if (subjectId === 'community' && input.activity === 'compass') return cleanCompassCreation({ ...input, ...base });
+  if (subjectId === 'reading' && input.activity === 'ribbon') return cleanRibbonCreation({ ...input, ...base });
   if (Object.hasOwn(input, 'activity')) return null;
   if (subjectId === 'math') {
     const cargo = values => Array.isArray(values) ? values.filter(value => [1, 2, 3, 5].includes(value)).slice(0, 8) : [];

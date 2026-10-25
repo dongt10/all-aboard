@@ -8,19 +8,21 @@ import { CHARACTERS } from '../src/data.js';
 const sign = { kind: 'writing', text: 'Welcome!', chapter: 0, grade: 0 };
 const SUBJECTS = CHARACTERS.map(c => c.id);
 
-test('earned statements follow the published activity, including legacy grade 3–5 work', () => {
+test('earned statements follow the published activity, including legacy grade 2–5 work', () => {
   const old = {
     math: { left: [1], right: [1], rolled: true }, science: { canopy: 'left', time: 10 },
     reading: { found: ['key', 'umbrella', 'book'] },
     community: { placements: [{ item: 'bench', x: 10, y: 90 }, { item: 'quiet', x: 10, y: 10 }, { item: 'sign', x: 90, y: 10 }], tried: true },
   };
   const activities = { math: 'pizza', science: 'chain', reading: 'tales', community: 'helpday' };
-  for (const grade of [3, 4, 5]) for (const [kind, values] of Object.entries(old)) {
+  const grade2 = { math: 'rows', science: 'beans', reading: 'ribbon', community: 'compass' };
+  for (const grade of [2, 3, 4, 5]) for (const [kind, values] of Object.entries(old)) {
+    const activity = (grade === 2 ? grade2 : activities)[kind];
     let state = publishCreation({ ...createState(), chapter: 1, grade }, kind, { kind, chapter: 1, grade, ...values });
-    state = saveDraft(state, kind, { kind, chapter: 1, grade, activity: activities[kind] });
+    state = saveDraft(state, kind, { kind, chapter: 1, grade, activity });
     const stamp = guideEntries(normalizeState(state)).find(e => e.id === kind).stamp;
-    assert.deepEqual(stamp, { earned: true, learned: learnedText(kind, 2) }, `${kind} grade ${grade} legacy stamp ignores new draft`);
-    state = publishCreation(state, kind, { kind, chapter: 1, grade, activity: activities[kind] });
+    assert.deepEqual(stamp, { earned: true, learned: kind === 'science' ? 'Shade makes ice melt slower.' : learnedText(kind, 1) }, `${kind} grade ${grade} legacy stamp ignores new draft`);
+    state = publishCreation(state, kind, { kind, chapter: 1, grade, activity });
     assert.equal(guideEntries(state).find(e => e.id === kind).stamp.learned, learnedText(kind, grade));
   }
 });
@@ -61,12 +63,12 @@ test('an earned guide page shows what the child made there', async () => {
 // --- Stamps per band (plan 1C and Part 2) ---
 test('learnedText gives the planned sentence at every grade for every subject', () => {
   const expect = {
-    math: ['Same number on both sides is equal.', 'Different crates can weigh the same.', 'Different crates can weigh the same.', 'Sharing equally is dividing: 8 ÷ 4 = 2 each.', 'Sharing equally is dividing: 12 ÷ 4 = 3 each.', 'A leftover can be split: 6 ÷ 4 = 1 and a half.'],
-    science: ['Shade keeps the sun off the ice.', 'Shade keeps the sun off the ice.', 'Shade makes ice melt slower.', STAMP_CHAIN, 'A pond chain keeps one tenth at each step too.', 'Only 10% of energy moves up each step of a chain.'],
-    reading: ['Letters make a word you can read.', 'The story tells you what to pack.', 'The story tells you what to pack.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.'],
+    math: ['Same number on both sides is equal.', 'Different crates can weigh the same.', 'Equal rows add up: 4 + 4 + 4 = 12.', 'Sharing equally is dividing: 8 ÷ 4 = 2 each.', 'Sharing equally is dividing: 12 ÷ 4 = 3 each.', 'A leftover can be split: 6 ÷ 4 = 1 and a half.'],
+    science: ['Shade keeps the sun off the ice.', 'Shade keeps the sun off the ice.', 'Plants need sun and water. Change one thing to test.', STAMP_CHAIN, 'A pond chain keeps one tenth at each step too.', 'Only 10% of energy moves up each step of a chain.'],
+    reading: ['Letters make a word you can read.', 'The story tells you what to pack.', 'A story has a beginning, middle, end, and a lesson.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.'],
     writing: ['Words welcome your neighbors.', ...Array(2).fill('A sentence starts big and ends with a mark.'), ...Array(3).fill('Describing words paint a picture for readers.')],
     art: ['Shapes and colors make a design.', ...Array(2).fill('A pattern repeats: star, circle, star, circle.'), ...Array(3).fill('A mirror design is the same on both sides.')],
-    community: ['A bench gives a tired neighbor a rest.', 'A good plan works for everyone.', 'A good plan works for everyone.', 'Different strengths get every job done together.', 'Every job needs the strength that fits it.', 'Ask about a strength before you hand out a job.'],
+    community: ['A bench gives a tired neighbor a rest.', 'A good plan works for everyone.', 'A compass shows north, south, east and west.', 'Different strengths get every job done together.', 'Every job needs the strength that fits it.', 'Ask about a strength before you hand out a job.'],
     music: ['Music can be fast or slow, high or low.', 'Rests are part of a rhythm.', 'Rests are part of a rhythm.', 'A tune can go up, down, or stay the same.', 'A steady part holds up a changing tune.', 'A steady part holds up a changing tune.'],
   };
   for (const subject of SUBJECTS) assert.deepEqual([0, 1, 2, 3, 4, 5].map(grade => learnedText(subject, grade)), expect[subject], subject);
@@ -83,8 +85,8 @@ test('the guide reads stamps with the current grade: chapter 0 is Kindergarten e
   const learnedAt = state => Object.fromEntries(guideEntries(state).filter(e => e.stamp).map(e => [e.id, e.stamp.learned]));
   assert.equal(learnedAt(k).math, 'Same number on both sides is equal.');
   assert.equal(learnedAt(k).music, 'Music can be fast or slow, high or low.');
-  assert.equal(learnedAt({ ...k, chapter: 1, grade: 2 }).math, 'Different crates can weigh the same.');
-  assert.equal(learnedAt({ ...k, chapter: 1, grade: 2 }).science, 'Shade makes ice melt slower.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 2 }).math, 'Equal rows add up: 4 + 4 + 4 = 12.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 2 }).science, 'Plants need sun and water. Change one thing to test.');
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 1 }).science, 'Shade keeps the sun off the ice.');
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 3 }).music, 'A tune can go up, down, or stay the same.');
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 5 }).music, 'A steady part holds up a changing tune.');

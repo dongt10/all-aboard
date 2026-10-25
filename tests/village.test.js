@@ -291,7 +291,7 @@ test('banded creations use their own safe drawings and preserve legacy fallbacks
   const { talesCreationMarkup } = await import('../src/tales.js');
   const cases = [
     ['math', { kind: 'math', activity: 'pizza', chapter: 1, grade: 3, slices: 8, halves: false, plates: [4, 4, 4, 4], tried: true }, pizzaCreationMarkup],
-    ['science', { activity: 'chain', chain: ['plant', 'fish', 'gull'], energy: [100, 10, 1] }, chainCreationMarkup],
+    ['science', { activity: 'chain', chain: ['plant', 'fish', 'gull'], energy: [1000, 100, 10] }, chainCreationMarkup],
     ['community', { activity: 'helpday', crew: Object.entries(HELP_FITS).map(([job, helper]) => ({ job, helper })) }, helpdayCreationMarkup],
     ['reading', { activity: 'tales', deck: 0, solved: ['momo-kitchen'] }, talesCreationMarkup],
   ];
@@ -941,19 +941,23 @@ for (const grade of [0, 1, 2]) test(`a stored Help Day in grade ${grade} cannot 
   const scene = createEncounterScene({ stage: f.stage, getState: () => state, speak() {}, open: { help() {} } }, { id: 'community' });
   t.after(() => scene.destroy());
   assert.doesNotThrow(() => scene.mount());
-  assert.equal(f.stage.querySelectorAll('.square-cell').length, 25);
+  assert.equal(f.stage.querySelectorAll(grade === 2 ? '.compass-cell' : '.square-cell').length, 25);
 });
 
-const replacements = { math: ['pizza', 'Pizza party'], science: ['chain', 'Sunbeam chart'], reading: ['tales', 'Tale book'], community: ['helpday', 'Help Day team'] };
-for (const grade of [3, 4, 5]) for (const legacy of [false, true]) test(`village and parade name the published creations (grade ${grade}, legacy=${legacy})`, t => {
+const replacements = {
+  2: { math: ['rows', 'Crate rows'], science: ['beans', 'Garden bed card'], reading: ['ribbon', 'Story ribbon'], community: ['compass', 'Delivery map'] },
+  3: { math: ['pizza', 'Pizza party'], science: ['chain', 'Sunbeam chart'], reading: ['tales', 'Tale book'], community: ['helpday', 'Help Day team'] },
+};
+for (const grade of [2, 3, 4, 5]) for (const legacy of [false, true]) test(`village and parade name the published creations (grade ${grade}, legacy=${legacy})`, t => {
+  const replacement = replacements[grade === 2 ? 2 : 3];
   let state = { ...createState(), chapter: 1, grade, settings: { ...createState().settings, reducedMotion: true } };
   for (const { id } of CHARACTERS) {
-    const activity = !legacy && replacements[id] ? { activity: replacements[id][0] } : {};
+    const activity = !legacy && replacement[id] ? { activity: replacement[id][0] } : {};
     state = publishCreation(state, id, { kind: id, chapter: 1, grade, ...activity, text: 'Welcome, neighbors!' });
   }
   const f = villageFixture(t, { state, large: true });
   for (const c of CHARACTERS) {
-    const name = !legacy && replacements[c.id] ? replacements[c.id][1] : c.reward.label;
+    const name = !legacy && replacement[c.id] ? replacement[c.id][1] : c.reward.label;
     assert.ok(f.root.querySelector(`.village-actor[data-id="${c.id}"]`).getAttribute('aria-label').includes(`Made a ${name.toLowerCase()}.`), name);
   }
   f.scene.destroy();
@@ -965,7 +969,7 @@ for (const grade of [3, 4, 5]) for (const legacy of [false, true]) test(`village
   assert.equal(sentences.length, 8, 'leader plus one sentence per neighbor');
   assert.ok(sentences.every(sentence => sentence.length <= 56), label);
   for (const c of CHARACTERS) {
-    const name = !legacy && replacements[c.id] ? replacements[c.id][1] : c.reward.label;
+    const name = !legacy && replacement[c.id] ? replacement[c.id][1] : c.reward.label;
     assert.ok(sentences.includes(`${c.name} brings the ${name.toLowerCase()}.`), name);
   }
 });

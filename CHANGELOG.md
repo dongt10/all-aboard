@@ -4,6 +4,26 @@ Changes to All Aboard, grouped by release.
 
 ## Unreleased
 
+### Added
+
+- Taro’s crate rows for grade 2: build equal rows, read their sum, pair crates to see odd or even, and Send cart when the rows match the order.
+- Momo’s bean test for grade 2: change one cup’s water or sunlight, compare two weeks of growth, and build a garden bed card with Seed, Sun, Water and Bee before Plant bed.
+- Hana’s compass errands for grade 2: follow three map clues, learn whose job each delivery helps, and Hang map after all three errands.
+- Sora’s story ribbon for grade 2: two five-line stories with why questions, beginning/middle/end cards and lesson tags, saved with Share ribbon.
+- Pattern and mirror goals for Yuki’s banner, from free stamping in K to six matching stamps in two colors in grades 4–5.
+- Sentence and describing-word goals for Fumi’s sign, with phrase/word tiles and a short hint for the next step.
+- The grade-4 pond food chain and Help Day set B, with Momo, Sora, Yuki and Fumi in four new jobs.
+- Finished tales can be reread from their labels or filled book slots, with all three lines visible and the proof highlighted.
+- Grade-2 activity routing, saves, creation pictures and Guide stamps, while older untagged creations keep their original pictures and learned statements.
+
+### Changed
+
+- Send band waits for each grade’s music lesson: a changed sound/rest rhythm at grade 1, a matched Echo at grade 2, and a changed melody at grades 3–5. Kindergarten keeps its play-or-edit rule, and published bands stay ready.
+- Food-chain energy starts at the plant, with ÷10 arrows between feeding levels. The Sun supplies sunlight without a number. The three placed numbers are 1000 → 100 → 10 in grade 3, 2000 → 200 → 20 in grade 4, and 5000 → 500 → 50 in grade 5.
+- Grade 5 pizzas use six or ten slices and require a cut into halves before Serve pizza; older saved pizzas still load and render.
+- Pizza Help asks for every slice or piece to be handed out, with a cutting step at grade 5. The grade-4 stamp reads “Sharing equally is dividing: 12 ÷ 4 = 3 each.”
+- Saved banner positions and sign text stay intact under the new completion goals. Grade-4 legacy charts and Help Day pictures remain visible; reopening starts the current pond or set-B task.
+
 ### Art
 
 - Yuki and Fumi now come from the team's drawings, with side and back views, and the reference drawings are pinned so they can never be swapped silently.
@@ -11,6 +31,11 @@ Changes to All Aboard, grouped by release.
 
 ### Fixed
 
+- The Enter walking hint closes after three seconds and moves above the player when needed, so it never covers the player. Read to me finishes speaking before the closing delay.
+- Taro’s starting crates stay tied to the cart; crates added by the child can still be removed.
+- Older grade-4 bands that load with Form A open as A B, preserving notes and mix settings. Form stays locked.
+- The west compass clue shows “← 2,” matching the stage’s position two squares west of the kiosk.
+- Music control rows keep one Tab stop each, with arrow-key navigation between controls.
 - Enter, Space and Z in the village talk only to the neighbor you are standing next to. They never jump you to a far stall any more; with nobody near, Pip says "Walk up to a neighbor, then press Enter."
 - The welcome and the celebration box close by themselves a few seconds after their last page, so Pip, Nori and Sora's stall are not hidden behind them when you come back from an activity.
 

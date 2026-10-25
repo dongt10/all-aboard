@@ -163,10 +163,10 @@ test('a saved band keeps its speed and form, and unknown values fall back to Ste
 });
 
 test('all four banded creations repair junk and round-trip through drafts and published saves', async () => {
-  const { HELP_FITS } = await import('../src/helpday.js');
+  const { helpSetFor } = await import('../src/helpday.js');
   const { expectedEnergy } = await import('../src/chain.js');
-  const crew = Object.entries(HELP_FITS).map(([job, helper]) => ({ job, helper }));
   for (const grade of [3, 4, 5]) {
+    const crew = Object.entries(helpSetFor(grade).fits).map(([job, helper]) => ({ job, helper }));
     const cases = [
       ['math', 'pizza', [
         { slices: 7, halves: 'yes', plates: [99, -1, 'x', 3, 3], tried: true },
@@ -174,7 +174,7 @@ test('all four banded creations repair junk and round-trip through drafts and pu
       ]],
       ['science', 'chain', [
         { chain: ['<script>', 'fish', 'gull'], energy: [Infinity, -1, 'x'], shone: true },
-        { chain: ['plant', 'fish', 'gull'], energy: expectedEnergy(grade), shone: true },
+        { chain: grade === 4 ? ['pondweed', 'snail', 'frog'] : ['plant', 'fish', 'gull'], energy: expectedEnergy(grade), shone: true },
       ]],
       ['community', 'helpday', [
         { crew: [null, { job: 'bad', helper: 'pip' }, ...crew, crew[0]] },
@@ -206,6 +206,111 @@ test('all four banded creations repair junk and round-trip through drafts and pu
     }
     const ice = { kind: 'science', chapter: 1, grade, canopy: 'left', time: 10 };
     assert.deepEqual(cleanCreation('science', ice), ice, 'legacy ice is never migrated by grade');
+  }
+});
+
+test('grade-2 creations repair junk and round-trip through drafts, publication and drawings', async () => {
+  const { activityFor } = await import('../src/ui/registry.js');
+  const { creationMarkup, creationLabel } = await import('../src/ui/creations.js');
+  const { encounterReady } = await import('../src/encounters.js');
+  const cases = [
+    ['math', 'rows', 'Rows', 'Crate rows',
+      { target: 12, crates: [0, 1] },
+      { target: 12, crates: [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13] },
+      { target: 99, crates: [1, 0, 1, -1, 25, '2', null] }],
+    ['science', 'beans', 'Beans', 'Garden bed card',
+      { change: 'dark', weeks: 1, bed: ['seed'] },
+      { change: 'water', weeks: 2, bed: ['seed', 'sun', 'water', 'bee'] },
+      { change: 'none', weeks: 99, bed: ['bee', 'seed', 'bee', 'dark', '<script>'] }],
+    ['community', 'compass', 'Compass', 'Delivery map',
+      { done: ['north'] },
+      { done: ['north', 'west', 'lantern'] },
+      { done: ['west', 'north', 'west', '<script>', null] }],
+    ['reading', 'ribbon', 'Ribbon', 'Story ribbon',
+      { found: [], story: 1, why: true, steps: 1, lesson: false },
+      { found: [], story: 0, why: true, steps: 3, lesson: true },
+      { found: ['key'], story: 99, why: false, steps: 3, lesson: true }],
+  ];
+  for (const [kind, activity, cap, label, partialValues, readyValues, junk] of cases) {
+    const rules = await import(`../src/${activity}.js`);
+    const base = { kind, activity, chapter: 1, grade: 2 };
+    const original = { ...createState(), chapter: 1, grade: 2 };
+    const controller = activityFor(kind, 2), options = { chapter: 1, grade: 2 };
+    const storage = memoryStorage();
+    const partial = { ...base, ...partialValues }, ready = { ...base, ...readyValues };
+    assert.equal(encounterReady(partial), false, `${activity} partial draft`);
+    assert.equal(encounterReady(ready), true, `${activity} ready creation`);
+    assert.equal(saveState(saveDraft(original, kind, partial), storage), true);
+    const resumed = loadState(storage);
+    assert.deepEqual(getDraft(resumed, kind), partial);
+    assert.deepEqual(getCompleted(resumed), []);
+    assert.deepEqual(controller.start(getDraft(resumed, kind), options).state, partial);
+    const published = publishCreation(resumed, kind, ready);
+    assert.equal(saveState(published, storage), true);
+    const loaded = loadState(storage);
+    assert.deepEqual(loaded, published);
+    assert.deepEqual(getDraft(loaded, kind), ready);
+    assert.deepEqual(getCreations(loaded)[kind], ready);
+    assert.deepEqual(getCompleted(loaded), [kind]);
+    assert.deepEqual(controller.start(getDraft(loaded, kind), options).state, ready);
+    const edited = saveDraft(loaded, kind, partial);
+    assert.deepEqual(getDraft(edited, kind), partial);
+    assert.deepEqual(getCreations(edited)[kind], ready, 'a new draft keeps the published picture');
+    for (const grade of [1, 3, 4, 5]) assert.deepEqual(getCreations({ ...loaded, grade }), {});
+    for (const values of [partialValues, readyValues, junk, {}]) {
+      const input = { ...base, ...values }, clean = cleanCreation(kind, input);
+      assert.deepEqual(clean, rules[`clean${cap}Creation`](input));
+      assert.deepEqual(cleanCreation(kind, clean), clean);
+      assert.deepEqual(normalizeEncounterSnapshot(kind, clean, 2, 1), clean);
+      assert.deepEqual(controller.start(clean, options).state, clean);
+      assert.equal(creationLabel(kind, clean), label);
+      assert.equal(creationMarkup(kind, clean), rules[`${activity}CreationMarkup`](clean));
+      assert.match(creationMarkup(kind, clean), new RegExp(`creation--${activity}`));
+      assert.doesNotMatch(creationMarkup(kind, clean), /<script>|undefined|NaN|Infinity/);
+      const saved = publishCreation(saveDraft(original, kind, clean), kind, clean);
+      saveState(saved, storage);
+      assert.deepEqual(getDraft(loadState(storage), kind), clean);
+      assert.deepEqual(getCreations(loadState(storage))[kind], clean);
+    }
+    if (activity === 'beans') {
+      assert.match(creationMarkup(kind, { ...ready, chain: ['plant', 'fish', 'gull'] }), /creation--beans/);
+    }
+  }
+});
+
+test('tagged grade-2 activities reject other scopes through every save path', () => {
+  const cases = [['math', 'rows'], ['science', 'beans'], ['community', 'compass'], ['reading', 'ribbon']];
+  for (const [kind, activity] of cases) {
+    for (const [chapter, grade] of [[0, 0], [0, 2], [1, 1], [1, 3], [1, 4], [1, 5]]) {
+      const creation = { kind, activity, chapter, grade };
+      const state = { ...createState(), chapter, grade: grade || 1 }, scope = scopeKey(chapter, grade);
+      assert.equal(cleanCreation(kind, creation), null, `${activity} chapter ${chapter}, grade ${grade}`);
+      assert.deepEqual(saveDraft(state, kind, creation), state);
+      assert.deepEqual(publishCreation(state, kind, creation), state);
+      const storage = memoryStorage();
+      storage.setItem(STORAGE_KEY, JSON.stringify({ ...state, drafts: { [scope]: { [kind]: creation } },
+        progress: { [scope]: { [kind]: { creation, completedAt: '2026-10-25T10:00:00Z' } } } }));
+      const loaded = loadState(storage);
+      assert.equal(getDraft(loaded, kind), null);
+      assert.deepEqual(getCompleted(loaded), []);
+      assert.deepEqual(getCreations(loaded), {});
+    }
+    const creation = cleanCreation(kind, { kind, activity, chapter: 1, grade: 2 });
+    for (const [chapter, grade] of [[0, 1], [1, 1], [1, 3], [1, 4], [1, 5]]) {
+      const state = { ...createState(), chapter, grade }, scope = scopeKey(chapter, grade);
+      assert.deepEqual(saveDraft(state, kind, creation), state, 'valid grade-2 snapshot stays in its own scope');
+      assert.deepEqual(publishCreation(state, kind, creation), state);
+      const loaded = normalizeState({ ...state, drafts: { [scope]: { [kind]: creation } },
+        progress: { [scope]: { [kind]: { creation, completedAt: '2026-10-25T10:00:00Z' } } } });
+      assert.equal(getDraft(loaded, kind), null);
+      assert.deepEqual(getCreations(loaded), {});
+    }
+    for (const invalid of ['constructor', '__proto__', 'toString', 'unknown', null]) {
+      assert.equal(cleanCreation(kind, { kind, activity: invalid, chapter: 1, grade: 2 }), null);
+    }
+    for (const [otherKind] of cases) if (otherKind !== kind) {
+      assert.equal(cleanCreation(otherKind, { ...creation, kind: otherKind }), null);
+    }
   }
 });
 
@@ -247,7 +352,7 @@ test('only an absent activity discriminator uses the legacy save format', () => 
 test('drafts and progress reject snapshots from another chapter or grade', async () => {
   const { chainReady } = await import('../src/chain.js');
   const chain = { kind: 'science', activity: 'chain', chapter: 1, grade: 3,
-    chain: ['plant', 'fish', 'gull'], energy: [100, 10, 1], shone: true };
+    chain: ['plant', 'fish', 'gull'], energy: [1000, 100, 10], shone: true };
   assert.equal(chainReady(chain), true);
   const record = { creation: chain, completedAt: '2026-10-24T10:00:00Z' };
   for (const [chapter, grade] of [[1, 5], [0, 1]]) {
@@ -295,7 +400,8 @@ test('tagged upper-grade activities are rejected in K–2 through every save pat
 
 test('writing tile runs are grade-validated, bounded, independent and preserved across save paths', () => {
   const phrase = 'Welcome, neighbors!';
-  const snapshot = { kind: 'writing', chapter: 1, grade: 5, text: `Hi ${phrase} Come explore`, tiles: [phrase, 'Come explore'] };
+  const ending = 'Come explore our festival.';
+  const snapshot = { kind: 'writing', chapter: 1, grade: 5, text: `Hi ${phrase} ${ending}`, tiles: [phrase, ending] };
   const original = { ...createState(), chapter: 1, grade: 5 };
   const storage = memoryStorage();
   const saved = publishCreation(saveDraft(original, 'writing', snapshot), 'writing', snapshot);
@@ -307,14 +413,15 @@ test('writing tile runs are grade-validated, bounded, independent and preserved 
   getDraft(loaded, 'writing').tiles.pop();
   assert.deepEqual(getDraft(loaded, 'writing').tiles, snapshot.tiles);
   const cases = [
-    [{ ...snapshot, tiles: ['<img>', 'Come explore'] }, []],
+    [{ ...snapshot, tiles: ['<img>', ending] }, []],
     [{ ...snapshot, tiles: [null, {}] }, []],
-    [{ ...snapshot, tiles: 'Come explore' }, []],
+    [{ ...snapshot, tiles: ending }, []],
     [{ ...snapshot, tiles: ['Welcome'] }, []],
     [{ ...snapshot, text: 'Hi Welcome, neighbors! now' }, []],
-    [{ ...snapshot, text: 'Hi Come explore' }, ['Come explore']],
+    [{ ...snapshot, text: `Hi ${ending}` }, [ending]],
     [{ ...snapshot, grade: 2 }, []],
-    [{ ...snapshot, text: 'HelloCome explore', tiles: ['Come explore'] }, []],
+    [{ ...snapshot, text: `Hello${ending}`, tiles: [ending] }, []],
+    [{ ...snapshot, text: 'Welcome, neighbors! Come explore', tiles: [phrase, 'Come explore'] }, []],
     [{ kind: 'writing', chapter: 0, grade: 0, text: Array(60).fill('♡').join(' '), tiles: Array(500).fill('♡') }, Array(60).fill('♡')],
   ];
   for (const [input, tiles] of cases) {

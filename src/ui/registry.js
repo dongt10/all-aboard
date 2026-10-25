@@ -3,6 +3,10 @@ import pizza from './activities/pizza.js';
 import chain from './activities/chain.js';
 import helpday from './activities/helpday.js';
 import tales from './activities/tales.js';
+import rows from './activities/rows.js';
+import beans from './activities/beans.js';
+import compass from './activities/compass.js';
+import ribbon from './activities/ribbon.js';
 import cart from './activities/cart.js';
 import ice from './activities/ice.js';
 import story from './activities/story.js';
@@ -24,13 +28,13 @@ The Activity contract. Each module in src/ui/activities/ default-exports one.
     mountField(host, { grade, dispatch }) → { update(state, ui), destroy() },
   }
 
-- Resolve with activityFor(kind, rawGrade) before start(). Band activities normalize their own
-  snapshots and use an activity discriminator.
+- Resolve with activityFor(kind, rawGrade) before start(). Exact-grade activities take priority over
+  bands; both normalize their own snapshots and use an activity discriminator.
 - `state` is the saved creation; `ui` is everything else the screen needs (tool choice, last roll …).
 - `commands` returns at most 4 commands (see menu.js for the Command shape). Each has an icon or art and a
   label of at most 12 characters (9 or fewer keeps the full font size). At most one is the finish
   (`finish: true`, icon `check`): it is LAST, shown from the start, and disabled until encounterReady(state).
-  (K–2 reading is the one exception: its four picture choices fill the menu, so it may omit the finish until
+  (K–1 reading is the one exception: its four picture choices fill the menu, so it may omit the finish until
   ready.) The encounter scene handles the finish command itself and pads shorter menus so the finish
   always renders bottom-right (menu.js arrangeCommands).
 - `act` is pure. An action is `{ type: 'command', id }` or `{ type: 'field', … }` (the field's own shape).
@@ -41,12 +45,12 @@ The Activity contract. Each module in src/ui/activities/ default-exports one.
 export const ACTIVITIES = { math: cart, science: ice, art: banner, reading: story, writing: sign, community: square };
 
 export const BANDED = {
-  math: { 3: pizza },
-  science: { 3: chain },
-  community: { 3: helpday },
-  reading: { 3: tales },
+  math: { 2: rows, 3: pizza },
+  science: { 2: beans, 3: chain },
+  community: { 2: compass, 3: helpday },
+  reading: { 2: ribbon, 3: tales },
 };
 
 export function activityFor(id, grade) {
-  return BANDED[id]?.[gradeBand(grade)] ?? ACTIVITIES[id];
+  return BANDED[id]?.[Number(grade)] ?? BANDED[id]?.[gradeBand(grade)] ?? ACTIVITIES[id];
 }

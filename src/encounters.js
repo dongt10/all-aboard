@@ -1,8 +1,18 @@
-import { normalizePizza, pizzaReady, pizzaOpening } from './pizza.js';
-import { normalizeChain, chainReady, chainOpening } from './chain.js';
-import { normalizeHelpday, helpdayReady, helpdayOpening } from './helpday.js';
-import { normalizeTales, talesReady, talesOpening } from './tales.js';
+import { GRADES_PIZZA, normalizePizza, pizzaReady, pizzaOpening } from './pizza.js';
+import { GRADES_CHAIN, normalizeChain, chainReady, chainOpening } from './chain.js';
+import { GRADES_HELPDAY, normalizeHelpday, helpdayReady, helpdayOpening } from './helpday.js';
+import { GRADES_TALES, normalizeTales, talesReady, talesOpening } from './tales.js';
+import { GRADES_ROWS, normalizeRows, rowsReady, rowsOpening } from './rows.js';
+import { GRADES_BEANS, normalizeBeans, beansReady, beansOpening } from './beans.js';
+import { GRADES_COMPASS, normalizeCompass, compassReady, compassOpening } from './compass.js';
+import { GRADES_RIBBON, normalizeRibbon, ribbonReady, ribbonOpening } from './ribbon.js';
 import { READING_ITEMS, normalizeReadingFound } from './reading.js';
+
+export const ACTIVITY_GRADES = {
+  __proto__: null,
+  pizza: GRADES_PIZZA, chain: GRADES_CHAIN, helpday: GRADES_HELPDAY, tales: GRADES_TALES,
+  rows: GRADES_ROWS, beans: GRADES_BEANS, compass: GRADES_COMPASS, ribbon: GRADES_RIBBON,
+};
 
 export const ENCOUNTER_COLORS = ['#e96163', '#f4bf4f', '#6dbea0', '#559fc7', '#9d7fbd', '#fff1cf'];
 export const ENCOUNTER_COLOR_NAMES = { '#e96163':'Coral', '#f4bf4f':'Gold', '#6dbea0':'Mint', '#559fc7':'Blue', '#9d7fbd':'Lavender', '#fff1cf':'Cream' };
@@ -38,11 +48,15 @@ export function normalizeCommunityMap(input) {
 export function normalizeEncounterSnapshot(kind, input = {}, grade = 1, chapter = 0) {
   let s = input && typeof input === 'object' && input.kind === kind ? input : {};
   const base = {kind, grade:clamp(grade,0,5), chapter:clamp(chapter,0,99)};
-  if (Object.hasOwn(s, 'activity') && (chapter !== 1 || ![3, 4, 5].includes(grade))) s = {};
+  if (Object.hasOwn(s, 'activity') && (chapter !== 1 || !(ACTIVITY_GRADES[s.activity] ?? []).includes(grade))) s = {};
   if (kind === 'math' && s.activity === 'pizza') return normalizePizza(s, base.grade, base.chapter);
   if (kind === 'science' && s.activity === 'chain') return normalizeChain(s, base.grade, base.chapter);
   if (kind === 'community' && s.activity === 'helpday') return normalizeHelpday(s, base.grade, base.chapter);
   if (kind === 'reading' && s.activity === 'tales') return normalizeTales(s, base.grade, base.chapter);
+  if (kind === 'math' && s.activity === 'rows') return normalizeRows(s, base.grade, base.chapter);
+  if (kind === 'science' && s.activity === 'beans') return normalizeBeans(s, base.grade, base.chapter);
+  if (kind === 'community' && s.activity === 'compass') return normalizeCompass(s, base.grade, base.chapter);
+  if (kind === 'reading' && s.activity === 'ribbon') return normalizeRibbon(s, base.grade, base.chapter);
 
   if (kind === 'math') return {...base, left:Array.isArray(s.left)?s.left.filter(n=>[1,2,3,5].includes(n)).slice(0,8):[], right:Array.isArray(s.right)?s.right.filter(n=>[1,2,3,5].includes(n)).slice(0,8):[], rolled:s.rolled===true};
   if (kind === 'science') return {...base, canopy:['left','right'].includes(s.canopy)?s.canopy:'none',time:clamp(s.time,0,20)};
@@ -103,6 +117,10 @@ export function encounterReady(s) {
   if (s.kind === 'science' && s.activity === 'chain') return chainReady(s);
   if (s.kind === 'community' && s.activity === 'helpday') return helpdayReady(s);
   if (s.kind === 'reading' && s.activity === 'tales') return talesReady(s);
+  if (s.kind === 'math' && s.activity === 'rows') return rowsReady(s);
+  if (s.kind === 'science' && s.activity === 'beans') return beansReady(s);
+  if (s.kind === 'community' && s.activity === 'compass') return compassReady(s);
+  if (s.kind === 'reading' && s.activity === 'ribbon') return ribbonReady(s);
 
   if(s.kind==='math')return s.rolled&&cartBalance(s).balanced;
   if(s.kind==='science')return s.time>=10&&s.canopy!=='none';
@@ -166,6 +184,10 @@ export function encounterOpeningDialogue(state) {
   if (state.kind === 'science' && state.activity === 'chain') return chainOpening(state);
   if (state.kind === 'community' && state.activity === 'helpday') return helpdayOpening(state);
   if (state.kind === 'reading' && state.activity === 'tales') return talesOpening(state);
+  if (state.kind === 'math' && state.activity === 'rows') return rowsOpening(state);
+  if (state.kind === 'science' && state.activity === 'beans') return beansOpening(state);
+  if (state.kind === 'community' && state.activity === 'compass') return compassOpening(state);
+  if (state.kind === 'reading' && state.activity === 'ribbon') return ribbonOpening(state);
 
  const band=gradeBand(state.grade);
  if(encounterReady(state)&&state.kind==='math')return 'Your balanced cart is ready to send. You can still change the crates.';

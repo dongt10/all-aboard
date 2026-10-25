@@ -2,11 +2,19 @@ import { pizzaCreationMarkup } from '../pizza.js';
 import { chainCreationMarkup } from '../chain.js';
 import { helpdayCreationMarkup } from '../helpday.js';
 import { talesCreationMarkup, solvedCount } from '../tales.js';
+import { rowsCreationMarkup } from '../rows.js';
+import { beansCreationMarkup } from '../beans.js';
+import { compassCreationMarkup } from '../compass.js';
+import { ribbonCreationMarkup } from '../ribbon.js';
 import { CHARACTERS } from '../data.js';
 import pizza from './activities/pizza.js';
 import chain from './activities/chain.js';
 import tales from './activities/tales.js';
 import helpday from './activities/helpday.js';
+import rows from './activities/rows.js';
+import beans from './activities/beans.js';
+import compass from './activities/compass.js';
+import ribbon from './activities/ribbon.js';
 // A saved creation drawn small for its stall, the parade, and the item-get card.
 // Every saved value is either validated (colors, numbers, shapes) or escaped (text) before it is written.
 import { INK, PAPER, PAPER_SHADE, WOOD, LANTERN, FINISH, SKY, GRASS, GRASS_DARK, PATH, SUBJECT_THEME } from './palette.js';
@@ -14,7 +22,7 @@ import { INK, PAPER, PAPER_SHADE, WOOD, LANTERN, FINISH, SKY, GRASS, GRASS_DARK,
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const color = (v, fallback) => /^#[0-9a-f]{3,8}$/i.test(v) ? v : fallback;
 const MAP_ITEMS = { bench: LANTERN, sign: SKY, quiet: GRASS };   // the same tile colors as Hana's square
-const ACTIVITIES = { pizza, chain, tales, helpday };
+const ACTIVITIES = { pizza, chain, tales, helpday, rows, beans, compass, ribbon };
 
 export function creationLabel(id, creation) {
   const activity = ACTIVITIES[creation?.activity];
@@ -84,6 +92,10 @@ function stampShape(shape, fill, rotation) {
 
 export function creationMarkup(id, s = {}) {
   s = s && typeof s === 'object' ? s : {};
+  if (id === 'math' && s.activity === 'rows') return rowsCreationMarkup(s);
+  if (id === 'science' && s.activity === 'beans') return beansCreationMarkup(s);
+  if (id === 'community' && s.activity === 'compass') return compassCreationMarkup(s);
+  if (id === 'reading' && s.activity === 'ribbon') return ribbonCreationMarkup(s);
   if (id === 'math' && s.activity === 'pizza') return pizzaCreationMarkup(s);
   if (id === 'science' && (s.activity === 'chain' || Array.isArray(s.chain))) return chainCreationMarkup(s);
   if (id === 'community' && s.activity === 'helpday') return helpdayCreationMarkup(s);

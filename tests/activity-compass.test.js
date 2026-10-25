@@ -303,7 +303,7 @@ test('field text is bounded, Pip moves once, and clue cards never name the desti
     if (view.errand) assert.equal(view.head, `Errand ${ERRAND_IDS.indexOf(view.errand) + 1} of 3`);
   }
   assert.deepEqual(fieldView(snapshot()).card.clues.map(clue => clue.text), ['↑ 1']);
-  assert.deepEqual(fieldView(snapshot(['north'])).card.clues.map(clue => clue.text), ['← 1']);
+  assert.deepEqual(fieldView(snapshot(['north'])).card.clues, [{ text: '← 2', label: 'West 2' }]);
   assert.deepEqual(fieldView(snapshot(['north', 'west'])).card.clues.map(clue => clue.text), ['→ 2', '↓ 1']);
   const detached = fieldView(snapshot()); detached.card.clues[0].text = 'changed';
   assert.equal(fieldView(snapshot()).card.clues[0].text, '↑ 1');

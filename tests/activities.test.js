@@ -32,6 +32,12 @@ const readyFor = (kind, grade) => {
     return { ...READY.art, stamps };
   }
   if (kind === 'writing') return { kind, text: grade === 0 ? 'Hello friend!' : grade < 3 ? 'Hello!' : 'Welcome, neighbors! The lanterns are bright.' };
+  if (grade === 2) return {
+    math: { kind, activity: 'rows', target: 12, crates: [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13] },
+    science: { kind, activity: 'beans', change: 'water', weeks: 2, bed: ['seed', 'sun', 'water', 'bee'] },
+    community: { kind, activity: 'compass', done: ['north', 'west', 'lantern'] },
+    reading: { kind, activity: 'ribbon', found: [], story: 0, why: true, steps: 3, lesson: true },
+  }[kind];
   if (grade < 3) return READY[kind];
   return {
     math: { kind, activity: 'pizza', ...(grade === 5 ? { slices: 6, halves: true, plates: [3, 3, 3, 3] } : { slices: 8, halves: false, plates: [4, 4, 4, 4] }), tried: true },
@@ -81,7 +87,7 @@ test('commands at the start: at most four, unique ids, short pictured labels, on
     }
     const finishes = finishesOf(commands);
     assert.ok(finishes.length <= 1, `${at} has at most one finish`);
-    if (!(kind === 'reading' && grade < 3)) assert.equal(finishes.length, 1, `${at} shows the finish from the start`);
+    if (!(kind === 'reading' && grade < 2)) assert.equal(finishes.length, 1, `${at} shows the finish from the start`);
     if (finishes.length) {
       assert.equal(finishes[0].id, 'finish', `${at} finish id is "finish" (the only id the encounter sends to finish())`);
       assert.equal(finishes[0].icon, 'check', `${at} finish icon is check`);
@@ -136,13 +142,19 @@ test('the encounter frame renders every finish bottom-right, whatever the activi
 });
 
 
-test('grade bands select new activities only in grades 3–5', () => {
+test('exact grade 2 selects its activities before the unchanged grade bands', () => {
   assert.deepEqual(GRADES.map(gradeBand), [0, 1, 1, 3, 3, 3]);
+  const grade2 = { math: 'rows', science: 'beans', community: 'compass', reading: 'ribbon' };
   const banded = { math: 'pizza', science: 'chain', community: 'helpday', reading: 'tales' };
   for (const kind of Object.keys(ACTIVITIES)) for (const grade of GRADES) {
     const activity = activityFor(kind, grade);
-    if (grade < 3 || !banded[kind]) assert.equal(activity, ACTIVITIES[kind]);
-    else assert.equal(activity.start(null, { grade, chapter: 1 }).state.activity, banded[kind]);
+    assert.equal(activityFor(kind, String(grade)), activity, `${kind} numeric-string grade ${grade}`);
+    if (grade < 2 || !banded[kind]) assert.equal(activity, ACTIVITIES[kind]);
+    else {
+      assert.equal(activity.start(null, { grade, chapter: 1 }).state.activity, grade === 2 ? grade2[kind] : banded[kind]);
+      assert.notEqual(activity, ACTIVITIES[kind]);
+      if (grade === 2) assert.notEqual(activity, activityFor(kind, 3));
+    }
   }
   const cart = ACTIVITIES.math;
   const options = { grade: 1, chapter: 1 };
