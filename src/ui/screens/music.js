@@ -3,12 +3,13 @@ import { createPlaybackController, bandPlaybackMessage, CAST } from '../../music
 import { getDraft, getCreations, saveDraft, publishCreation } from '../../progress.js';
 import {
   MUSICIAN_COLORS, toggleMusician, toggleBeat, cycleNote, noteLabel, setTrackNotes, musicCommands,
-  leadTrack, TEMPO_NAMES, cycleTempo, setTempo, formLabel, cycleForm, setForm, defaultBandFor, isEdited,
-  melodyShape, shapeLine, restsLine, pickEcho, echoMatches, openingLine, helpLines,
+  leadTrack, TEMPO_NAMES, cycleTempo, setTempo, formLabel, cycleForm, setForm, defaultBandFor, lessonDone,
+  melodyShape, shapeLine, restsLine, pickEcho, echoMatches, openingLine, helpLines, lessonHint,
 } from '../band.js';
 import { figureMarkup } from '../figures/index.js';
 import { icon } from '../icons.js';
 import { createCommandMenu } from '../menu.js';
+import { gridMove, keyIntent } from '../input.js';
 import { createDialogue } from '../dialogue.js';
 import { stopSpeaking } from '../voice.js';
 import { onceAtATime } from '../scenes.js';
@@ -59,6 +60,7 @@ export function createMusicScene(ctx) {
   let root = null, menu = null, dialogue = null, engine = null, playback = null, sounds = null, presetWindow = null;
   let band = null, grade = 0, lead = null, selected = 'melody';
   let quiet = false, quietTimer = null, quietBand = null, quietBeat = 0, playedOnce = false;
+  let echoed = false, published = false;
   let echo = null, echoCount = 0, echoToken = 0;   // echo: { mask, phase: 'demo' | 'copy', beat, timer }
   let destroyed = false, finishing = false;
   let presetUndo = null, audition = false, muteDialogue = false, suppressPlaybackLine = 0;
@@ -67,7 +69,8 @@ export function createMusicScene(ctx) {
   const settings = () => ctx.getState().settings ?? {};
   const say = (speaker, words) => { if (!destroyed) dialogue.say(speaker, words); };
   const lanterns = () => [...root.querySelectorAll('.music-lantern')];
-  const edited = () => playedOnce || isEdited(band, grade);
+  const edited = () => published || lessonDone(band, { played: playedOnce, echoed }, grade);
+  const stoppedLine = mode => `${mode} stopped. ${grade > 0 && !edited() ? lessonHint(grade) : 'Your song is safe.'}`;
   const musicianSound = c => normalizePreset(band.preset) === 'minecraft' ? PIANO_PART[c.id] : { part: PART[c.id], sound: c.sound, line: c.line };
 
   // ---- Stage ----
@@ -254,7 +257,7 @@ export function createMusicScene(ctx) {
   function toggleQuiet() {
     rememberAutoplay(false);
     audition = false;
-    if (quiet) { stopAll(); say('Kiko', 'See beat stopped. Your song is safe.'); return; }
+    if (quiet) { stopAll(); say('Kiko', stoppedLine('See beat')); return; }
     stopAll();
     quiet = true; quietBeat = 0; quietBand = sanitizeBandSnapshot(band); playedOnce = true;
     startQuietTicker();
@@ -292,7 +295,7 @@ export function createMusicScene(ctx) {
     let line = lead === 'percussion' ? restsLine(notes) : shapeLine(melodyShape(notes));
     if (echo?.phase === 'copy') {
       const sounds = notes.filter(n => n !== null && n !== undefined).length, wanted = echo.mask.filter(Boolean).length;
-      if (echoMatches(notes, echo.mask)) { echo = null; echoCount++; line = ECHO_LINES.matched; }
+      if (echoMatches(notes, echo.mask)) { echoed = true; echo = null; echoCount++; line = ECHO_LINES.matched; }
       else if (sounds >= wanted) line = ECHO_LINES.notYet;   // enough sounds placed, but on the wrong beats
     }
     edit(next, { line: ['Kiko', line] });
@@ -352,7 +355,7 @@ export function createMusicScene(ctx) {
   }
 
   // Presets are editable band scores. Switching keeps the child's volume and chosen form; one Undo
-  // restores the entire previous score and whether it had already been played for the finish gate.
+  // restores the entire previous score and Kindergarten's explicit playback credit.
   function choosePreset(id) {
     const preset = normalizePreset(id);
     if (preset === normalizePreset(band.preset)) return;
@@ -454,11 +457,24 @@ export function createMusicScene(ctx) {
   // Arrow keys walk a row of buttons the way they walk the musicians; the ends stop, they never wrap.
   function stepAlong(buttons, current, intent) {
     const i = buttons.indexOf(current);
-    buttons[Math.max(0, Math.min(buttons.length - 1, i + (intent === 'right' ? 1 : -1)))]?.focus();
+    buttons[gridMove(i, intent, buttons.length, buttons.length)]?.focus();
     return true;
   }
-  // The upper controls: Village, the available lesson signs, then the separate listening clip.
+  // The upper controls: Village, the available lesson signs, then the preset picker.
   const topRow = () => [$('.music-back'), ...root.querySelectorAll('.music-sign'), $('.music-preset')].filter(b => b && !b.disabled);
+  const controlRows = () => [topRow(), [...root.querySelectorAll('button.music-lantern')], [...root.querySelectorAll('.music-musician')]];
+  function markControl(button) {
+    const row = controlRows().find(buttons => buttons.includes(button));
+    row?.forEach(control => { control.tabIndex = control === button ? 0 : -1; });
+  }
+  function onControlKey(event) {
+    const intent = keyIntent(event), button = event.target.closest?.('button');
+    if (!['left', 'right'].includes(intent)) return;
+    const row = controlRows().find(buttons => buttons.includes(button));
+    if (!row) return;
+    event.preventDefault();
+    stepAlong(row, button, intent);
+  }
   const firstLantern = () => root.querySelector('button.music-lantern');
   // Up from the band or the rail lands on the row above; down from the top row lands on the rail, or the menu at K.
   function focusTopRow() { ($('.music-sign:not(:disabled)') ?? $('.music-back'))?.focus(); return true; }
@@ -470,10 +486,16 @@ export function createMusicScene(ctx) {
       grade = gradeOf(state);
       lead = leadTrack(grade);
       band = sanitizeBandSnapshot(getDraft(state, 'music') ?? defaultBandFor(grade));
+      // Older saves acquire A when loaded; grade 4's locked form needs both phrases.
+      if (grade === 4 && band.form === 'A') band.form = 'AB';
       // A published band already passed the finish gate, even when its score is still the default.
-      playedOnce = Boolean(getCreations(state).music);
+      published = Boolean(getCreations(state).music);
       selected = lead ?? 'melody';
       build();
+      controlRows().forEach(row => markControl(row[0]));
+      root.addEventListener('focusin', event => markControl(event.target.closest?.('button')));
+      root.addEventListener('click', event => markControl(event.target.closest?.('button')));
+      root.addEventListener('keydown', onControlKey);
       dialogue = createDialogue($('.music-dialogue'), {
         speak: text => { stopAll({ silent: true }); return ctx.speak(text); },
         onHelp: () => { stopAll({ silent: true }); ctx.open.help('Kiko’s Sound Garden', helpLines(grade)); },
@@ -496,7 +518,7 @@ export function createMusicScene(ctx) {
           $('.music-playback-status').textContent = reason === 'unavailable' ? 'Press Play band to listen. Or try See beat.' : state === 'playing' ? 'Your band is playing.' : '';
           if (audition || suppressPlaybackLine) return;
           sayPlayback(reason === 'unavailable' ? 'Sound is unavailable. Try Play band or See beat.'
-            : state === 'starting' ? 'Waking up the band…' : state === 'playing' ? bandPlaybackMessage(band) : 'Band stopped. Your song is safe.');
+            : state === 'starting' ? 'Waking up the band…' : state === 'playing' ? bandPlaybackMessage(band) : stoppedLine('Band'));
         },
       });
       engine.update(band);

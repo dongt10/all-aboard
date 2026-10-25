@@ -2,14 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PITCH_NAMES, MUSICIAN_COLORS, editorMode, toggleMusician, setPattern, toggleBeat, cycleNote, noteLabel, musicCommands,
-  leadTrack, TEMPO_NAMES, cycleTempo, setTempo, formLabel, cycleForm, setForm, defaultBandFor, setTrackNotes, isEdited,
-  melodyShape, shapeLine, ECHO_PATTERNS, pickEcho, echoMatches, patternGlyphs, restsLine, openingLine, helpLines,
+  leadTrack, TEMPO_NAMES, cycleTempo, setTempo, formLabel, cycleForm, setForm, defaultBandFor, setTrackNotes, isEdited, lessonDone,
+  melodyShape, shapeLine, ECHO_PATTERNS, pickEcho, echoMatches, patternGlyphs, restsLine, openingLine, helpLines, LESSON_HINTS, lessonHint,
 } from '../src/ui/band.js';
 import { createDefaultBand, createBandPreset, patternsFor, PATTERNS } from '../src/audio.js';
 import { cleanCreation } from '../src/progress.js';
 import { INK, contrastRatio } from '../src/ui/palette.js';
+import { ICON_NAMES } from '../src/ui/icons.js';
+import { paginate, PAGE_CHARS } from '../src/ui/dialogue.js';
 
-const sentences = text => text.split(/(?<=[.!?])\s+/).filter(Boolean);
+const sentences = text => text.split(/(?<=[.!?…]["'”’)\]]*)\s+/).filter(Boolean);
 const GRADES = [0, 1, 2, 3, 4, 5];
 
 test('editing tiers follow the grade, and percussion always toggles beats', () => {
@@ -87,6 +89,70 @@ test('a band counts as edited once a track, the speed or the form changes', () =
   const softer = { ...band, tracks: band.tracks.map(t => (t.id === 'voice' ? { ...t, volume: 0.2 } : t)) };
   assert.equal(isEdited(softer, 1), true);
 });
+test('lessonDone follows each grade\'s lesson', () => {
+  const k = defaultBandFor(0);
+  assert.equal(lessonDone(k, {}, 0), false);
+  assert.equal(lessonDone(k, { played: true }, 'K'), true);
+  assert.equal(lessonDone(k, { echoed: true }, 0), false);
+  assert.equal(lessonDone(setTempo(k, 120), {}, 0), true);
+  assert.equal(lessonDone(toggleMusician(k, 'voice'), {}, 0), true);
+  assert.equal(lessonDone({ ...k, masterVolume: 0 }, {}, 0), true);
+
+  for (const preset of ['minecraft', 'meadow']) {
+    const rhythm = defaultBandFor(1, preset);
+    assert.equal(lessonDone(toggleBeat(rhythm, 'percussion', 1), {}, 1), true);
+    const pitches = rhythm.tracks[3].notes.map(note => note === null ? null : 4);
+    assert.equal(lessonDone(setTrackNotes(rhythm, 'percussion', pitches), {}, 1), false, 'pitch alone does not change sound/rest');
+    assert.equal(lessonDone(toggleBeat(toggleBeat(rhythm, 'percussion', 1), 'percussion', 1), {}, 1), false, 'reversing the rhythm edit closes the gate');
+
+    const echo = defaultBandFor(2, preset);
+    assert.equal(lessonDone(toggleBeat(echo, 'percussion', 1), {}, 2), false, 'an arbitrary rhythm edit is not an echo');
+    assert.equal(lessonDone(echo, { echoed: true }, 2), true);
+    assert.equal(lessonDone(echo, { echoed: 'true' }, 2), false, 'only a completed scene echo counts');
+    for (const mask of ECHO_PATTERNS) {
+      const matched = setTrackNotes(echo, 'percussion', mask.map(on => on ? 4 : null));
+      assert.equal(lessonDone(matched, {}, 2), true, 'a restored matching rhythm counts without scene flags');
+    }
+
+    for (const grade of [3, 4, 5]) {
+      const band = defaultBandFor(grade, preset), changed = cycleNote(band, 'melody', 0);
+      assert.equal(lessonDone(changed, {}, grade), true, 'a saved melody edit counts without playback');
+      assert.equal(lessonDone(setTrackNotes(changed, 'melody', band.tracks[2].notes), {}, grade), false, 'restoring the preset notes closes the gate');
+      assert.equal(lessonDone({ ...changed, tracks: [...changed.tracks].reverse() }, {}, grade), true, 'finds the melody by id');
+    }
+  }
+});
+test('grades 1–5 ignore playback, mix, Speed, Form and other friends when deciding lesson completion', () => {
+  for (const preset of ['minecraft', 'meadow']) for (const grade of [1, 2, 3, 4, 5]) {
+    const band = defaultBandFor(grade, preset), before = structuredClone(band);
+    for (const changed of [
+      band, setTempo(band, 60), setForm(band, cycleForm(band.form)), { ...band, masterVolume: 0 },
+      ...band.tracks.map(track => toggleMusician(band, track.id)),
+      ...band.tracks.map(track => ({ ...band, tracks: band.tracks.map(t => t.id === track.id ? { ...t, volume: 0 } : t) })),
+      ...band.tracks.filter(track => track.id !== leadTrack(grade)).map(track => cycleNote(band, track.id, 1)),
+    ]) assert.equal(lessonDone(changed, { played: true }, grade), false, `${preset}, grade ${grade}`);
+    assert.deepEqual(band, before, 'lesson checks are pure');
+    assert.equal(lessonDone(band, { echoed: true }, grade), grade === 2, 'Echo credit belongs only to grade 2');
+  }
+});
+test('melody lessons use the saved preset or the explicit preset, with Meadow for legacy scores', () => {
+  for (const grade of [3, 4, 5]) {
+    const { preset, ...legacy } = defaultBandFor(grade, 'meadow');
+    assert.equal(lessonDone(legacy, {}, grade), false);
+    assert.equal(lessonDone({ ...legacy, preset: 'unknown' }, {}, grade), false);
+    const minecraft = defaultBandFor(grade, 'minecraft');
+    assert.equal(lessonDone(minecraft, {}, grade, 'minecraft'), false);
+    assert.equal(lessonDone(minecraft, {}, grade, 'meadow'), true);
+  }
+});
+test('lesson completion refuses missing lead notes without throwing', () => {
+  for (const grade of [1, 2, 3, 4, 5]) {
+    for (const band of [null, {}, { tracks: 'nope' }, { tracks: [null] }, { tracks: [{ id: leadTrack(grade) }] }, setTrackNotes(defaultBandFor(grade), 'bass', [])]) {
+      assert.equal(lessonDone(band, {}, grade), false);
+    }
+    assert.equal(lessonDone({ tracks: [{ id: leadTrack(grade), notes: [0] }] }, {}, grade), false);
+  }
+});
 test('a default band saved today reads as untouched after the progress round trip', () => {
   for (const g of GRADES) {
     const saved = cleanCreation('music', { ...defaultBandFor(g), chapter: g ? 1 : 0, grade: g });
@@ -121,7 +187,7 @@ test('band volume alone counts as edited, with the default used for older saves'
     assert.equal(isEdited({ ...older, masterVolume }, grade), false);
   }
 });
-test('the finish gate never throws on a thin or broken band', () => {
+test('edit detection never throws on a thin or broken band', () => {
   assert.equal(isEdited({ tracks: [{ id: 'bass' }] }, 1), true);
   assert.equal(isEdited({}, 1), false);
   assert.equal(isEdited(null, 1), false);
@@ -175,6 +241,18 @@ test('pattern glyphs and rest counts use kid words', () => {
   assert.ok(sentences(restsLine([null, null, null, null, null, null, null, null])).every(s => s.length <= 56));
 });
 test('Kiko opens each grade with the planned line and four help steps that fit a Bigger-words page', () => {
+  const hints = [
+    'Play the band once, then Send band.',
+    'Change a lantern first, then Send band.',
+    'Echo a rhythm first, then Send band.',
+    'Change my tune first, then Send band.',
+    'Change my tune above Cricket, then Send band.',
+    'Change tune A first, then Send band.',
+  ];
+  assert.deepEqual(GRADES.map(lessonHint), hints);
+  assert.deepEqual(Object.values(LESSON_HINTS), hints);
+  assert.equal(lessonHint('k'), hints[0]);
+  assert.equal(lessonHint('4'), hints[4]);
   assert.equal(openingLine(0), 'Tap a friend to rest or join. Who sings low? Who whistles high? Try Slow and Fast!');
   assert.equal(openingLine('k'), openingLine(0));
   assert.equal(openingLine(0, 'minecraft'), 'Tap a friend to rest or join. Who plays low? Who plays high? Try Slow and Fast!');
@@ -186,11 +264,12 @@ test('Kiko opens each grade with the planned line and four help steps that fit a
   for (const g of GRADES) {
     const help = helpLines(g);
     assert.equal(help.length, 4, `grade ${g} help steps`);
-    for (const text of [openingLine(g), ...help]) {
+    for (const text of [openingLine(g), ...help, lessonHint(g), `Band stopped. ${lessonHint(g)}`, `See beat stopped. ${lessonHint(g)}`]) {
       assert.ok(text.length <= 96, `${text} fits one page`);
       for (const s of sentences(text)) assert.ok(s.length <= 56, `"${s}" is ${s.length} chars`);
+      for (const limit of Object.values(PAGE_CHARS)) assert.ok(paginate(text, limit).every(page => page.length <= limit));
     }
-    assert.match(help.at(-1), /Send band/);
+    assert.equal(help.at(-1), hints[g].replace('then Send band', 'then tap Send band'));
     const all = help.join(' ');
     for (const label of ['Play band', 'See beat', 'Sounds', 'Send band']) assert.ok(all.includes(label), `grade ${g} help names ${label}`);
     assert.match(help[2], /Sounds picks a tune/, 'help says Sounds picks a tune, not only loud or soft');
@@ -198,14 +277,17 @@ test('Kiko opens each grade with the planned line and four help steps that fit a
   helpLines(2).push('x');
   assert.equal(helpLines(2).length, 4);
 });
-test('music keeps four short commands with icons, and Send band waits for an edit', () => {
+test('music keeps four short commands with icons, and Send band waits for the lesson', () => {
   const idle = musicCommands({ playing: false, quiet: false });
   assert.deepEqual(idle.map(c => c.label), ['Play band', 'See beat', 'Sounds', 'Send band']);
   assert.deepEqual(idle.map(c => c.id), ['play', 'quiet', 'tunes', 'save']);
   assert.deepEqual(idle.map(c => c.icon), ['play', 'quiet', 'music', 'check']);
   assert.deepEqual(musicCommands({ playing: true, quiet: true }).map(c => c.label), ['Stop', 'Stop', 'Sounds', 'Send band']);
   assert.deepEqual(musicCommands({ playing: true, quiet: true }).map(c => c.icon), ['stop', 'stop', 'music', 'check']);
-  for (const c of [...idle, ...musicCommands({ playing: true, quiet: true, edited: true })]) assert.ok(c.label.length <= 9, c.label);
+  for (const c of [...idle, ...musicCommands({ playing: true, quiet: true, edited: true })]) {
+    assert.ok(c.label.length <= 9, c.label);
+    assert.ok(ICON_NAMES.includes(c.icon), c.icon);
+  }
   assert.equal(idle.at(-1).finish, true);
   assert.equal(idle.at(-1).disabled, true);
   assert.equal(musicCommands().at(-1).disabled, true);

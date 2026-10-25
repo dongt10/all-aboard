@@ -15,10 +15,11 @@ Object.assign(globalThis, {
   cancelAnimationFrame: () => {},
 });
 
-const { createState, getCreations, getDraft, saveState, loadState } = await import('../src/progress.js');
+const { createState, getCreations, getDraft, saveDraft, publishCreation, saveState, loadState } = await import('../src/progress.js');
 const { figureMarkup } = await import('../src/ui/figures/index.js');
 const { createMusicScene, ECHO_LINES, lanternStep } = await import('../src/ui/screens/music.js');
-const { isEdited } = await import('../src/ui/band.js');
+const { isEdited, lessonDone, lessonHint, defaultBandFor, pickEcho, setTrackNotes, toggleBeat, cycleNote } = await import('../src/ui/band.js');
+const { withScope } = await import('../src/ui/save.js');
 
 function fakeCtx(state = createState()) {
   doc.body.children = []; doc._active = null;
@@ -40,6 +41,13 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 const slot = (stage, id) => stage.querySelectorAll('.cmd-slot').find(b => b.dataset.id === id);
 const at = grade => (grade === 0 ? { ...createState(), chapter: 0 } : { ...createState(), chapter: 1, grade });
 const text = ctx => ctx.stage.querySelector('.dlg__text').textContent;
+function completeLesson(ctx, grade) {
+  if (grade === 0) { slot(ctx.stage, 'quiet').click(); return; }
+  const lanterns = ctx.stage.querySelectorAll('button.music-lantern');
+  if (grade === 2) {
+    pickEcho(0).forEach((on, i) => { if ((lanterns[i].getAttribute('aria-pressed') === 'true') !== on) lanterns[i].click(); });
+  } else lanterns[grade === 1 ? 1 : 0].click();
+}
 
 test('K: lanterns are pictures, Speed sign shows, no Echo/Form, Send band disabled until Play', () => {
   const ctx = fakeCtx(at(0)), scene = createMusicScene(ctx); scene.mount();
@@ -87,6 +95,8 @@ test('grade 1: lantern buttons flip Cricket sound/rest, Kiko counts, Send band l
   ctx.stage.querySelector('.music-musician[data-id="bass"]').focus();
   scene.handleIntent('up');
   assert.equal(doc.activeElement, ls[0]);
+  ls[1].click();
+  assert.equal(slot(ctx.stage, 'save').disabled, true, 'restoring the default rhythm closes the gate');
   scene.destroy();
 });
 
@@ -111,20 +121,21 @@ test('K: the opening instruction describes resting and rejoining the fresh band'
   }
 });
 
-test('a completed default band stays ready after storage reload at every grade', async () => {
+test('each grade finishes its lesson and the published band stays ready after storage reload', async () => {
   const data = new Map(), storage = { getItem: key => data.get(key), setItem: (key, value) => data.set(key, value) };
   for (const grade of [0, 1, 2, 3, 4, 5]) {
     const ctx = fakeCtx(at(grade)), scene = createMusicScene(ctx); scene.mount();
     try {
       assert.equal(slot(ctx.stage, 'save').disabled, true, `grade ${grade} starts unready`);
-      slot(ctx.stage, 'quiet').click();
+      completeLesson(ctx, grade);
       assert.equal(slot(ctx.stage, 'save').disabled, false);
       slot(ctx.stage, 'save').click(); await tick();
       const card = ctx.stage.querySelector('.item-get');
       assert.ok(card);
       card.firstElementChild.click(); await tick();
       assert.ok(getCreations(ctx.getState()).music);
-      assert.equal(isEdited(getCreations(ctx.getState()).music, grade), false, 'default score is unchanged');
+      assert.equal(isEdited(getCreations(ctx.getState()).music, grade), grade > 0, 'only K may send an untouched score');
+      assert.equal(lessonDone(getCreations(ctx.getState()).music, {}, grade), grade > 0, 'later lessons survive without scene flags');
       assert.equal(saveState(ctx.getState(), storage), true);
     } finally { scene.destroy(); }
     const restored = loadState(storage);
@@ -135,6 +146,66 @@ test('a completed default band stays ready after storage reload at every grade',
     const ctx3 = fakeCtx(other), scene3 = createMusicScene(ctx3); scene3.mount();
     try { assert.equal(slot(ctx3.stage, 'save').disabled, true, 'completion does not unlock another grade'); }
     finally { scene3.destroy(); }
+  }
+});
+
+test('matching lesson drafts survive reload without publishing or saving scene flags', () => {
+  for (const preset of ['minecraft', 'meadow']) for (const grade of [1, 2, 3, 4, 5]) {
+    const state = at(grade), band = defaultBandFor(grade, preset);
+    const changed = grade === 1 ? toggleBeat(band, 'percussion', 1)
+      : grade === 2 ? setTrackNotes(band, 'percussion', pickEcho(0).map(on => on ? 0 : null)) : cycleNote(band, 'melody', 0);
+    const data = new Map(), storage = { getItem: key => data.get(key), setItem: (key, value) => data.set(key, value) };
+    assert.equal(saveState(saveDraft(state, 'music', withScope(changed, state)), storage), true);
+    const restored = loadState(storage);
+    assert.equal(getCreations(restored).music, undefined);
+    const ctx = fakeCtx(restored), scene = createMusicScene(ctx); scene.mount();
+    try {
+      assert.equal(slot(ctx.stage, 'save').disabled, false, `${preset}, grade ${grade} saved lesson is ready`);
+      for (const key of ['played', 'playedOnce', 'echoed', 'published']) assert.equal(Object.hasOwn(getDraft(ctx.getState(), 'music'), key), false);
+    } finally { scene.destroy(); }
+  }
+});
+
+test('already published default bands bypass the lesson at every grade, including after a preset switch', () => {
+  for (const grade of [0, 1, 2, 3, 4, 5]) {
+    const state = at(grade);
+    state.settings.musicAutoplay = false;
+    const completed = publishCreation(state, 'music', withScope(defaultBandFor(grade), state));
+    const ctx = fakeCtx(completed), scene = createMusicScene(ctx); scene.mount();
+    try {
+      assert.equal(slot(ctx.stage, 'save').disabled, false);
+      ctx.stage.querySelector('.music-preset').click();
+      ctx.stage.querySelector('[data-preset="meadow"]').click();
+      assert.equal(slot(ctx.stage, 'save').disabled, false, 'published status is independent of the current preset');
+      slot(ctx.stage, 'quiet').click(); slot(ctx.stage, 'quiet').click();
+      assert.equal(text(ctx), 'See beat stopped. Your song is safe.');
+    } finally { scene.destroy(); }
+  }
+});
+
+test('grades 1–5 keep Send band off after listening, Speed and friends, and explain the missing lesson', async () => {
+  for (const grade of [1, 2, 3, 4, 5]) for (const largeText of [false, true]) {
+    const state = at(grade);
+    state.settings.largeText = largeText; state.settings.musicAutoplay = false;
+    const ctx = fakeCtx(state), scene = createMusicScene(ctx); scene.mount();
+    try {
+      ctx.stage.querySelector('[data-sign="speed"]').click();
+      for (const friend of ctx.stage.querySelectorAll('.music-musician')) friend.click();
+      slot(ctx.stage, 'play').click(); await tick();
+      assert.equal(slot(ctx.stage, 'save').disabled, true, `grade ${grade}: Play and mix do not finish the lesson`);
+      slot(ctx.stage, 'quiet').click();
+      assert.equal(slot(ctx.stage, 'save').disabled, true, 'See beat does not finish it either');
+      slot(ctx.stage, 'quiet').click();
+      const pages = [text(ctx)];
+      while (!ctx.stage.querySelector('.dlg__more').hidden) { ctx.stage.querySelector('.dlg__more').click(); pages.push(text(ctx)); }
+      assert.equal(pages.join(' '), `See beat stopped. ${lessonHint(grade)}`);
+      assert.ok(pages.every(page => page.length <= (largeText ? 56 : 96)));
+      slot(ctx.stage, 'save').click(); await tick();
+      assert.equal(ctx.stage.querySelector('.item-get'), null);
+      assert.equal(getCreations(ctx.getState()).music, undefined);
+      ctx.stage.querySelector('.dlg__tab[data-act="help"]').click();
+      assert.equal(ctx.opened.at(-1).at(-1), lessonHint(grade).replace('then Send band', 'then tap Send band'));
+    } finally { scene.destroy(); }
   }
 });
 
@@ -160,13 +231,17 @@ test('grade 3: lanterns cycle Kiko notes, hang by pitch, Kiko names the shape', 
   scene.destroy();
 });
 
-test('grade 4: Form chip disabled at A B, steady badge; grade 5 cycles form and saves it', () => {
+test('grade 4: Form stays at A B; grade 5 saves Form changes but only tune edits unlock Send band', () => {
   let ctx = fakeCtx(at(4)), scene = createMusicScene(ctx); scene.mount();
   let form = ctx.stage.querySelector('[data-sign="form"]');
   assert.equal(form.disabled, true);
   assert.equal(form.querySelectorAll('b').map(b => b.textContent).join(' '), 'A B');
   assert.ok(ctx.stage.querySelector('.music').classList.contains('music--steady'));
   assert.equal(slot(ctx.stage, 'save').disabled, true, 'default AB band is not edited at grade 4');
+  form.click();
+  assert.equal(slot(ctx.stage, 'save').disabled, true);
+  ctx.stage.querySelector('button.music-lantern').click();
+  assert.equal(slot(ctx.stage, 'save').disabled, false);
   scene.destroy();
   ctx = fakeCtx(at(5)); scene = createMusicScene(ctx); scene.mount();
   form = ctx.stage.querySelector('[data-sign="form"]');
@@ -175,8 +250,34 @@ test('grade 4: Form chip disabled at A B, steady badge; grade 5 cycles form and 
   form.click();
   assert.equal(form.querySelectorAll('b').map(b => b.textContent).join(' '), 'A');
   assert.match(text(ctx), /Just tune A/);
+  assert.equal(getDraft(ctx.getState(), 'music').form, 'A');
+  assert.equal(slot(ctx.stage, 'save').disabled, true, 'Form alone does not finish tune A');
+  ctx.stage.querySelector('button.music-lantern').click();
   assert.equal(slot(ctx.stage, 'save').disabled, false);
   scene.destroy();
+});
+
+test('grade 4 restores A B on older saved bands without Form, preserving every note and mix setting', async () => {
+  for (const preset of ['minecraft', 'meadow']) {
+    const state = at(4), { form, ...oldBand } = defaultBandFor(4, preset);
+    oldBand.masterVolume = 0; oldBand.tempo = 120;
+    const legacy = { ...state, drafts: { 'chapter-1-grade-4': { music: withScope(oldBand, state) } } };
+    assert.equal(Object.hasOwn(legacy.drafts['chapter-1-grade-4'].music, 'form'), false);
+    const restored = loadState({ getItem: key => key === 'all-aboard-demo-v2' ? JSON.stringify(legacy) : null });
+    assert.equal(getDraft(restored, 'music').form, 'A', 'the loader supplies A before the scene can inspect the save');
+    const ctx = fakeCtx(restored), scene = createMusicScene(ctx); scene.mount();
+    try {
+      const sign = ctx.stage.querySelector('[data-sign="form"]');
+      assert.equal(sign.disabled, true);
+      assert.equal(sign.querySelectorAll('b').map(b => b.textContent).join(' '), 'A B');
+      assert.equal(slot(ctx.stage, 'save').disabled, true, 'repairing the form is not the melody lesson');
+      ctx.stage.querySelector('.music-back').click(); await tick();
+      const saved = getDraft(ctx.getState(), 'music');
+      assert.equal(saved.form, 'AB');
+      assert.deepEqual(saved.tracks, oldBand.tracks);
+      assert.equal(saved.tempo, oldBand.tempo); assert.equal(saved.masterVolume, 0);
+    } finally { scene.destroy(); }
+  }
 });
 
 test('musician names describe the selected piano or Meadow sounds after a preset switch', () => {
@@ -302,15 +403,21 @@ test('grade 2: Echo plays a demo at the band’s speed, clears Cricket, a live m
     assert.ok(ls.every(l => l.classList.contains('is-rest')), 'rail cleared to rests');
     assert.ok(!echo.classList.contains('is-busy'));
     assert.equal(timers.size, 0, 'the demo clock is gone');
+    assert.equal(slot(ctx.stage, 'save').disabled, true, 'watching the demo and clearing Cricket do not complete Echo');
     // a wrong copy with as many sounds as the rhythm (1, 4, 7) is told, not praised
     ls[1].click(); ls[2].click();
     assert.match(text(ctx), /Two sounds and six rests/, 'the first taps are just counted');
     ls[4].click();
     assert.equal(text(ctx), ECHO_LINES.notYet);
+    assert.equal(slot(ctx.stage, 'save').disabled, true, 'a wrong copy is not ready');
     // now the right one
     ls[1].click(); ls[2].click(); ls[4].click();
     ls[0].click(); ls[3].click(); ls[6].click();
     assert.equal(text(ctx), ECHO_LINES.matched);
+    assert.equal(slot(ctx.stage, 'save').disabled, false, 'matching the rhythm completes the lesson');
+    ls[1].click();
+    assert.equal(lessonDone(getDraft(ctx.getState(), 'music'), {}, 2), false, 'the next rhythm need not match a demonstration');
+    assert.equal(slot(ctx.stage, 'save').disabled, false, 'this visit remembers the successful Echo while making one back');
     scene.destroy();
   } finally { realTimers(); }
 });
@@ -436,6 +543,42 @@ test('keyboard: up from the rail reaches the signs, arrows walk Village and the 
   kScene.destroy();
 });
 
+test('keyboard: each stage row has one Tab stop; arrows and WASD move focus without editing', () => {
+  for (const grade of [0, 1, 2, 3, 4, 5]) {
+    const state = at(grade); state.settings.musicAutoplay = false;
+    const ctx = fakeCtx(state), scene = createMusicScene(ctx); scene.mount();
+    try {
+      const rows = [
+        [ctx.stage.querySelector('.music-back'), ...ctx.stage.querySelectorAll('.music-sign'), ctx.stage.querySelector('.music-preset')].filter(button => !button.disabled),
+        ctx.stage.querySelectorAll('button.music-lantern'),
+        ctx.stage.querySelectorAll('.music-musician'),
+      ].filter(row => row.length);
+      for (const row of rows) {
+        assert.deepEqual(row.map(button => button.tabIndex), row.map((_, i) => i === 0 ? 0 : -1));
+        row[0].focus();
+        const right = new Event('keydown', { key: 'ArrowRight' }); row[0].dispatchEvent(right);
+        assert.equal(right.defaultPrevented, true);
+        assert.equal(doc.activeElement, row[1]);
+        assert.deepEqual(row.map(button => button.tabIndex), row.map((_, i) => i === 1 ? 0 : -1));
+        const modified = new Event('keydown', { key: 'ArrowRight', ctrlKey: true }); row[1].dispatchEvent(modified);
+        assert.equal(modified.defaultPrevented, false);
+        assert.equal(doc.activeElement, row[1]);
+        row[1].dispatchEvent(new Event('keydown', { key: 'a' }));
+        assert.equal(doc.activeElement, row[0]);
+        row.at(-1).focus(); row.at(-1).dispatchEvent(new Event('keydown', { key: 'd' }));
+        assert.equal(doc.activeElement, row.at(-1), 'the right edge never wraps');
+        assert.deepEqual(row.map(button => button.tabIndex), row.map((_, i) => i === row.length - 1 ? 0 : -1));
+      }
+      assert.deepEqual(ctx.getState(), state, 'navigation saves no edits and earns no lesson credit');
+      assert.equal(slot(ctx.stage, 'save').disabled, true);
+      const friends = rows.at(-1);
+      friends[1].click();
+      assert.deepEqual(friends.map(button => button.tabIndex), [-1, 0, -1, -1], 'a tap updates the row cursor too');
+      assert.equal(ctx.stage.querySelectorAll('.music-musician')[1], friends[1], 'edits preserve the mounted controls');
+    } finally { scene.destroy(); }
+  }
+});
+
 test('Send band publishes "Festival band" once edited; destroy clears everything', async () => {
   const ctx = fakeCtx(at(1)), scene = createMusicScene(ctx); scene.mount();
   slot(ctx.stage, 'save').click(); await tick();
@@ -489,17 +632,30 @@ test('Sounds opens the other lane’s window and its edits flow through edit() w
   assert.equal(ctx.stage.querySelector('.win'), null, 'destroy closes the window');
 });
 
-test('changing only Band volume in Sounds saves the draft and unlocks Send band', () => {
-  const ctx = fakeCtx(at(1)), scene = createMusicScene(ctx); scene.mount();
+test('changing only Band volume in Sounds saves the draft, with completion credit only at K', () => {
+  for (const grade of [0, 1, 2, 3, 4, 5]) {
+    const ctx = fakeCtx(at(grade)), scene = createMusicScene(ctx); scene.mount();
+    try {
+      assert.equal(slot(ctx.stage, 'save').disabled, true);
+      slot(ctx.stage, 'tunes').click();
+      const input = ctx.stage.querySelector('.sounds [data-master]');
+      input.type = 'range'; input.value = '0.2';
+      input.dispatchEvent(new Event('input'));
+      input.dispatchEvent(new Event('change'));
+      ctx.stage.querySelector('.win__close').click();
+      assert.equal(getDraft(ctx.getState(), 'music').masterVolume, 0.2);
+      assert.equal(slot(ctx.stage, 'save').disabled, grade !== 0);
+    } finally { scene.destroy(); }
+  }
+});
+
+test('K: Speed still completes the lesson without playback', () => {
+  const state = at(0); state.settings.musicAutoplay = false;
+  const ctx = fakeCtx(state), scene = createMusicScene(ctx); scene.mount();
   try {
     assert.equal(slot(ctx.stage, 'save').disabled, true);
-    slot(ctx.stage, 'tunes').click();
-    const input = ctx.stage.querySelector('.sounds [data-master]');
-    input.type = 'range'; input.value = '0.2';
-    input.dispatchEvent(new Event('input'));
-    input.dispatchEvent(new Event('change'));
-    ctx.stage.querySelector('.win__close').click();
-    assert.equal(getDraft(ctx.getState(), 'music').masterVolume, 0.2);
+    ctx.stage.querySelector('[data-sign="speed"]').click();
+    assert.equal(getDraft(ctx.getState(), 'music').tempo, 120);
     assert.equal(slot(ctx.stage, 'save').disabled, false);
   } finally { scene.destroy(); }
 });
