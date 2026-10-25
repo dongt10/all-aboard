@@ -39,6 +39,24 @@
         "left": "fead9b4512c19fc834420a63605c9d3dfd643391eaed7ed8ebd9651510691785",
         "right": "72d684c0fc7d1a1d4d730d8f711b523f9f561d06c9e775b7526292df9f87f8c4"
       }
+    },
+    "writing": {
+      "name": "Fumi",
+      "composite": "ref-22.png",
+      "grid": { "blockSize": 4, "offset": [0, 0] },
+      "swatchBox": [49, 5, 60, 8],
+      "background": { "color": "#ffffff", "removal": "exterior" },
+      "dropRows": [],
+      "shift": [0, -5],
+      "feetRow": 56,
+      "joyEyeBox": [23, 26, 39, 30],
+      "frontStepColumns": [[18, 27], [36, 45]],
+      "rightMirrorColumns": [0, 1, 2],
+      "sideStandSha256": {
+        "left": "d05043f6fef57909acc82fc2d8e210f61b29e0f092991e2f5d6c166f244375d4",
+        "right": "bbcba8f49eea3eb00543377eb8102050bc938d982228a4c15cd215f81ac69396"
+      },
+      "backStandSha256": "27de819c922ac581ededd47cb8419f20f61c7e55f438676d16d8bd7d8f0a3871"
     }
   }
 }
