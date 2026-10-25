@@ -15,12 +15,13 @@ const frontColors = figure => {
   return colors;
 };
 
-test('all seven neighbors are drawn with their names, species, side walks and a joy face', () => {
+test('all seven neighbors have side walks and joy faces; only Yuki and Fumi also have back views', () => {
   assert.deepEqual(NEIGHBORS.map(f => f.id), CHARACTERS.map(c => c.id));
   for (const figure of NEIGHBORS) {
     const character = CHARACTERS.find(c => c.id === figure.id);
     assert.deepEqual([figure.name, figure.species], [character.name, character.species]);
-    assert.deepEqual([figure.views, figure.walks, figure.joy], [['front', 'left', 'right'], true, true], figure.id);
+    const views = ['art', 'writing'].includes(figure.id) ? ['front', 'left', 'right', 'back'] : ['front', 'left', 'right'];
+    assert.deepEqual([figure.views, figure.walks, figure.joy], [views, true, true], figure.id);
   }
 });
 test('each neighbor wears their subject color', () => {

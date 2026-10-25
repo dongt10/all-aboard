@@ -153,7 +153,7 @@ The build produces a static site in `dist/`, ready for a static web server. Serv
 
 The plan covers the cast, village layout, front-end screens, sprite sizes, and the first batch of artwork to create.
 
-Taro and Momo come from the team’s reference drawings in [docs/art/source/neighbors](docs/art/source/neighbors); their sheets (`assets/figures/math.png` and `assets/figures/science.png`) are derived by the transforms in [manifest.json](docs/art/source/neighbors/manifest.json) and never redrawn. [tests/figures-references.test.js](tests/figures-references.test.js) fails on any deviation from these rules; to change the art, change the reference.
+Taro, Momo, Yuki and Fumi come from the team’s reference drawings in [docs/art/source/neighbors](docs/art/source/neighbors): `ref-03.png`, `ref-08.png`, `ref-21.png` and `ref-22.png`, respectively. Their sheets are derived using [manifest.json](docs/art/source/neighbors/manifest.json), never redrawn or recolored. The references are pinned by hash and never replaced; [tests/figures-references.test.js](tests/figures-references.test.js) checks the drawings and derived pixels. To change the art, change the reference and the pinned hash on purpose.
 
 ## Our first chapters
 

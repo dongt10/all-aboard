@@ -4,6 +4,10 @@ Changes to All Aboard, grouped by release.
 
 ## Unreleased
 
+### Art
+
+- Yuki and Fumi now come from the team's drawings, with side and back views, and the reference drawings are pinned so they can never be swapped silently.
+
 ## 2026-10-25 · Cal Hacks build
 
 ### Added

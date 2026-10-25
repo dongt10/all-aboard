@@ -1,6 +1,12 @@
 {
-  "rule": "the original design overrides all. The team's reference drawing is the source of truth; the sprite sheet is derived, never drawn or restyled. To change the art, change the reference.",
-  "coordinates": "Zero-based art pixels after block sampling; boxes are [left, top, right, bottom], inclusive. Drop rows use original sampled row numbers, before shifting. rightMirrorColumns maps each right column to its left column.",
+  "rule": "the original design overrides all. The team's reference drawing is the source of truth; the sprite sheet is derived, never drawn or restyled. To change the art, change the reference. The reference drawings are pinned by hash and never replaced.",
+  "coordinates": "Zero-based art pixels after block sampling; boxes are [left, top, right, bottom], inclusive. Drop rows use original sampled row numbers, before shifting. rightMirrorColumns maps each right column to its left column. backStandSha256 hashes the 64x64 RGBA bytes of the back stand at sheet row 3, column 1. referenceSha256 maps reference file names to SHA-256 hashes of their PNG file bytes. colorSwap is optional; without it, every reference color is kept.",
+  "referenceSha256": {
+    "ref-03.png": "7e782f5d73a6bcfa0110ca67d373ac848e90b2aa6cc3f8ad307ae66631b38e15",
+    "ref-08.png": "3463e112e33c806ba1fe23eecfde52caa5ff5c9df8354781a6e114de6ca82e3b",
+    "ref-21.png": "0edae8b269af0ac2f27994a6de2c6c96a1d54b982902077083699433f6481565",
+    "ref-22.png": "d6cff08375b8d119f187c34ae559c6051ac198dc8c54f2adc3aa662d77ec8b0e"
+  },
   "frameSize": 64,
   "alphaThreshold": 128,
   "characters": {
