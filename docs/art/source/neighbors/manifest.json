@@ -9,7 +9,8 @@
     "ref-27.png": "2f0a844bfaf8357ca7f4205d8dc2f2cf78a8cf90fd035366dcf35572d36253b0",
     "ref-25.png": "34315b18abf13a69674862255edae0193fc33c107a58995d98d65ee3ed504988",
     "ref-23.png": "9c04c79efbd7f66d655a4b365bd1fc4df7542dfe06e8b51f2bf7d4290791308d",
-    "ref-26.png": "20f068c5bfd3671bc37b9991750d0b913a42cdef670ca011399fc90b917738bd"
+    "ref-26.png": "20f068c5bfd3671bc37b9991750d0b913a42cdef670ca011399fc90b917738bd",
+    "ref-24.png": "ba9615e4129ad09939c8d0ecae43062982af25541a5345cea754990b674b20d2"
   },
   "frameSize": 64,
   "alphaThreshold": 128,
@@ -431,6 +432,54 @@
         "right": "a6095a823018e6cf29f58cb510dba06c8c41108f86ffa3648392db6f371a12d9"
       },
       "backStandSha256": "9a73eb97d5a99195911b1f93f448f32ad804d4682cc0df986ce96b2109eb0cdd"
+    },
+    "nori": {
+      "name": "Nori",
+      "composite": "ref-24.png",
+      "grid": {
+        "blockSize": 4,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "swatchBox": [
+        50,
+        2,
+        61,
+        5
+      ],
+      "background": {
+        "color": "#ffffff",
+        "removal": "exterior"
+      },
+      "dropRows": [],
+      "shift": [
+        0,
+        -4
+      ],
+      "feetRow": 56,
+      "joyEyeBox": [
+        21,
+        26,
+        41,
+        30
+      ],
+      "frontStepColumns": [
+        [
+          19,
+          28
+        ],
+        [
+          35,
+          45
+        ]
+      ],
+      "rightMirrorColumns": null,
+      "sideStandSha256": {
+        "left": "bc3d2245ae56a446ad7612b32f167a2216b24ac5184584543dfb0c276d81229d",
+        "right": "247142d31cd75b80422bee0c6b080ccbcbfa76b4eccad1ab88277d4ec18355ca"
+      }
     }
   }
 }
