@@ -26,7 +26,7 @@ test('every neighbor and side character has a roomy patch clear of the HUD and e
 });
 
 test('hotspots follow the feet they are given', () => {
-  assert.deepEqual(hotspotRect('math'), { x: 84, y: 210, w: 112, h: 112 });
+  assert.deepEqual(hotspotRect('math'), { x: 84, y: 220, w: 112, h: 112 });
   assert.deepEqual(hotspotRect('math', { x: 150, y: 302 }), { x: 94, y: 222, w: 112, h: 112 });
   assert.deepEqual(hotspotRect('pip', { x: 100, y: 200 }), { x: 64, y: 128, w: 72, h: 88 });
   assert.deepEqual(talkPoint('math', { x: 150, y: 302 }), { x: 150, y: 342 });
@@ -48,8 +48,8 @@ test('wander targets stay inside the home patch', () => {
       assert.ok(hot.x >= roam.x && hot.y >= roam.y && hot.x + hot.w <= roam.x + roam.w && hot.y + hot.h <= roam.y + roam.h, `${id} hotspot stays in its roam rect`);
     }
   }
-  assert.deepEqual(wanderTarget('math', () => 0), { x: 104, y: 286 });
-  assert.deepEqual(wanderTarget('math', () => 0.5), { x: 140, y: 290 });
+  assert.deepEqual(wanderTarget('math', () => 0), { x: 104, y: 296 });
+  assert.deepEqual(wanderTarget('math', () => 0.5), { x: 140, y: 300 });
 });
 
 test('stepToward walks a capped step and faces the way it goes', () => {
@@ -448,15 +448,26 @@ test('bottom dialogue keeps More and its focus ring inside the stage at both tex
   assert.ok(STAGE.height - inset - frameBorder - moreBottom + outline <= STAGE.height, 'More and its full focus ring fit');
 });
 
-test('the welcome and Kiko dialogue leave the reading stall, easel and wandering hotspot clear', async () => {
-  const { easelRect } = await import('../src/ui/village-map.js');
+test('the top dialogue sits over the square: its box, tabs and More button clear every neighbor and stall', () => {
+  // The welcome and Kiko's cheer use the top placement. It may cover the torii and Sora's name chip, never a figure.
   const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
   const interaction = readFileSync(new URL('../src/ui/interaction.css', import.meta.url), 'utf8');
   const top = cssBlock(css, '.village-dialogue--top');
-  const dialogue = { x: cssPx(top, 'left'), y: cssPx(top, 'top') - 25, w: cssPx(cssBlock(css, '.village-dialogue'), 'width'), h: cssPx(cssBlock(interaction, '.dlg'), 'height') + 50 };
-  const reading = VILLAGE_SPOTS.reading;
-  for (const [label, rect] of Object.entries({ hotspot: roamRect('reading'), stall: { x: reading.x - 64, y: reading.y - 96, w: 128, h: 80 }, easel: easelRect('reading') })) {
-    assert.equal(overlaps(dialogue, rect), false, `dialogue clears Sora's ${label}, including tabs and focus rings`);
+  const left = cssPx(top, 'left'), y = cssPx(top, 'top');
+  const w = cssPx(cssBlock(css, '.village-dialogue'), 'width'), h = cssPx(cssBlock(interaction, '.dlg'), 'height');
+  const parts = {
+    box: { x: left, y, w, h },
+    speakerTab: { x: left + 14, y: y - 18, w: 120, h: 24 },
+    hearHelpTabs: { x: left + w - 12 - 160, y: y - 18, w: 160, h: 24 },   // "Hear" and "Help" tabs, 8px apart
+    more: { x: left + w - 14 - 110, y: y + h - 6, w: 110, h: 24 },
+  };
+  for (const [id, feet] of Object.entries(VILLAGE_SPOTS)) {
+    const figure = { x: feet.x - 48, y: feet.y - 84, w: 96, h: 84 };            // the drawn 1.5× figure above its feet
+    const stall = { x: feet.x - 64, y: feet.y - 92, w: 128, h: 76 };            // the stall front, below the roof peak
+    for (const [part, rect] of Object.entries(parts)) {
+      assert.equal(overlaps(rect, figure), false, `${part} clears ${id}`);
+      assert.equal(overlaps(rect, stall), false, `${part} clears ${id}'s stall`);
+    }
   }
 });
 

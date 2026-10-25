@@ -89,7 +89,8 @@
 
 /* Dialogue (styles for .dlg live in interaction.css); it sits bottom right, clear of the board */
 .village-dialogue { position: absolute; right: 12px; bottom: 24px; width: 472px; z-index: 1001; }
-.village-dialogue--top { right: auto; bottom: auto; left: 244px; top: 96px; }
+/* Over the festival square: it covers the torii and Sora's name chip, never a neighbor or a stall front. */
+.village-dialogue--top { right: auto; bottom: auto; left: 244px; top: 168px; }
 
 /* A new creation sparkles once */
 .village-sparkle { position: absolute; inset: -8px; display: none; pointer-events: none; }

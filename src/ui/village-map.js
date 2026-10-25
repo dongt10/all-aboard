@@ -3,10 +3,10 @@ import { INK, INK_SOFT, PAPER, PAPER_SHADE, SKY, SEA, GRASS, GRASS_DARK, PATH, W
 
 // The HUD strip across the top and the festival board in the bottom-left corner.
 export const HUD_ZONES = [{ x: 0, y: 0, w: 960, h: 72 }, { x: 0, y: 452, w: 440, h: 88 }];
-// Home spots are feet positions. Reading sits below Math, clear of the top dialogue.
+// Home spots are feet positions.
 export const VILLAGE_SPOTS = {
-  community: { x: 180, y: 168 }, reading: { x: 112, y: 410 }, writing: { x: 780, y: 168 },
-  math: { x: 140, y: 290 }, art: { x: 820, y: 300 },
+  community: { x: 180, y: 168 }, reading: { x: 480, y: 168 }, writing: { x: 780, y: 168 },
+  math: { x: 140, y: 300 }, art: { x: 820, y: 300 },
   science: { x: 330, y: 416 }, music: { x: 630, y: 416 },
 };
 export const SIDE_SPOTS = { pip: { x: 330, y: 280 }, nori: { x: 640, y: 280 } };
