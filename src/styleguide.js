@@ -26,7 +26,7 @@ const typeColumn = (title, extra = '') => `<div class="guide-type ${extra}"><sma
   <p style="font-size:var(--text-field)">Lots of ice · 3 of 3 packed</p>
   <p style="font-size:var(--text-small)">A 1 l I · a g · smallest readable text</p></div>`;
 addSection('Type', `<div class="guide-row">${typeColumn('Default')}${typeColumn('Bigger words', 'large-text')}</div>`,
-  'Andika for everything a child reads (single-story a and g). Pixelify Sans only for names, titles, and numbers.');
+  'Pixelify Sans for everything, so the words match the pixel art. Andika stays loaded as the fallback.');
 
 const kit = `<div class="px-frame" style="max-width:420px">A pixel window. One short sentence at a time.</div>
   <button class="px-button" type="button">Load left</button>
