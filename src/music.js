@@ -2,17 +2,17 @@ import { sanitizeBandSnapshot } from './audio.js';
 export { createDefaultBand, sanitizeBandSnapshot } from './audio.js';
 
 export const CAST=[
-  {id:'bass',character:'reading',name:'Sora',color:'#91c5f5',sound:'Bum-bum bass',icon:'♩',line:'My low notes give our song a cozy floor.'},
-  {id:'voice',character:'nori',name:'Nori',color:'#e4a2cf',sound:'Doo-doo singer',icon:'♫',line:'I sing a warm little doo. Shall we try another tune?'},
-  {id:'melody',character:'music',name:'Kiko',color:'#f6c85f',sound:'Whistling bird',icon:'♪',line:'My whistle floats up high! Every tune belongs here.'},
-  {id:'percussion',character:'cricket',name:'Cricket',color:'#79cfc2',sound:'Tap-tap rhythm',icon:'♬',line:'Tap, rest, tap! A little space makes a lovely rhythm.'},
+  {id:'bass',character:'reading',name:'Sora',color:'#91c5f5',sound:'Bum-bum bass',icon:'♩',line:'I play the low notes, like a big drum.'},
+  {id:'voice',character:'nori',name:'Nori',color:'#e4a2cf',sound:'Doo-doo singer',icon:'♫',line:'I sing in the middle, warm and round.'},
+  {id:'melody',character:'music',name:'Kiko',color:'#f6c85f',sound:'Whistling bird',icon:'♪',line:'I whistle high, like a bird!'},
+  {id:'percussion',character:'cricket',name:'Cricket',color:'#79cfc2',sound:'Tap-tap rhythm',icon:'♬',line:'Tap, rest, tap! I keep the beat.'},
 ];
 export function bandPlaybackMessage(snapshot,{quiet=false}={}) {
   const band=sanitizeBandSnapshot(snapshot);
   const musicalTracks=band.tracks.filter(track=>track.enabled&&track.notes.some(note=>note!==null));
-  if(!musicalTracks.length)return `${quiet?'Quiet play: everyone':'Everyone'} is resting. Invite a friend or add a note.`;
-  if(!musicalTracks.some(track=>track.volume>0))return quiet?'Quiet play: friend volumes are at zero. Raise one to see their beat.':'Your friends are muted. Raise a friend’s volume to listen.';
-  if(quiet)return 'Quiet play: watch the beat without sound.';
+  if(!musicalTracks.length)return `${quiet?'See beat: everyone':'Everyone'} is resting. Invite a friend or add a note.`;
+  if(!musicalTracks.some(track=>track.volume>0))return quiet?'See beat: friend volumes are at zero. Raise one to see their beat.':'Your friends are muted. Raise a friend’s volume to listen.';
+  if(quiet)return 'See beat: watch the beat without sound.';
   if(band.masterVolume===0)return 'Band is playing with sound off. Raise band volume to listen.';
   return 'Your band is playing. Try a new sound!';
 }

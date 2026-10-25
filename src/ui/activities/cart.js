@@ -1,17 +1,21 @@
-import { normalizeEncounterSnapshot, encounterReady, cartBalance, encounterOpeningDialogue } from '../../encounters.js';
+import { normalizeEncounterSnapshot, encounterReady, cartBalance, encounterOpeningDialogue, startingCargo } from '../../encounters.js';
 
-// Taro's cart (math): load crates into two bays until both sides weigh the same, then roll it.
+// Taro's cart (math): Taro pre-loads the left bay; the child loads the right until both sides weigh
+// the same, then rolls it. Crate sizes are picked on a small rail inside the field; a loaded crate is a
+// button that takes itself off. One verb everywhere: roll.
 const MAX = 8;
 const SIDES = ['left', 'right'];
-const LINES = {
-  load: 'Make the two loads equal, then try the cart.',
+export const LINES = {
+  load: 'Make the two loads equal, then roll it.',
   unload: 'One crate off. Make the two loads equal.',
-  changed: 'The load changed. Try the cart again.',
-  full: 'That side is full. Try the other side.',
-  empty: 'The cart is empty. Load a crate first.',
-  noCargo: 'Let’s load some supplies first, then try the wheels.',
-  smooth: 'A smooth roll! Your cart is ready.',
-  wobble: side => `Oop, a wobble! The ${side} load is heavier. Let’s adjust it.`,
+  equal: 'Equal! Choose Roll it!',
+  changed: 'The load changed. Roll it again.',
+  full: 'That side is full. Take a crate off.',
+  empty: 'The left side is empty. Load crates on both sides.',
+  noCargo: 'Load some crates first, then roll it.',
+  smooth: 'A smooth roll! Choose Send cart.',
+  wobble: (side, by) => `Oop, a wobble! The ${side} is heavier by ${by}.`,
+  size: weight => `Next crate weighs ${weight}.`,
 };
 const sum = list => list.reduce((a, b) => a + b, 0);
 
@@ -20,9 +24,17 @@ export function cartWeights(grade) {
   return grade >= 1 ? [1, 2] : [1];
 }
 
+// What to say after the cargo changed: the equal line once the sides match (and stops repeating),
+// "roll it again" when a rolled cart changed, else the line for the move that was made.
+function cargoLine(before, after, moveLine) {
+  const now = cartBalance(after);
+  if (now.balanced) return cartBalance(before).balanced ? null : LINES.equal;
+  return before.rolled ? LINES.changed : moveLine;
+}
 // A new cargo list for one side. Any change re-arms the roll.
-function changeCargo(state, ui, side, list, line) {
-  return { state: { ...state, [side]: list, rolled: false }, ui, line: state.rolled ? LINES.changed : line };
+function changeCargo(state, ui, side, list, moveLine) {
+  const next = { ...state, [side]: list, rolled: false };
+  return { state: next, ui, line: cargoLine(state, next, moveLine) };
 }
 function load(state, ui, side) {
   if (!SIDES.includes(side)) return { state, ui };
@@ -33,70 +45,75 @@ function remove(state, ui, side, index) {
   if (!SIDES.includes(side) || !Number.isInteger(index) || index < 0 || index >= state[side].length) return { state, ui };
   return changeCargo(state, ui, side, state[side].filter((_, i) => i !== index), LINES.unload);
 }
-function unload(state, ui) {
-  const { left, right } = cartBalance(state);
-  if (!left && !right) return { state, ui, line: LINES.empty };
-  const side = left > right ? 'left' : 'right';
-  return remove(state, ui, side, state[side].length - 1);
+// Every tap on the rail answers with the weight, even a repeat (at K the rail is a single crate).
+function pickSize(state, ui, weight, grade) {
+  if (!cartWeights(grade).includes(weight)) return { state, ui };
+  return { state, ui: weight === ui.weight ? ui : { ...ui, weight }, line: LINES.size(weight) };
 }
 function roll(state, ui) {
   const { left, right, balanced } = cartBalance(state);
   if (!left && !right) return { state, ui, line: LINES.noCargo };
   const result = balanced ? 'smooth' : 'wobble';
   const next = { ...ui, lastRoll: result, rolls: (ui.rolls ?? 0) + 1 };
-  return { state: { ...state, rolled: true }, ui: next, line: balanced ? LINES.smooth : LINES.wobble(left > right ? 'left' : 'right') };
+  const line = balanced ? LINES.smooth : LINES.wobble(left > right ? 'left' : 'right', Math.abs(left - right));
+  return { state: { ...state, rolled: true }, ui: next, line };
 }
+
+const isSaved = snapshot => Boolean(snapshot) && typeof snapshot === 'object' && snapshot.kind === 'math';
 
 const cart = {
   kind: 'math',
   title: 'Taro’s cart',
-  help: ['Tap a side of the cart to load a crate.', 'Tap a crate to take it off.', 'Make both sides the same.', 'Choose Roll it! to test the cart.'],
+  help: ['Tap a crate size, then tap a side to load it.', 'Tap a loaded crate to take it off.', 'Make both sides weigh the same.', 'Choose Roll it!, then Send cart.'],
+  notReadyLine: LINES.changed,
+  // A new cart starts with Taro's crates on the left (per grade band). A saved draft is never re-seeded.
   start(snapshot, { chapter = 0, grade = 1 } = {}) {
-    return { state: normalizeEncounterSnapshot('math', snapshot, grade, chapter), ui: { weight: grade >= 3 ? 2 : 1, lastRoll: null, rolls: 0 } };
+    const input = isSaved(snapshot) ? snapshot : { kind: 'math', ...startingCargo(grade) };
+    return { state: normalizeEncounterSnapshot('math', input, grade, chapter), ui: { weight: cartWeights(grade)[0], lastRoll: null, rolls: 0 } };
   },
-  opening: state => encounterOpeningDialogue(state),
-  commands(state, ui, grade) {
-    const empty = !state.left.length && !state.right.length;
-    const third = grade >= 1
-      ? { id: 'weight', label: `Crate: ${ui.weight}`, icon: 'crate' }
-      : { id: 'unload', label: 'Unload', icon: 'undo', disabled: empty };
-    const last = encounterReady(state)
-      ? { id: 'finish', label: 'Send cart', icon: 'check', finish: true }
-      : { id: 'roll', label: 'Roll it!', icon: 'play' };
-    return [{ id: 'load-left', label: 'Load left', icon: 'crate' }, { id: 'load-right', label: 'Load right', icon: 'crate' }, third, last];
+  // A saved draft with an emptied left bay must not claim "the left side weighs 8".
+  opening: state => (!encounterReady(state) && state.left.length === 0 ? LINES.empty : encounterOpeningDialogue(state)),
+  commands(state) {
+    return [
+      { id: 'load-left', label: 'Load left', icon: 'crate' },
+      { id: 'load-right', label: 'Load right', icon: 'crate' },
+      { id: 'roll', label: 'Roll it!', icon: 'play' },
+      { id: 'finish', label: 'Send cart', icon: 'check', finish: true, disabled: !encounterReady(state) },
+    ];
   },
   act(state, ui, action, grade) {
     if (action?.type === 'field') {
       if (action.remove) return remove(state, ui, action.remove.side, action.remove.index);
       if (action.load) return load(state, ui, action.load);
+      if (action.weight !== undefined) return pickSize(state, ui, action.weight, grade);
       return { state, ui };
     }
     if (action?.type !== 'command') return { state, ui };
     switch (action.id) {
       case 'load-left': return load(state, ui, 'left');
       case 'load-right': return load(state, ui, 'right');
-      case 'unload': return unload(state, ui);
       case 'roll': return roll(state, ui);
-      case 'weight': {
-        const sizes = cartWeights(grade), weight = sizes[(sizes.indexOf(ui.weight) + 1) % sizes.length];
-        return { state, ui: { ...ui, weight }, line: `New crates weigh ${weight}.` };
-      }
       default: return { state, ui };
     }
   },
-  mountField(host, { dispatch }) {
+  mountField(host, { grade = 1, dispatch }) {
+    const sizes = cartWeights(grade);
     const root = document.createElement('div');
     root.className = 'cart';
     const bays = SIDES.map(side => `<div class="cart__bay" data-side="${side}">
         <button type="button" class="cart__load" data-side="${side}"><span class="cart__hint">Tap to load</span></button>
         <div class="cart__crates">${Array.from({ length: MAX }, (_, i) => `<button type="button" class="cart__crate" data-side="${side}" data-index="${i}" hidden></button>`).join('')}</div>
       </div>`).join('');
+    const rail = `<div class="cart__sizes" role="radiogroup" aria-label="Crate size">${sizes.map(w =>
+      `<button type="button" role="radio" class="cart__size cart__crate--w${w}" data-weight="${w}" aria-checked="false" aria-label="Crates weigh ${w}">${w}</button>`).join('')}</div>`;
     root.innerHTML = `<div class="cart__badges">${SIDES.map(side => `<span class="px-chip cart__total" data-side="${side}"><span class="cart__total-label">${side === 'left' ? 'Left' : 'Right'}</span><span class="cart__total-num">0</span></span>`).join('')}</div>
+      ${rail}
       <div class="cart__ground" aria-hidden="true"></div>
       <div class="cart__move"><div class="cart__body">${bays}<div class="cart__chassis" aria-hidden="true"></div><i class="cart__wheel cart__wheel--left" aria-hidden="true"></i><i class="cart__wheel cart__wheel--right" aria-hidden="true"></i></div></div>`;
     host.append(root);
     const move = root.querySelector('.cart__move');
     const body = root.querySelector('.cart__body');
+    const sizeButtons = [...root.querySelectorAll('.cart__size')];
     const parts = Object.fromEntries(SIDES.map(side => [side, {
       load: root.querySelector(`.cart__load[data-side="${side}"]`),
       hint: root.querySelector(`.cart__load[data-side="${side}"] .cart__hint`),
@@ -104,10 +121,23 @@ const cart = {
       total: root.querySelector(`.cart__total[data-side="${side}"] .cart__total-num`),
     }]));
     root.addEventListener('click', event => {
+      const size = event.target.closest('.cart__size');
+      if (size) return dispatch({ type: 'field', weight: Number(size.dataset.weight) });
       const crate = event.target.closest('.cart__crate');
       if (crate) return dispatch({ type: 'field', remove: { side: crate.dataset.side, index: Number(crate.dataset.index) } });
       const bay = event.target.closest('.cart__load');
       if (bay) dispatch({ type: 'field', load: bay.dataset.side });
+    });
+    // Left/right arrows walk the size rail like a radio group; the pick happens at once.
+    root.addEventListener('keydown', event => {
+      const size = event.target.closest?.('.cart__size');
+      if (!size || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const at = sizeButtons.indexOf(size), step = event.key === 'ArrowRight' ? 1 : -1;
+      const next = sizeButtons[(at + step + sizeButtons.length) % sizeButtons.length];
+      next.focus();
+      dispatch({ type: 'field', weight: Number(next.dataset.weight) });
     });
     const replay = name => {
       move.classList.remove('cart--roll', 'cart--wobble');
@@ -119,6 +149,11 @@ const cart = {
 
     return {
       update(state, ui) {
+        for (const button of sizeButtons) {
+          const picked = Number(button.dataset.weight) === ui.weight;
+          button.setAttribute('aria-checked', String(picked));
+          button.tabIndex = picked || sizeButtons.length === 1 ? 0 : -1;
+        }
         for (const side of SIDES) {
           const { load: bay, hint, crates, total } = parts[side], list = state[side];
           const full = list.length >= MAX;

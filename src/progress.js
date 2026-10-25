@@ -1,4 +1,5 @@
 import { CHARACTERS } from './data.js';
+import { TEMPOS, FORMS } from './audio.js';
 
 export const STORAGE_KEY = 'all-aboard-demo-v2';
 const LEGACY_KEY = 'all-aboard-demo-v1';
@@ -34,7 +35,7 @@ export function cleanCreation(subjectId, input) {
   if (subjectId === 'writing') return { ...base, text: typeof input.text === 'string' ? input.text.slice(0, 120) : '' };
   if (subjectId === 'community') return { ...base, placements: (Array.isArray(input.placements) ? input.placements : []).filter(item => isObject(item) && ['bench', 'sign', 'quiet'].includes(item.item)).slice(0, 12).map(item => ({ item: item.item, x: finite(item.x, 10, 90), y: finite(item.y, 10, 90) })), tried: input.tried === true };
   const trackIds = ['bass', 'voice', 'melody', 'percussion'];
-  return { ...base, tempo: 90, masterVolume: finite(input.masterVolume, 0, 1, 0.45), tracks: trackIds.map(id => {
+  return { ...base, tempo: TEMPOS.includes(input.tempo) ? input.tempo : 90, form: FORMS.includes(input.form) ? input.form : 'A', masterVolume: finite(input.masterVolume, 0, 1, 0.45), tracks: trackIds.map(id => {
     const track = Array.isArray(input.tracks) ? input.tracks.find(item => isObject(item) && item.id === id) : null;
     return { id, enabled: track?.enabled === true, pattern: track?.pattern === 1 ? 1 : 0, notes: Array.from({ length: 8 }, (_, index) => { const note = track?.notes?.[index]; return Number.isInteger(note) && note >= 0 && note <= 4 ? note : null; }), volume: finite(track?.volume, 0, 1, 0.65) };
   }) };

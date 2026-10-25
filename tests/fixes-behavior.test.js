@@ -174,6 +174,7 @@ test('music: B during the item-get card does not leave, and the band still gets 
   const ctx = fakeCtx();
   const scene = createMusicScene(ctx);
   scene.mount();
+  slot(ctx.stage, 'quiet').click();          // Send band waits for an edit or a play; See beat counts as a play
   slot(ctx.stage, 'save').click();
   await tick();
   const card = ctx.stage.querySelector('.item-get');
@@ -192,6 +193,7 @@ test('music: the item-get figure is drawn at scale 2 like the encounter', async 
   const ctx = fakeCtx();
   const scene = createMusicScene(ctx);
   scene.mount();
+  slot(ctx.stage, 'quiet').click();
   slot(ctx.stage, 'save').click();
   await tick();
   const html = ctx.stage.querySelector('.item-get').innerHTML;
@@ -231,6 +233,24 @@ test('sign: B in the empty textarea moves to Village, and a second B leaves', as
   scene.handleIntent('b');
   await tick();
   assert.deepEqual(ctx.gone, [['village', { focus: 'writing' }]]);
+  scene.destroy();
+});
+
+// ---- Frame: a readiness flip with no line from the activity still gets a line ----
+test('encounter: typing the sign empty says the activity\'s not-ready line, and a word says the sign\'s own line', () => {
+  const ctx = fakeCtx(grade2());
+  const scene = createEncounterScene(ctx, { id: 'writing' });
+  scene.mount();
+  const face = ctx.stage.querySelector('textarea');
+  const text = () => ctx.stage.querySelector('.enc__dialogue').querySelector('.dlg__text').textContent;
+  face.value = 'Hello';
+  face.dispatchEvent(new Event('input'));          // the sign speaks for itself when a word lands
+  assert.equal(text(), 'You wrote it. Add more, or choose Put up sign.');
+  assert.equal(slot(ctx.stage, 'finish').disabled, false, 'Put up sign is enabled');
+  face.value = '';
+  face.dispatchEvent(new Event('input'));          // sign.js returns no line here; the frame says notReadyLine
+  assert.equal(text(), 'The sign is empty.');
+  assert.equal(slot(ctx.stage, 'finish').disabled, true, 'Put up sign is disabled again');
   scene.destroy();
 });
 

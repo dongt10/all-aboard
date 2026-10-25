@@ -5,6 +5,15 @@ export const ENCOUNTER_COLOR_NAMES = { '#e96163':'Coral', '#f4bf4f':'Gold', '#6d
 const SHAPES = ['star', 'flower', 'leaf', 'circle'];
 const clamp = (n, a, b) => Math.min(b, Math.max(a, Number(n) || 0));
 const sum = a => a.reduce((x,y) => x+y,0);
+// Grades come in three bands tonight: 0 is Kindergarten, 1 covers grades 1–2, 3 covers grades 3–5.
+// A snapshot without a grade (old tests, old saves) is treated as Kindergarten, like cleanCreation's chapter-0
+// grade 0 and guide.js learnedText.
+export function gradeBand(grade) {
+  if (grade === null || grade === undefined) return 0;
+  const g = Number(grade);
+  if (!Number.isFinite(g)) return 0;
+  return g <= 0 ? 0 : g <= 2 ? 1 : 3;
+}
 export function normalizeEncounterSnapshot(kind, input = {}, grade = 1, chapter = 0) {
   const s = input && typeof input === 'object' && input.kind === kind ? input : {};
   const base = {kind, grade:clamp(grade,0,5), chapter:clamp(chapter,0,99)};
@@ -15,24 +24,65 @@ export function normalizeEncounterSnapshot(kind, input = {}, grade = 1, chapter 
   if (kind === 'writing') return {...base,text:typeof s.text==='string'?s.text.slice(0,120):''};
   return {...base,placements:(Array.isArray(s.placements)?s.placements:[]).filter(x=>x&&['bench','sign','quiet'].includes(x.item)).slice(0,12).map(x=>({item:x.item,x:clamp(x.x,10,90),y:clamp(x.y,10,90)})),tried:s.tried===true};
 }
+// Taro's cart starts with crates on the left so the child has something to match. The right side is always empty.
+export function startingCargo(grade) {
+  const band = gradeBand(grade);
+  return { left: band === 0 ? [1, 1] : band === 1 ? [2, 1] : [5, 3], right: [] };
+}
 export function cartBalance(s) { const left=sum(s.left),right=sum(s.right); return {left,right,balanced:left>0&&left===right}; }
 export function iceRemaining(time, shaded) { return Math.max(0,100-time*(shaded?2:5)); }
-export function routeReport(s) { return {blocked:s.placements.some(p=>p.item!=='sign'&&Math.abs(p.y-50)<16), quiet:s.placements.some(p=>p.item==='quiet'&&p.x<45&&p.y<35), rest:s.placements.some(p=>p.item==='bench')}; }
+// Ice in kid words, at every grade. Grades 2–5 may add the number beside these.
+export function iceWords(remaining) { return remaining >= 70 ? 'Lots of ice' : remaining > 0 ? 'Less ice' : 'Water'; }
+// After 10 minutes, Momo says whether the child's first Shade pick (the prediction) was the tray that kept more ice.
+// The shaded tray always keeps more ice in this model, so the guess is right when it matches the shaded tray.
+// With no guess this run (the guess is never saved, so a reloaded draft has none) it returns '' and the caller skips it.
+export function predictionLine(predictedSide, s) {
+  if (predictedSide !== 'left' && predictedSide !== 'right') return '';
+  if (predictedSide === s?.canopy) return 'You guessed right! The shaded tray kept more ice.';
+  return 'Surprise! The shaded tray kept more ice. Shade keeps the sun off.';
+}
+// Hana's map: the stage is drawn in the top-right corner, over the cell at x 90, y 10.
+// A sign counts as "next to the stage" in that cell or in either cell touching it.
+export const STAGE_CELLS = [{ x: 90, y: 10 }, { x: 70, y: 10 }, { x: 90, y: 30 }];
+const onPath = p => Math.abs(p.y - 50) < 16;
+const atStage = p => STAGE_CELLS.some(c => c.x === p.x && c.y === p.y);
+export function routeReport(s) {
+  const placements = Array.isArray(s?.placements) ? s.placements : [];
+  return {
+    blocked: placements.some(p => p.item !== 'sign' && onPath(p)),
+    quiet: placements.some(p => p.item === 'quiet' && p.x < 45 && p.y < 35),
+    rest: placements.some(p => p.item === 'bench'),
+    signed: placements.some(p => p.item === 'sign' && atStage(p)),
+  };
+}
+// The square's checklist for this snapshot's grade, in order. K: bench. Grades 1–2 add the garden. Grades 3–5 add the sign.
+// A bench or garden on the path blocks the walk, so the first step stays undone and says to move it until the path is clear.
+export function squareSteps(s) {
+  const r = routeReport(s), band = gradeBand(s?.grade);
+  const steps = [r.blocked
+    ? { id: 'rest', done: false, text: 'Move the bench or garden off the path.' }
+    : { id: 'rest', done: r.rest, text: 'Put a bench off the path.' }];
+  if (band >= 1) steps.push({ id: 'quiet', done: r.quiet, text: 'Put a garden by the quiet trees.' });
+  if (band >= 3) steps.push({ id: 'signed', done: r.signed, text: 'Put a sign next to the stage.' });
+  steps.push({ id: 'tried', done: s?.tried === true, text: 'Choose Try it to walk the square.' });
+  return steps;
+}
 export function encounterReady(s) {
   if(s.kind==='math')return s.rolled&&cartBalance(s).balanced;
   if(s.kind==='science')return s.time>=10&&s.canopy!=='none';
   if(s.kind==='art')return s.stamps.length>0;
   if(s.kind==='reading')return normalizeReadingFound(s.found).length===READING_ITEMS.length;
   if(s.kind==='writing')return s.text.trim().length>0;
-  const r=routeReport(s); return s.tried&&!r.blocked&&r.quiet&&r.rest;
+  const r=routeReport(s), band=gradeBand(s.grade);
+  return s.tried===true&&!r.blocked&&r.rest&&(band<1||r.quiet)&&(band<3||r.signed);
 }
 export function shadeScienceTray(state, side) {
  return state.canopy===side ? state : {...state,canopy:side,time:0};
 }
 export function scienceNextStep(state) {
- if(state.canopy==='none')return state.time>0?'Both trays are in sun. Shade one tray to start a fresh comparison.':'Shade tray A or B to begin the comparison.';
- if(state.time<10)return `Advance ${10-state.time} more model minutes to compare the ice.`;
- return 'Comparison ready. Use this shade, or explore more with More tools.';
+ if(state.canopy==='none')return 'Shade tray A or B to begin.';
+ if(state.time<10){const n=10-state.time;return `Wait ${n} more ${n===1?'minute':'minutes'}. Then look at both trays.`;}
+ return 'Ready! Choose Serve ice.';
 }
 export function communityCellLabel(tool, placed, row, column) {
  const label=item=>item==='quiet'?'quiet garden':item;
@@ -49,11 +99,38 @@ export function placeCommunityItem(state, item, x, y) {
  if(item!=='remove')placements.push({item,x,y});
  return {state:{...state,placements,tried:false},status:item==='remove'?'removed':'placed'};
 }
+// Every sentence here is 56 characters or fewer so a page never breaks mid-sentence with Bigger words on.
+// The math opening reads the draft's real left side (a saved draft or a Load left press may differ from the pre-load).
+// The fixed band text is only the fallback for an empty left side.
+const MATH_OPENING = {
+ 0:'Taro put two crates on the left. Put the same on the right!',
+ 1:'The left side weighs 3. Load the right side to match.',
+ 3:'The left side weighs 8. Find crates that add up to 8.',
+};
+const COUNT_WORDS = ['zero','one','two','three','four','five','six','seven','eight'];
+function mathOpening(state, band) {
+ const left = Array.isArray(state.left) ? state.left : [];
+ if (left.length === 0) return MATH_OPENING[band];
+ if (band === 0) return `Taro put ${COUNT_WORDS[left.length] ?? left.length} ${left.length === 1 ? 'crate' : 'crates'} on the left. Put the same on the right!`;
+ const w = cartBalance({ left, right: [] }).left;
+ return band === 1 ? `The left side weighs ${w}. Load the right side to match.` : `The left side weighs ${w}. Find crates that add up to ${w}.`;
+}
+const SCIENCE_OPENING = {
+ 0:'Shade one tray. Then wait and look!',
+ 1:'Shade one tray. Then wait and look!',
+ 3:'Which tray will keep more ice? Shade your guess.',
+};
+const COMMUNITY_OPENING = {
+ 0:'Put a bench off the path for a tired neighbor.',
+ 1:'Put a bench off the path. Put a garden by the quiet trees.',
+ 3:'Add a bench and a garden by the quiet trees. Then put a sign by the stage.',
+};
 export function encounterOpeningDialogue(state) {
- if(encounterReady(state)&&state.kind==='math')return 'Your balanced cart is ready to send. You can still change the cargo.';
- if(encounterReady(state)&&state.kind==='science')return 'Your shade test is ready. Use this canopy, or try fresh ice.';
- if(encounterReady(state)&&state.kind==='reading')return 'Your story bag is ready. Share it, or read again.';
- return {math:state.grade===0?'Put the same number of crates on both sides.':'Make both sides of my cart weigh the same.',science:'Start with equal cubes. Shade one tray, then watch 10 model minutes.',art:'Tap the cloth to add a stamp.',reading:'Help me pack three things for the festival.',writing:'Choose words for your welcome sign.',community:'Put a garden by the quiet trees and a bench off the path.'}[state.kind];
+ const band=gradeBand(state.grade);
+ if(encounterReady(state)&&state.kind==='math')return 'Your balanced cart is ready to send. You can still change the crates.';
+ if(encounterReady(state)&&state.kind==='science')return 'Your ice test is ready. Serve ice, or try fresh ice.';
+ if(encounterReady(state)&&state.kind==='reading')return 'Your story bag is ready. Share it, or start over.';
+ return {math:mathOpening(state,band),science:SCIENCE_OPENING[band],art:'Tap the cloth to add a stamp.',reading:'Help me pack three things for the festival.',writing:'Choose words for your welcome sign.',community:COMMUNITY_OPENING[band]}[state.kind];
 }
 export function writingControlAvailability(text) {
  return {canPublish:text.trim().length>0,canRemove:text.length>0};

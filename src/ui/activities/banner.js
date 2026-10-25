@@ -2,35 +2,59 @@
 // start, opening, commands and act are pure; mountField builds the field once and updates it in place.
 import { ENCOUNTER_COLORS, ENCOUNTER_COLOR_NAMES, normalizeEncounterSnapshot, encounterReady, encounterOpeningDialogue } from '../../encounters.js';
 import { keyIntent, gridMove } from '../input.js';
+import { icon } from '../icons.js';
 
 export const BANNER_SHAPES = ['star', 'flower', 'leaf', 'circle'];
-const COLUMNS = 6, ROWS = 5, CELLS = COLUMNS * ROWS, MAX_STAMPS = 30;
+const COLUMNS = 6, ROWS = 5, CELLS = COLUMNS * ROWS, MAX_STAMPS = 30, HISTORY = 40;
 const FULL_LINE = 'The cloth has 30 stamps. Undo one to make room, or hang your banner.';
+const NOT_READY_LINE = 'Nothing on the cloth yet.';
+export const BANNER_LINES = {
+  stamped: 'Keep stamping, or hang your banner.',
+  turned: 'Turned.',
+  undone: 'Undone.',
+  notReady: NOT_READY_LINE,
+  paint: color => `${ENCOUNTER_COLOR_NAMES[color]} paint.`,
+  stamp: shape => `${shapeName(shape)} stamp.`,
+  filled: color => `The cloth is ${ENCOUNTER_COLOR_NAMES[color]} now.`,
+};
 
 export function stampPosition(cell) {
   return { x: 8.33 + (cell % COLUMNS) * 16.66, y: 10 + Math.floor(cell / COLUMNS) * 20 };
 }
+// The stamp already sitting on a cell, if any (saved stamps keep the same positions). A save from earlier
+// today may stack two stamps on one cell; the last one drawn is the one on top, so that is the one found.
+const sameSpot = (stamp, at) => Math.abs(stamp.x - at.x) < 1e-6 && Math.abs(stamp.y - at.y) < 1e-6;
+export function stampAt(state, cell) {
+  const at = stampPosition(cell);
+  return state.stamps.findLastIndex(s => sameSpot(s, at));
+}
+const sameStamp = (a, b) => a.shape === b.shape && a.color === b.color && a.rotation === b.rotation;
 
+// Every shape is drawn with the ink outline (see banner.css .banner-stamp), so a Cream star on a Cream cloth still shows.
 const FORMS = {
   star: '<path d="m20 2 5 12 13 1-10 9 3 13-11-7-11 7 3-13L2 15l13-1Z"/>',
   flower: '<path d="M20 12C7-5-4 18 12 20-5 33 18 44 20 28c13 17 24-6 8-8C45 7 22-4 20 12Z"/><circle cx="20" cy="20" r="5" fill="#fff1cf"/>',
   leaf: '<path d="M5 35C-1 10 17 0 35 5c5 19-6 36-30 30Z"/><path d="m8 32 20-20" stroke="#284b45" fill="none" stroke-width="2"/>',
-  circle: '<circle cx="20" cy="20" r="16"/><circle cx="15" cy="14" r="4" fill="#fff" opacity=".4"/>',
+  circle: '<circle cx="20" cy="20" r="16"/><circle cx="15" cy="14" r="4" fill="#fff" opacity=".4" stroke="none"/>',
 };
 const stampSVG = (shape, color, rotation = 0) =>
   `<svg class="banner-stamp" viewBox="0 0 40 40" aria-hidden="true" focusable="false" style="fill:${color};transform:rotate(${rotation}deg)">${FORMS[shape] || FORMS.circle}</svg>`;
-const shapeName = shape => shape[0].toUpperCase() + shape.slice(1);
+function shapeName(shape) { return shape[0].toUpperCase() + shape.slice(1); }
 
 function start(snapshot, { chapter = 0, grade = 1 } = {}) {
-  return { state: normalizeEncounterSnapshot('art', snapshot, grade, chapter), ui: { color: ENCOUNTER_COLORS[0], shape: 'star', rotation: 0 } };
+  // history holds the cloth before each stamp or fill, so Undo reverses both. It is not saved.
+  return { state: normalizeEncounterSnapshot('art', snapshot, grade, chapter), ui: { color: ENCOUNTER_COLORS[0], shape: 'star', rotation: 0, history: [] } };
 }
 
 const opening = state => encounterOpeningDialogue(state);
 
+const canUndo = (state, ui) => (ui.history?.length || 0) > 0 || state.stamps.length > 0;
+const remember = (ui, state) => ({ ...ui, history: [...(ui.history || []), state].slice(-HISTORY) });
+
 function commands(state, ui) {
   return [
-    { id: 'undo', icon: 'undo', label: 'Undo', disabled: !state.stamps.length },
-    { id: 'turn', icon: 'turn', label: `Turn ${ui.rotation}°` },
+    { id: 'undo', icon: 'undo', label: 'Undo', disabled: !canUndo(state, ui) },
+    { id: 'turn', icon: 'turn', label: 'Turn' },
     { id: 'fill', icon: 'fill', label: 'Fill cloth' },
     { id: 'finish', icon: 'check', label: 'Hang banner', finish: true, disabled: !encounterReady(state) },
   ];
@@ -38,18 +62,37 @@ function commands(state, ui) {
 
 function act(state, ui, action) {
   if (action?.type === 'command') {
-    if (action.id === 'undo' && state.stamps.length) return { state: { ...state, stamps: state.stamps.slice(0, -1) }, ui };
-    if (action.id === 'turn') return { state, ui: { ...ui, rotation: (ui.rotation + 45) % 360 } };
-    if (action.id === 'fill') return { state: state.background === ui.color ? state : { ...state, background: ui.color }, ui, line: `The cloth is ${ENCOUNTER_COLOR_NAMES[ui.color]} now.` };
+    if (action.id === 'undo' && canUndo(state, ui)) {
+      const history = ui.history || [];
+      // A saved banner arrives with stamps but no history: Undo still lifts the last stamp.
+      const before = history.length ? history.at(-1) : { ...state, stamps: state.stamps.slice(0, -1) };
+      const line = before.stamps.length ? BANNER_LINES.undone : `${BANNER_LINES.undone} ${NOT_READY_LINE}`;
+      return { state: before, ui: { ...ui, history: history.slice(0, -1) }, line };
+    }
+    if (action.id === 'turn') return { state, ui: { ...ui, rotation: (ui.rotation + 45) % 360 }, line: BANNER_LINES.turned };
+    if (action.id === 'fill') {
+      const line = BANNER_LINES.filled(ui.color);
+      if (state.background === ui.color) return { state, ui, line };
+      return { state: { ...state, background: ui.color }, ui: remember(ui, state), line };
+    }
     return { state, ui };
   }
   if (action?.type !== 'field') return { state, ui };
-  if (ENCOUNTER_COLORS.includes(action.color)) return { state, ui: { ...ui, color: action.color } };
-  if (BANNER_SHAPES.includes(action.shape)) return { state, ui: { ...ui, shape: action.shape } };
+  if (ENCOUNTER_COLORS.includes(action.color)) return { state, ui: { ...ui, color: action.color }, line: BANNER_LINES.paint(action.color) };
+  if (BANNER_SHAPES.includes(action.shape)) return { state, ui: { ...ui, shape: action.shape }, line: BANNER_LINES.stamp(action.shape) };
   if (Number.isInteger(action.cell) && action.cell >= 0 && action.cell < CELLS) {
-    if (state.stamps.length >= MAX_STAMPS) return { state, ui, line: FULL_LINE };
     const stamp = { shape: ui.shape, color: ui.color, rotation: ui.rotation, ...stampPosition(action.cell) };
-    return { state: { ...state, stamps: [...state.stamps, stamp] }, ui, line: 'Keep stamping, or hang your banner.' };
+    const index = stampAt(state, action.cell);
+    // Tapping a cell that already holds a stamp swaps it for the new one instead of piling up.
+    if (index >= 0) {
+      // The very same stamp again changes nothing, so there is nothing for Undo to take back.
+      if (sameStamp(state.stamps[index], stamp)) return { state, ui, line: BANNER_LINES.stamped };
+      const stamps = state.stamps.slice();
+      stamps[index] = stamp;
+      return { state: { ...state, stamps }, ui: remember(ui, state), line: BANNER_LINES.stamped };
+    }
+    if (state.stamps.length >= MAX_STAMPS) return { state, ui, line: FULL_LINE };
+    return { state: { ...state, stamps: [...state.stamps, stamp] }, ui: remember(ui, state), line: BANNER_LINES.stamped };
   }
   return { state, ui };
 }
@@ -78,7 +121,7 @@ function mountField(host, { dispatch }) {
   root.className = 'banner-field';
 
   const paints = radioRail('banner-paints', 'Paint', ENCOUNTER_COLORS.map(c => ({ value: c, name: ENCOUNTER_COLOR_NAMES[c], html: `<i class="banner-pot" style="background:${c}" aria-hidden="true"></i>` })));
-  const stamps = radioRail('banner-shapes', 'Stamp', BANNER_SHAPES.map(s => ({ value: s, name: shapeName(s), html: `<span class="banner-shape-pic" aria-hidden="true"></span>` })));
+  const stamps = radioRail('banner-shapes', 'Stamp', BANNER_SHAPES.map(s => ({ value: s, name: shapeName(s), html: `<span class="banner-shape-pic" aria-hidden="true"></span><span class="banner-option__turn" aria-hidden="true"></span>` })));
 
   const cloth = document.createElement('div');
   cloth.className = 'banner-cloth';
@@ -163,7 +206,16 @@ function mountField(host, { dispatch }) {
     if (ui !== current.ui) {
       setRadio(paints.buttons, ui.color);
       setRadio(stamps.buttons, ui.shape);
-      stamps.buttons.forEach(b => { b.querySelector('.banner-shape-pic').innerHTML = stampSVG(b.dataset.value, ui.color, ui.rotation); });
+      // The previews turn with the stamp. The chosen one wears a small turn arrow, itself turned the same way,
+      // so no number or degree ever reaches the screen (the rotated preview already shows the angle).
+      stamps.buttons.forEach(b => {
+        b.querySelector('.banner-shape-pic').innerHTML = stampSVG(b.dataset.value, ui.color, ui.rotation);
+        const turned = b.dataset.value === ui.shape && ui.rotation !== 0;
+        const chip = b.querySelector('.banner-option__turn');
+        chip.innerHTML = turned ? icon('turn', { size: 12 }) : '';
+        chip.style.transform = turned ? `rotate(${ui.rotation}deg)` : '';
+        b.setAttribute('aria-label', `${shapeName(b.dataset.value)}${turned ? ', turned' : ''}`);
+      });
     }
     current = { state, ui };
   }
@@ -180,6 +232,7 @@ function mountField(host, { dispatch }) {
 export default {
   kind: 'art',
   title: 'Your colors, flying high',
-  help: ['Pick a paint and a stamp.', 'Tap the cloth to stamp.', 'Turn or undo any time.', 'Choose Hang banner.'],
+  help: ['Pick a paint and a stamp.', 'Tap the cloth to stamp it.', 'Turn, Fill cloth or Undo any time.', 'Choose Hang banner.'],
+  notReadyLine: NOT_READY_LINE,
   start, opening, commands, act, mountField,
 };

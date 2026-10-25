@@ -42,6 +42,8 @@
   border: 2px solid var(--ink); font-family: var(--font-pixel); font-size: 14px; font-weight: 700; line-height: 1;
 }
 .village-badge__mark--new { background: var(--lantern); color: var(--ink); animation: village-nod 1.6s steps(2) infinite; }
+/* Started but not finished: three quiet dots on paper, no nod */
+.village-badge__mark--started { background: var(--paper); color: var(--ink); padding: 0 3px 4px; letter-spacing: 1px; }
 .village-badge__mark--made { background: var(--finish); color: var(--paper); }
 .village-badge__mark--made .icon { width: 16px; height: 16px; }
 .village-badge__mark--visited { left: 30px; top: 6px; padding: 0 4px; background: var(--paper); color: var(--ink); font-family: var(--font-read); font-size: var(--text-small); height: auto; white-space: nowrap; }
@@ -55,7 +57,7 @@
 }
 .village-player .figure { display: block; }
 .village-talk { position: absolute; transform: translateX(-50%); white-space: nowrap; font-size: var(--text-small); --chip: var(--lantern); cursor: pointer; }
-.village-talk__key { display: inline-grid; place-items: center; min-width: 20px; height: 20px; background: var(--ink); color: var(--paper); font-family: var(--font-pixel); font-size: 14px; }
+.village-talk__key { display: inline-grid; place-items: center; min-width: 20px; height: 20px; padding: 0 4px; box-sizing: border-box; background: var(--ink); color: var(--paper); font-family: var(--font-pixel); font-size: 14px; }
 .village-find { position: absolute; width: 32px; height: 36px; pointer-events: none; animation: village-bob .8s steps(2) infinite alternate; }
 .village-find__lantern { position: absolute; left: 6px; top: 0; width: 20px; height: 18px; background: var(--vermilion); border: 2px solid var(--ink); box-shadow: inset 0 4px 0 var(--lantern); box-sizing: border-box; }
 .village-find::after { content: ''; position: absolute; left: 8px; top: 20px; border-left: 8px solid transparent; border-right: 8px solid transparent; border-top: 12px solid var(--ink); }
@@ -68,15 +70,21 @@
 .village-hud__buttons { display: flex; gap: 8px; }
 .village-hud__buttons .px-icon-button { min-height: 52px; min-width: 72px; cursor: pointer; }
 
-/* Festival board (bottom left) */
-.village-board { position: absolute; left: 8px; top: 460px; width: 424px; height: 72px; box-sizing: border-box; padding: 6px 10px; display: flex; align-items: center; gap: 10px; z-index: 1000; }
-.village-board__title { display: grid; place-items: center; color: var(--vermilion); }
-.village-board__pips { display: flex; gap: 3px; flex: 1; }
+/* Festival board (bottom left): a labelled row on top, the seven pips and the Parade button below.
+   It fills the HUD zone (y 452–536) so the label still fits with Bigger words on. */
+.village-board {
+  position: absolute; left: 8px; top: 452px; width: 428px; height: 84px; box-sizing: border-box; padding: 4px 10px; z-index: 1000;
+  display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-items: center; column-gap: 10px; row-gap: 4px;
+}
+.village-board__title { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; color: var(--vermilion); white-space: nowrap; }
+.village-board__title > .icon { flex: none; }
+.village-board__label { font-family: var(--font-read); font-size: var(--text-small); font-weight: 700; line-height: 1.1; color: var(--ink); }
+.village-board__pips { display: flex; gap: 3px; }
 .village-pip { position: relative; width: 28px; height: 28px; box-sizing: border-box; display: grid; place-items: center; border: 2px dashed var(--ink-soft); color: var(--ink-soft); background: var(--paper); }
 .village-pip > .icon { width: 20px; height: 20px; opacity: .45; }
 .village-pip--filled { border: 2px solid var(--ink); background: var(--subject); color: var(--ink); }
 .village-pip--filled > .icon { opacity: 1; }
-.village-parade { cursor: pointer; padding: 4px 10px; white-space: nowrap; }
+.village-parade { cursor: pointer; min-height: 40px; padding: 4px 10px; white-space: nowrap; }   /* 22 + 4 + 40 fits the board's 68px inside */
 .village-parade[hidden], .village-talk[hidden], .village-find[hidden], .village-pointer[hidden], .village-dialogue[hidden] { display: none; }
 
 /* Dialogue (styles for .dlg live in interaction.css); it sits bottom right, clear of the board */
@@ -95,8 +103,8 @@
 
 /* Creations (shared by the stall easels, the parade, and the item-get card) */
 .creation { display: block; box-sizing: border-box; max-width: 100%; }
-.creation.world-sign { background: var(--paper-shade); color: var(--ink); border: 2px solid var(--ink); font: 700 10px/1.15 var(--font-read); padding: 2px 4px; max-height: 40px; overflow: hidden; text-align: center; }
-.creation.world-score { display: flex; gap: 3px; align-items: center; background: var(--paper); border: 2px solid var(--ink); padding: 4px; }
+.creation.world-sign { background: var(--paper-shade); color: var(--ink); border: 2px solid var(--ink); font: 700 var(--text-small)/1.15 var(--font-read); padding: 2px 4px; max-height: calc(var(--text-small) * 1.15 * 4 + 8px); overflow: hidden; overflow-wrap: anywhere; text-align: center; }
+.creation.world-score { display: flex; gap: 3px; align-items: flex-end; background: var(--paper); border: 2px solid var(--ink); padding: 4px; }
 .creation.world-score i { display: block; width: 6px; height: 4px; background: var(--ink-soft); }
 .creation.world-score i.world-note-on { height: 14px; background: var(--music); box-shadow: 0 0 0 1px var(--ink); }
 /* A book cover with a thick spine on the left, so no line runs through the title. */

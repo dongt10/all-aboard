@@ -61,9 +61,27 @@ export function stepPlayer(player, intent) {
 }
 
 // 'made': a creation stands at the stall. 'visited': an older save finished it without a creation.
-export function stallState(id, creations = {}, completed = []) {
+// 'started': a draft exists but nothing is finished, so the stall looks started rather than new.
+export function stallState(id, creations = {}, completed = [], drafts = {}) {
   if (creations?.[id]) return 'made';
-  return completed.includes(id) ? 'visited' : 'new';
+  if (completed.includes(id)) return 'visited';
+  return drafts?.[id] ? 'started' : 'new';
+}
+
+// The badge mark and the words a screen reader hears for every stall state except 'made'
+// (a made stall shows a check and names what was made, which the scene knows).
+export const STALL_BADGE = {
+  new: { mark: '!', said: 'Something new to make.' },
+  started: { mark: '...', said: 'Started. Tap to continue.' },
+  visited: { mark: 'Visited', said: 'Visited.' },
+};
+export const stallBadge = status => STALL_BADGE[status] ?? null;
+
+// The festival board's visible label: how many of the seven are made in this grade.
+export const BOARD_TOTAL = 7;
+export function boardLabel(count, total = BOARD_TOTAL) {
+  const made = Math.max(0, Math.min(total, Math.floor(Number(count) || 0)));
+  return made >= total ? `${total} of ${total} · Festival complete!` : `Festival board · ${made} of ${total}`;
 }
 
 export const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;

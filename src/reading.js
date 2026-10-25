@@ -1,4 +1,6 @@
 // A tiny festival packing story. Saved progress is the same list of collected items.
+// K reads one word ("Key"). Grades 1–2 read a line that names the item. Grades 3–5 read clues that only imply it.
+// Every sentence is 56 characters or fewer so a dialogue page never breaks mid-sentence with Bigger words on.
 export const READING_ITEMS = ['key', 'umbrella', 'book'];
 export const READING_LABELS = { key: 'Key', umbrella: 'Umbrella', book: 'Book', cup: 'Cup' };
 
@@ -6,37 +8,50 @@ export function normalizeReadingFound(found) {
   return READING_ITEMS.filter(id => Array.isArray(found) && found.includes(id));
 }
 
+const MOMENTS = {
+  key: {
+    short: 'Sora will lock her door. She packs a key.',
+    clue: 'Sora’s front door has a lock. She wants to open it when she comes home.',
+    question: 'What does Sora pack to lock her door?',
+    reason: 'The key fits the lock on Sora’s door.',
+    retry: 'Look for the thing that fits a door lock.',
+  },
+  umbrella: {
+    short: 'Rain is coming. Sora packs an umbrella to stay dry.',
+    clue: 'Gray clouds roll over the bay. Sora does not want to get wet.',
+    question: 'What does Sora pack to stay dry?',
+    reason: 'The umbrella keeps the rain off Sora.',
+    retry: 'Look for the thing that keeps rain off Sora.',
+  },
+  book: {
+    short: 'Sora will read to her friends. She packs a book.',
+    clue: 'At storytime, Sora’s friends sit in a circle. They wait for her to begin.',
+    question: 'What does Sora pack for storytime?',
+    reason: 'The book has a story for Sora to read to her friends.',
+    retry: 'Look for the thing with a story to read.',
+  },
+};
+const CLUE_QUESTION = 'What should Sora pack?';
+
 export function readingStep(found, grade = 1, reviewId = null) {
   const collected = normalizeReadingFound(found);
   const id = READING_ITEMS.includes(reviewId) ? reviewId : READING_ITEMS.find(item => !collected.includes(item));
   if (!id) return null;
-  const moments = {
-    key: {
-      passage: grade < 3 ? 'Sora will lock her door. She packs a key.' : 'Before leaving for the festival, Sora will lock her front door. She packs a key for the lock.',
-      question: 'What does Sora pack to lock her door?',
-      reason: 'The key fits the lock on Sora’s door.',
-      retry: 'Look for the thing that fits a door lock.',
-    },
-    umbrella: {
-      passage: grade < 3 ? 'Rain is coming. Sora packs an umbrella to stay dry.' : 'Rain is expected on the way to the festival. Sora packs an umbrella to keep the rain off her.',
-      question: 'What does Sora pack to stay dry?',
-      reason: 'The umbrella keeps the rain off Sora.',
-      retry: 'Look for the thing that keeps rain off Sora.',
-    },
-    book: {
-      passage: grade < 3 ? 'Sora will read to her friends. She packs a book.' : 'At the festival, Sora plans to read a story to her friends. She packs a book to share at storytime.',
-      question: 'What does Sora pack for storytime?',
-      reason: 'The book has a story for Sora to read to her friends.',
-      retry: 'Look for the thing with a story to read.',
-    },
+  const moment = MOMENTS[id], word = READING_LABELS[id];
+  if (grade === 0) return {
+    id, index: READING_ITEMS.indexOf(id), word,
+    passage: word,
+    question: `Put the ${word} in the bag.`,
+    reason: `This says ${word}. ${word} is in the bag!`,
+    retry: `Look for ${word}.`,
   };
-  const moment = moments[id];
+  const inferred = grade >= 3;
   return {
-    id, index: READING_ITEMS.indexOf(id), word: READING_LABELS[id].toUpperCase(),
-    passage: grade === 0 ? READING_LABELS[id].toUpperCase() : moment.passage,
-    question: grade === 0 ? `Put the ${READING_LABELS[id].toUpperCase()} in the bag.` : moment.question,
-    reason: grade === 0 ? `This says ${READING_LABELS[id].toUpperCase()}. You packed the ${id}.` : moment.reason,
-    retry: grade === 0 ? `Look for ${READING_LABELS[id].toUpperCase()}.` : moment.retry,
+    id, index: READING_ITEMS.indexOf(id), word,
+    passage: inferred ? moment.clue : moment.short,
+    question: inferred ? CLUE_QUESTION : moment.question,
+    reason: moment.reason,
+    retry: moment.retry,
   };
 }
 
@@ -52,7 +67,7 @@ export function readingChoice(found, choice, grade = 1) {
   const uses = { key: 'A key fits a lock.', umbrella: 'An umbrella keeps rain off.', book: 'A book has a story.', cup: 'A cup holds a drink.' };
   return {
     found: collected, accepted: false, reviewId: null,
-    message: grade === 0 ? `That says ${READING_LABELS[choice].toUpperCase()}. ${step.retry}` : `${uses[choice]} ${step.retry}`,
+    message: grade === 0 ? `That says ${READING_LABELS[choice]}. ${step.retry}` : `${uses[choice]} ${step.retry}`,
   };
 }
 

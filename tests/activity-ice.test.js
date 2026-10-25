@@ -1,69 +1,271 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import ice, { iceLabel } from '../src/ui/activities/ice.js';
+import ice, { iceLabel, ICE_LINES } from '../src/ui/activities/ice.js';
 import { ICON_NAMES } from '../src/ui/icons.js';
-import { encounterOpeningDialogue } from '../src/encounters.js';
+import { encounterOpeningDialogue, encounterReady, predictionLine, scienceNextStep } from '../src/encounters.js';
 
 const cmd = id => ({ type: 'command', id });
-test('fresh trays offer shade, wait and a locked finish', () => {
-  const { state, ui } = ice.start(null, { chapter: 1, grade: 2 });
-  assert.deepEqual(ice.commands(state, ui, 2).map(c => [c.id, Boolean(c.disabled)]), [['shade-left', false], ['shade-right', false], ['wait', false], ['finish', true]]);
-});
-test('ten shaded minutes unlock Use shade', () => {
-  let s = ice.start(null, { chapter: 1, grade: 2 });
-  for (const id of ['shade-left', 'wait', 'wait']) s = ice.act(s.state, s.ui, cmd(id), 2);
-  assert.deepEqual([s.state.time, s.line], [10, 'The shaded ice melts more slowly in this model.']);
-  const commands = ice.commands(s.state, s.ui, 2);
-  assert.deepEqual([commands[3].label, Boolean(commands[3].disabled), commands[0].pressed], ['Use shade', false, true]);
-});
-test('at twenty minutes Wait becomes Fresh ice, which restarts the clock and keeps the shade', () => {
-  let s = ice.start({ kind: 'science', canopy: 'right', time: 20 }, { chapter: 1, grade: 4 });
-  assert.equal(ice.commands(s.state, s.ui, 4)[2].id, 'fresh');
-  s = ice.act(s.state, s.ui, cmd('fresh'), 4);
-  assert.deepEqual([s.state.time, s.state.canopy], [0, 'right']);
-});
-test('shading the same tray again keeps time and explains the next step', () => {
-  const s = ice.start({ kind: 'science', canopy: 'left', time: 5 }, { chapter: 1, grade: 3 });
-  const again = ice.act(s.state, s.ui, cmd('shade-left'), 3);
-  assert.deepEqual([again.state.time, again.line], [5, 'Advance 5 more model minutes to compare the ice.']);
-});
-test('tapping a tray in the field shades it', () => {
-  const s = ice.start(null, { chapter: 0, grade: 0 });
-  assert.equal(ice.act(s.state, s.ui, { type: 'field', tray: 'right' }, 0).state.canopy, 'right');
+const run = (s, ids, grade) => ids.reduce((acc, id) => ice.act(acc.state, acc.ui, cmd(id), grade), s);
+const sentences = text => text.split(/(?<=[.!?])\s+/);
+const GRADES = [0, 1, 2, 3, 4, 5];
+const chapterOf = grade => (grade === 0 ? 0 : 1);
+
+test('commands: Shade A, Shade B, Wait 5 min, then Serve ice last and disabled, at every grade', () => {
+  for (const grade of GRADES) {
+    const { state, ui } = ice.start(null, { chapter: chapterOf(grade), grade });
+    const commands = ice.commands(state, ui, grade);
+    assert.deepEqual(commands.map(c => [c.id, c.label, c.icon, Boolean(c.disabled)]),
+      [['shade-left', 'Shade A', 'shade', false], ['shade-right', 'Shade B', 'shade', false], ['wait', 'Wait 5 min', 'clock', false], ['finish', 'Serve ice', 'check', true]], `grade ${grade}`);
+    assert.ok(commands.every(c => ICON_NAMES.includes(c.icon) && c.label.length <= 12));
+    assert.equal(commands.filter(c => c.finish).length, 1);
+    assert.equal(commands.at(-1).finish, true);
+  }
 });
 
-test('identity, help and opening line', () => {
-  assert.deepEqual([ice.kind, ice.title], ['science', 'A little shade experiment']);
-  assert.deepEqual(ice.help, ['Tap a tray to shade it.', 'Choose Wait 5 min two times.', 'Compare the two ice cubes.', 'Choose Use shade.']);
-  const s = ice.start(null, { chapter: 1, grade: 2 });
-  assert.equal(ice.opening(s.state, s.ui, 2), encounterOpeningDialogue(s.state));
+test('ten shaded minutes unlock Serve ice; the shaded tray shows pressed', () => {
+  const s = run(ice.start(null, { chapter: 1, grade: 2 }), ['shade-left', 'wait', 'wait'], 2);
+  assert.equal(s.state.time, 10);
+  assert.equal(encounterReady(s.state), true);
+  const commands = ice.commands(s.state, s.ui, 2);
+  assert.deepEqual([commands[3].label, Boolean(commands[3].disabled), commands[0].pressed, commands[1].pressed], ['Serve ice', false, true, false]);
 });
-test('commands use known icons and labels', () => {
-  const s = ice.start({ kind: 'science', canopy: 'right', time: 20 }, { chapter: 1, grade: 3 });
-  const commands = ice.commands(s.state, s.ui, 3);
-  assert.deepEqual(commands.map(c => [c.label, c.icon]), [['Shade A', 'shade'], ['Shade B', 'shade'], ['Fresh ice', 'undo'], ['Use shade', 'check']]);
-  assert.ok(commands.every(c => ICON_NAMES.includes(c.icon)));
-  assert.deepEqual(commands.map(c => Boolean(c.pressed)).slice(0, 2), [false, true]);
-  assert.equal(commands.filter(c => c.finish).length, 1);
-  assert.equal(ice.start(null, { chapter: 1, grade: 3 }).state.canopy, 'none');
-  assert.equal(ice.commands(ice.start(null, { chapter: 1, grade: 3 }).state, {}, 3)[2].icon, 'clock');
+
+test('once ten minutes have passed, Wait 5 min becomes Fresh ice, which restarts the clock and keeps the shade', () => {
+  for (const time of [10, 15, 20]) {
+    const s = ice.start({ kind: 'science', canopy: 'right', time }, { chapter: 1, grade: 4 });
+    assert.deepEqual(ice.commands(s.state, s.ui, 4)[2], { id: 'fresh', label: 'Fresh ice', icon: 'undo' }, `at ${time} minutes`);
+  }
+  const s = ice.start({ kind: 'science', canopy: 'right', time: 10 }, { chapter: 1, grade: 4 });
+  const fresh = ice.act(s.state, s.ui, cmd('fresh'), 4);
+  assert.deepEqual([fresh.state.time, fresh.state.canopy, fresh.line], [0, 'right', 'Fresh ice in both trays. Try shading the other tray!']);
+  assert.equal(encounterReady(fresh.state), false);
+  // a stray wait at or after ten minutes does nothing
+  assert.equal(ice.act(s.state, s.ui, cmd('wait'), 4).state, s.state);
 });
-test('shading a new tray restarts with fresh cubes; act is pure', () => {
-  const s = ice.start({ kind: 'science', canopy: 'left', time: 15 }, { chapter: 1, grade: 3 });
-  const moved = ice.act(s.state, s.ui, cmd('shade-right'), 3);
-  assert.deepEqual([moved.state.canopy, moved.state.time, moved.line], ['right', 0, 'Fresh equal cubes. Watch 10 model minutes with one tray shaded.']);
-  assert.deepEqual([s.state.canopy, s.state.time], ['left', 15]);
+
+test('shading the same tray again keeps time and says the next step in kid words', () => {
+  const s = ice.start({ kind: 'science', canopy: 'left', time: 5 }, { chapter: 1, grade: 3 });
+  const again = ice.act(s.state, s.ui, cmd('shade-left'), 3);
+  assert.equal(again.state, s.state);
+  assert.equal(again.line, scienceNextStep(s.state));
+  assert.equal(again.line, 'Wait 5 more minutes. Then look at both trays.');
+  const ready = ice.start({ kind: 'science', canopy: 'left', time: 10 }, { chapter: 1, grade: 3 });
+  assert.equal(ice.act(ready.state, ready.ui, cmd('shade-left'), 3).line, 'Ready! Choose Serve ice.');
 });
-test('waiting with no shade, the clock cap and fresh ice line', () => {
-  let s = ice.start(null, { chapter: 1, grade: 3 });
-  s = ice.act(s.state, s.ui, cmd('wait'), 3);
-  assert.deepEqual([s.state.time, s.line], [5, 'Both trays are sunny. Their ice melts at the same rate.']);
-  const capped = ice.act({ ...s.state, time: 20 }, s.ui, cmd('wait'), 3);
-  assert.equal(capped.state.time, 20);
-  const fresh = ice.act({ ...s.state, time: 20 }, s.ui, cmd('fresh'), 3);
-  assert.deepEqual([fresh.state.time, fresh.line], [0, 'Equal cubes again. Try moving the shade to the other tray.']);
+
+test('tapping a tray in the field shades it; moving the shade gives fresh ice; act is pure', () => {
+  const s = ice.start(null, { chapter: 0, grade: 0 });
+  const tapped = ice.act(s.state, s.ui, { type: 'field', tray: 'right' }, 0);
+  assert.deepEqual([tapped.state.canopy, tapped.state.time, tapped.line], ['right', 0, 'Tray B is in the shade. Now wait and look!']);
+  assert.equal(ice.act(s.state, s.ui, { type: 'field', tray: 'top' }, 0).state, s.state);
+  const mid = ice.start({ kind: 'science', canopy: 'left', time: 15 }, { chapter: 1, grade: 1 });
+  const moved = ice.act(mid.state, mid.ui, cmd('shade-right'), 1);
+  assert.deepEqual([moved.state.canopy, moved.state.time, moved.line], ['right', 0, 'Fresh ice. Tray B is in the shade now. Wait and look!']);
+  assert.deepEqual([mid.state.canopy, mid.state.time], ['left', 15]);
 });
-test('tray labels are words for little ones and percents for older kids', () => {
-  assert.deepEqual([iceLabel(100, 0), iceLabel(60, 1), iceLabel(0, 1)], ['Lots of ice', 'Less ice', 'Water']);
-  assert.deepEqual([iceLabel(80, 2), iceLabel(0, 5)], ['80% ice left', '0% ice left']);
+
+test('wait lines: sunny trays melt the same; the shaded tray melts slower; the result names Serve ice', () => {
+  let s = ice.start(null, { chapter: 1, grade: 1 });
+  s = ice.act(s.state, s.ui, cmd('wait'), 1);
+  assert.deepEqual([s.state.time, s.line], [5, 'Both trays are in the sun. They melt the same. Shade one!']);
+  s = ice.act(s.state, s.ui, cmd('wait'), 1);
+  assert.deepEqual([s.state.time, s.line], [10, 'Both trays are in the sun. They melt the same. Shade one!']);
+  assert.equal(encounterReady(s.state), false);
+  let shaded = run(ice.start(null, { chapter: 0, grade: 0 }), ['shade-left', 'wait'], 0);
+  assert.equal(shaded.line, 'Tray A is in the shade. Its ice melts slower. Wait more!');
+  shaded = ice.act(shaded.state, shaded.ui, cmd('wait'), 0);
+  assert.equal(shaded.line, 'Look! The shaded tray kept more ice. Choose Serve ice.');
+});
+
+test('grades 3 to 5 predict: the first Shade pick is the guess, kept in ui and never in the saved state', () => {
+  for (const grade of [3, 4, 5]) {
+    const start = ice.start(null, { chapter: 1, grade });
+    assert.equal(ice.opening(start.state, start.ui, grade), 'Which tray will keep more ice? Shade your guess.');
+    assert.equal(start.ui.predicted, null);
+    const picked = ice.act(start.state, start.ui, cmd('shade-right'), grade);
+    assert.equal(picked.line, 'You picked Tray B. Wait and see if it keeps more ice!');
+    assert.equal(picked.ui.predicted, 'right');
+    assert.equal('predicted' in picked.state, false, 'the guess is not saved');
+    const right = run(picked, ['wait', 'wait'], grade);
+    assert.equal(right.line, `${predictionLine('right', right.state)} Choose Serve ice.`);
+    assert.equal(right.line, 'You guessed right! The shaded tray kept more ice. Choose Serve ice.');
+    assert.equal(encounterReady(right.state), true);
+  }
+});
+
+test('a changed mind keeps the first guess, so the result can surprise', () => {
+  const start = ice.start(null, { chapter: 1, grade: 3 });
+  const switched = run(start, ['shade-left', 'shade-right'], 3);
+  assert.deepEqual([switched.ui.predicted, switched.state.canopy, switched.state.time], ['left', 'right', 0]);
+  const done = run(switched, ['wait', 'wait'], 3);
+  assert.equal(done.line, 'Surprise! The shaded tray kept more ice. Shade keeps the sun off. Choose Serve ice.');
+});
+
+test('Fresh ice clears the guess; a run without a new guess gets the plain result', () => {
+  const ready = run(ice.start(null, { chapter: 1, grade: 5 }), ['shade-left', 'wait', 'wait'], 5);
+  const fresh = ice.act(ready.state, ready.ui, cmd('fresh'), 5);
+  assert.equal(fresh.ui.predicted, null);
+  assert.equal(run(fresh, ['wait', 'wait'], 5).line, 'Look! The shaded tray kept more ice. Choose Serve ice.');
+  const reguessed = ice.act(fresh.state, fresh.ui, cmd('shade-right'), 5);
+  assert.deepEqual([reguessed.ui.predicted, reguessed.line], ['right', 'Fresh ice. You picked Tray B. Wait and see!'], 'the kid hears that the new pick is the guess');
+  // a second move after the guess is just a move
+  const movedAgain = ice.act(reguessed.state, reguessed.ui, cmd('shade-left'), 5);
+  assert.deepEqual([movedAgain.ui.predicted, movedAgain.line], ['right', 'Fresh ice. Tray A is in the shade now. Wait and look!']);
+  // K to 2 never hear the guess line, even after Fresh ice
+  const youngFresh = run(ice.start(null, { chapter: 1, grade: 1 }), ['shade-left', 'wait', 'wait', 'fresh'], 1);
+  const young = ice.act(youngFresh.state, youngFresh.ui, cmd('shade-right'), 1);
+  assert.equal(young.line, 'Fresh ice. Tray B is in the shade now. Wait and look!');
+});
+
+test('two sunny waits keep the Wait button; the clock runs to 20, then Fresh ice names shading a tray', () => {
+  const s = ice.start({ kind: 'science', canopy: 'none', time: 10 }, { chapter: 1, grade: 1 });
+  assert.equal(ice.commands(s.state, s.ui, 1)[2].id, 'wait', 'nothing was compared, so Wait stays');
+  assert.equal(ice.commands(s.state, s.ui, 1)[3].disabled, true);
+  const waited = ice.act(s.state, s.ui, cmd('wait'), 1);
+  assert.deepEqual([waited.state.time, waited.line], [15, 'Both trays are in the sun. They melt the same. Shade one!']);
+  const melted = ice.act(waited.state, waited.ui, cmd('wait'), 1);
+  assert.equal(melted.state.time, 20);
+  assert.equal(ice.commands(melted.state, melted.ui, 1)[2].id, 'fresh', 'the clock is out, so Fresh ice takes over');
+  assert.equal(ice.act(melted.state, melted.ui, cmd('wait'), 1).state, melted.state, 'a stray wait at 20 does nothing');
+  const fresh = ice.act(melted.state, melted.ui, cmd('fresh'), 1);
+  assert.deepEqual([fresh.state.time, fresh.state.canopy, fresh.line], [0, 'none', 'Fresh ice in both trays. Shade one tray!']);
+  // a sunny saved draft at 15 also keeps Wait
+  const draft = ice.start({ kind: 'science', canopy: 'none', time: 15 }, { chapter: 1, grade: 4 });
+  assert.equal(ice.commands(draft.state, draft.ui, 4)[2].id, 'wait');
+});
+
+test('a resumed draft with a shaded tray still melting opens with the next step, not "shade a tray"', () => {
+  for (const grade of [1, 3]) {
+    const s = ice.start({ kind: 'science', canopy: 'left', time: 5 }, { chapter: 1, grade });
+    assert.equal(ice.opening(s.state, s.ui, grade), scienceNextStep(s.state), `grade ${grade}`);
+    assert.equal(ice.opening(s.state, s.ui, grade), 'Wait 5 more minutes. Then look at both trays.');
+  }
+  const zero = ice.start({ kind: 'science', canopy: 'right', time: 0 }, { chapter: 0, grade: 0 });
+  assert.equal(ice.opening(zero.state, zero.ui, 0), 'Wait 10 more minutes. Then look at both trays.');
+});
+
+test('a saved draft with a shaded tray counts that tray as the guess', () => {
+  const s = ice.start({ kind: 'science', canopy: 'left', time: 5 }, { chapter: 1, grade: 4 });
+  assert.equal(s.ui.predicted, 'left');
+  assert.equal(run(s, ['wait'], 4).line, 'You guessed right! The shaded tray kept more ice. Choose Serve ice.');
+});
+
+test('K to 2 never hear the guess line and get the simple opening', () => {
+  for (const grade of [0, 1, 2]) {
+    const start = ice.start(null, { chapter: chapterOf(grade), grade });
+    assert.equal(ice.opening(start.state, start.ui, grade), 'Shade one tray. Then wait and look!');
+    const picked = ice.act(start.state, start.ui, cmd('shade-left'), grade);
+    assert.equal(picked.line, 'Tray A is in the shade. Now wait and look!');
+    assert.equal(run(picked, ['wait', 'wait'], grade).line, 'Look! The shaded tray kept more ice. Choose Serve ice.');
+  }
+});
+
+test('a ready draft opens with the ready line at every grade', () => {
+  for (const grade of GRADES) {
+    const s = ice.start({ kind: 'science', canopy: 'right', time: 10 }, { chapter: chapterOf(grade), grade });
+    assert.equal(ice.opening(s.state, s.ui, grade), encounterOpeningDialogue(s.state));
+    assert.equal(ice.opening(s.state, s.ui, grade), 'Your ice test is ready. Serve ice, or try fresh ice.');
+  }
+});
+
+test('identity, help and the not-ready line use kid words and name every command', () => {
+  assert.deepEqual([ice.kind, ice.title], ['science', 'Momo’s ice test']);
+  assert.deepEqual(ice.help, ['Tap a tray, or choose Shade A or Shade B.', 'Choose Wait 5 min two times. Watch the ice.', 'Which tray kept more ice? Fresh ice starts over.', 'Choose Serve ice.']);
+  assert.equal(ice.help.at(-1), 'Choose Serve ice.');
+  for (const label of ['Shade A', 'Shade B', 'Wait 5 min', 'Fresh ice', 'Serve ice']) assert.ok(ice.help.some(step => step.includes(label)), `help names ${label}`);
+  assert.equal(ice.notReadyLine, 'Shade a tray, then wait 10 minutes.');
+});
+
+test('every line fits one Bigger words page per sentence and avoids grown-up words', () => {
+  const lines = [ice.notReadyLine, ...ice.help, ICE_LINES.waitSunny, ICE_LINES.result, ICE_LINES.fresh, ICE_LINES.freshSunny, ICE_LINES.finishHint,
+    ...['left', 'right'].flatMap(side => [ICE_LINES.waitShaded(side), ICE_LINES.shaded(side), ICE_LINES.guessed(side), ICE_LINES.moved(side), ICE_LINES.movedGuess(side)])];
+  for (const line of lines) {
+    for (const sentence of sentences(line)) assert.ok(sentence.length <= 56, `"${sentence}" is ${sentence.length} characters`);
+    assert.doesNotMatch(line, /model|canopy|%|simplified|experiment/i, line);
+  }
+  assert.doesNotMatch(ice.title, /model|canopy|experiment/i);
+});
+
+test('tray labels are words at every grade, with the number from grade 2 up', () => {
+  assert.deepEqual([iceLabel(100, 0), iceLabel(60, 1), iceLabel(0, 1), iceLabel(70, 0)], ['Lots of ice', 'Less ice', 'Water', 'Lots of ice']);
+  assert.deepEqual([iceLabel(80, 2), iceLabel(65, 3), iceLabel(0, 5)], ['Lots of ice · 80', 'Less ice · 65', 'Water · 0']);
+  for (const grade of GRADES) assert.doesNotMatch(iceLabel(50, grade), /%/);
+});
+
+// A small DOM stand-in, enough for mountField: elements, classes, attributes, querySelector by the few selectors used.
+function fakeDoc() {
+  const matches = (el, sel) => sel.split(',').some(part => {
+    part = part.trim();
+    const m = part.match(/^\.([\w-]+)(?:\[data-tray="(\w+)"\])?(?:\s+(\w+))?$/);
+    if (!m) return false;
+    if (m[3]) return false;   // handled by querySelector below
+    return el.classList.has(m[1]) && (!m[2] || el.dataset.tray === m[2]);
+  });
+  const make = tag => {
+    const el = {
+      tagName: tag.toUpperCase(), children: [], attrs: {}, dataset: {}, style: {}, textContent: '', parent: null,
+      classList: { set: new Set(), add(c) { this.set.add(c); }, has(c) { return this.set.has(c); }, toggle(c, on) { on ? this.set.add(c) : this.set.delete(c); }, contains(c) { return this.set.has(c); } },
+      set className(v) { el.classList.set = new Set(v.split(/\s+/).filter(Boolean)); }, get className() { return [...el.classList.set].join(' '); },
+      set innerHTML(html) { el.children = parse(html, el); }, get innerHTML() { return ''; },
+      setAttribute(k, v) { el.attrs[k] = String(v); }, getAttribute(k) { return el.attrs[k] ?? null; },
+      addEventListener() {}, removeEventListener() {}, append(...kids) { for (const k of kids) { k.parent = el; el.children.push(k); } }, remove() {},
+      contains(other) { return other === el || el.children.some(c => c.contains(other)); },
+      querySelectorAll(sel) { const out = []; const walk = n => { for (const c of n.children) { if (matches(c, sel)) out.push(c); walk(c); } }; walk(el); return out; },
+      querySelector(sel) {
+        const [first, ...rest] = sel.trim().split(/\s+/);
+        let found = el.querySelectorAll(first)[0] ?? null;
+        for (const part of rest) found = found ? found.querySelectorAll(part.startsWith('.') ? part : `.${part}`)[0] ?? found.children.find(c => c.tagName === part.toUpperCase()) ?? null : null;
+        return found;
+      },
+    };
+    return el;
+  };
+  // Tiny tag parser for the markup mountField writes: nested tags with class/data/aria attributes, text ignored.
+  function parse(html, parent) {
+    const stack = [{ children: [] }];
+    const re = /<(\/?)([a-z]+)([^>]*?)(\/?)>/gi;
+    let m;
+    while ((m = re.exec(html))) {
+      const [, close, tag, attrText, selfClose] = m;
+      if (close) { stack.pop(); continue; }
+      const el = make(tag);
+      for (const [, k, v] of attrText.matchAll(/([\w-]+)="([^"]*)"/g)) {
+        if (k === 'class') el.className = v; else if (k.startsWith('data-')) el.dataset[k.slice(5)] = v; else el.attrs[k] = v;
+      }
+      el.parent = stack.at(-1); stack.at(-1).children.push(el);
+      if (!selfClose && !['path', 'rect', 'circle', 'line', 'polygon', 'use'].includes(tag)) stack.push(el);
+    }
+    for (const c of stack[0].children) c.parent = parent;
+    return stack[0].children;
+  }
+  return { createElement: make };
+}
+
+test('the field reads minutes, Tray A / Tray B with ice words, and shows the shade only over the shaded tray', () => {
+  const doc = fakeDoc();
+  const host = doc.createElement('section');
+  host.ownerDocument = doc;
+  const field = ice.mountField(host, { grade: 3, dispatch() {} });
+  const root = host.children[0];
+  assert.equal(root.querySelectorAll('.ice-tag').length, 0, 'no model tag');
+  assert.equal(root.querySelectorAll('.ice-sun').length, 1, 'the sun is drawn');
+  assert.equal(root.querySelectorAll('.ice-canopy').length, 2, 'each tray has a shade to show');
+  const { state } = ice.start({ kind: 'science', canopy: 'left', time: 10 }, { chapter: 1, grade: 3 });
+  field.update(state, {});
+  assert.equal(root.querySelector('.ice-clock b').textContent, '10 minutes');
+  const [a, b] = root.querySelectorAll('.ice-tray');
+  assert.deepEqual([a.querySelector('.ice-name') ? 'Tray A' : null, a.querySelector('.ice-left').textContent], ['Tray A', 'Lots of ice · 80']);
+  assert.equal(b.querySelector('.ice-left').textContent, 'Less ice · 50');
+  assert.deepEqual([a.classList.has('ice-tray--shaded'), b.classList.has('ice-tray--shaded')], [true, false]);
+  assert.deepEqual([a.getAttribute('aria-pressed'), b.getAttribute('aria-pressed')], ['true', 'false']);
+  assert.equal(a.getAttribute('aria-label'), 'Tray A, in the shade, Lots of ice · 80');
+  assert.equal(b.getAttribute('aria-label'), 'Tray B, in the sun, Less ice · 50');
+  assert.deepEqual([a.querySelector('.ice-cube').style.width, b.querySelector('.ice-cube').style.width], ['40%', '25%'], 'the ice block shrinks with remaining');
+  field.update(ice.start({ kind: 'science', canopy: 'right', time: 20 }, { chapter: 0, grade: 0 }).state, {});
+  assert.equal(root.querySelector('.ice-clock b').textContent, '20 minutes');
+  assert.equal(root.querySelectorAll('.ice-tray')[0].querySelector('.ice-cube').style.visibility, 'hidden', 'melted ice disappears');
+  // the K field shows words only, whatever the saved grade says
+  const kField = ice.mountField(host, { grade: 0 });
+  kField.update(ice.start({ kind: 'science', canopy: 'none', time: 5 }, { chapter: 0, grade: 0 }).state, {});
+  assert.equal(host.children[1].querySelectorAll('.ice-left')[0].textContent, 'Lots of ice');
 });

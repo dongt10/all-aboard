@@ -145,3 +145,19 @@ test('the chosen kid round-trips and anything else falls back to the boy', () =>
   assert.equal(loadState(storage).avatar, 'girl');
   for (const junk of ['player', 7, null, undefined, '<b>']) assert.equal(normalizeState({ ...createState(), avatar: junk }).avatar, 'boy');
 });
+
+test('a saved band keeps its speed and form, and unknown values fall back to Steady and A', () => {
+  const band = { ...createDefaultBand(), tempo: 120, form: 'AB', chapter: 1, grade: 4 };
+  const clean = cleanCreation('music', band);
+  assert.equal(clean.tempo, 120); assert.equal(clean.form, 'AB'); assert.equal(clean.tracks.length, 4);
+  const storage = memoryStorage(); const state = createState(); state.chapter = 1; state.grade = 4;
+  saveState(publishCreation(state, 'music', band), storage);
+  const loaded = loadState(storage);
+  assert.equal(getCreations(loaded).music.tempo, 120); assert.equal(getCreations(loaded).music.form, 'AB');
+  assert.deepEqual(getDraft(loaded, 'music'), clean);
+  const junk = cleanCreation('music', { ...createDefaultBand(), tempo: 75, form: 'BAB' });
+  assert.equal(junk.tempo, 90); assert.equal(junk.form, 'A');
+  const old = cleanCreation('music', { kind: 'music', tracks: [] });
+  assert.equal(old.tempo, 90); assert.equal(old.form, 'A', 'a save from before forms still loads');
+  for (const value of ['60', 0, null, 121]) assert.equal(cleanCreation('music', { kind: 'music', tempo: value }).tempo, 90);
+});

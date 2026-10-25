@@ -53,6 +53,12 @@
 }
 .square-cell:hover { background: rgb(255 255 255 / .25); }
 .square-cell:focus-visible { outline: 3px solid var(--ink); outline-offset: -3px; background: rgb(255 255 255 / .35); }
+/* Grades 3–5 need a sign next to the stage: the three cells that count get a dashed red mark. */
+.square-field--stage-marked .square-cell[data-stage] {
+  background: rgb(233 97 99 / .16);
+  box-shadow: inset 0 0 0 3px var(--vermilion);
+}
+.square-field--stage-marked .square-cell[data-stage]:hover { background: rgb(233 97 99 / .28); }
 .square-item { display: grid; place-items: center; width: 36px; height: 36px; border: 2px solid var(--ink); box-sizing: border-box; }
 .square-item--bench { background: var(--lantern); }
 .square-item--sign { background: var(--sky); }

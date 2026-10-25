@@ -15,18 +15,39 @@
   clip-path: polygon(6px 0, 14px 0, 14px 6px, 20px 6px, 20px 14px, 14px 14px, 14px 20px, 6px 20px, 6px 14px, 0 14px, 0 6px, 6px 6px); }
 .music-flower::after { content: ''; position: absolute; inset: 7px; background: var(--lantern); }
 
-/* Top row: the way back, the eight beat lanterns, and the garden's name. */
+/* Top row: the way back and its lesson chip (left), the eight lanterns (middle), the name and the signs (right).
+   Left column x 16–288, rail x 300–684, right column from about x 708 at Bigger words, so nothing meets. */
 .music-back { position: absolute; left: 16px; top: 16px; z-index: 2; }
 .music-back .icon { width: 22px; height: 22px; }
-.music-title { position: absolute; right: 16px; top: 20px; z-index: 2; --chip: var(--music); font-size: var(--text-small); }
+.music-lesson { position: absolute; left: 16px; top: 72px; z-index: 2; max-width: 272px; --chip: var(--white); white-space: normal; text-align: left; line-height: 1.25; }
+.music-title { position: absolute; right: 16px; top: 20px; z-index: 2; --chip: var(--music); font-size: var(--text-small); white-space: nowrap; }
 .music-title .icon { width: 20px; height: 20px; }
-.music-lanterns { position: absolute; left: 228px; top: 12px; width: 432px; height: 48px; }
-.music-string { position: absolute; left: -8px; right: -8px; top: 4px; height: 2px; background: var(--ink); }
-.music-lantern { position: absolute; top: 12px; margin-left: 13px; width: 28px; height: 32px; display: grid; place-items: center;
-  background: var(--paper-shade); border: solid var(--ink); border-width: 6px 4px; border-top-color: var(--vermilion); border-bottom-color: var(--vermilion); }
-.music-lantern::before { content: ''; position: absolute; left: 50%; top: -14px; width: 2px; height: 8px; background: var(--ink); }
+.music-signs { position: absolute; right: 16px; top: 64px; z-index: 2; display: flex; gap: 8px; }
+.music-sign { min-height: 40px; min-width: 0; padding: 2px 10px; gap: 6px; font-size: var(--text-small); white-space: nowrap; }
+.music-sign .icon { flex: none; width: 18px; height: 18px; }
+.music-sign.is-busy { --fill: var(--lantern); }
+.music-form__letters { display: inline-flex; gap: 4px; font-family: var(--font-pixel); }
+.music-form__letters b { padding: 0 4px; line-height: 1.2; }
+.music-form__letters b.is-now { background: var(--lantern); box-shadow: 0 0 0 2px var(--ink); }
+
+/* The lantern rail: eight 44×44 lanterns on a string. At K they are pictures; from grade 1 they are buttons that
+   edit the lead musician. --step hangs a lantern lower (the grade 3–5 staircase: La at the string, rests lowest). */
+.music-lanterns { position: absolute; left: 300px; top: 8px; width: 384px; height: 160px; z-index: 1; --lead: var(--lantern); }
+.music-string { position: absolute; left: -12px; right: -12px; top: 0; height: 2px; background: var(--ink); }
+.music-lantern { position: absolute; top: 8px; width: 44px; height: 44px; margin: 0; padding: 0; display: grid; place-items: center;
+  background: var(--paper-shade); color: var(--ink); border: solid var(--ink); border-width: 6px 4px; border-top-color: var(--vermilion); border-bottom-color: var(--vermilion);
+  font: inherit; transform: translateY(var(--step, 0px)); transition: transform 180ms steps(3); }
+.music-lantern::before { content: ''; position: absolute; left: 50%; top: calc(-8px - var(--step, 0px)); width: 2px; height: calc(8px + var(--step, 0px)); margin-left: -1px; background: var(--ink); }
 .music-lantern b { font-family: var(--font-pixel); font-size: var(--text-small); line-height: 1; color: var(--ink); }
-.music-lantern.is-lit { background: var(--lantern); transform: translateY(2px); box-shadow: inset 3px 3px 0 var(--white), 0 0 0 6px rgba(255, 201, 74, .55), 0 0 0 12px rgba(255, 248, 230, .35); }
+button.music-lantern { cursor: pointer; }
+/* Hover never recolors the body: the sound/rest color carries the meaning (and :hover sticks after a touch). */
+button.music-lantern:hover { filter: brightness(1.12); }
+.music-lantern.is-sound { background: var(--lead); }
+.music-lantern.is-rest { background: var(--letterbox); }
+.music-lantern.is-rest b { color: var(--paper); }
+.music-lantern.is-lit { box-shadow: inset 3px 3px 0 var(--white), 0 0 0 6px rgba(255, 201, 74, .55), 0 0 0 10px rgba(255, 248, 230, .35); }
+.music-lantern.is-lit:not(.is-rest) { background: var(--lantern); }
+.music-lantern:focus-visible { z-index: 2; }
 
 /* The band: one button per musician, floating on a pedestal ringed in its own color. */
 .music-band { position: absolute; inset: 0; pointer-events: none; }
@@ -68,33 +89,16 @@
 .music-musician.is-resting .music-zzz { visibility: visible; }
 .music-musician.is-resting .music-name { --chip: var(--paper-shade); }
 
+/* The lead musician (the one the lanterns edit) gets a glowing frame around the ring. */
+.music-lead-glow { position: absolute; left: 10px; width: 140px; height: 36px; z-index: 1; visibility: hidden; border: 4px solid var(--musician); outline: 4px solid rgba(255, 255, 255, .8); animation: music-glow 1.4s steps(2) infinite; }
+.music-musician.is-lead .music-lead-glow { visibility: visible; }
+@keyframes music-glow { 50% { transform: scale(1.06, 1.2); } }
+/* Grades 4–5: Cricket keeps the steady part, and says so. */
+.music-badge { position: absolute; left: 50%; top: -8px; transform: translateX(-50%); display: none; --chip: var(--white); white-space: nowrap; }
+.music--steady .music-musician[data-id="percussion"] .music-badge { display: inline-flex; }
+/* The badge takes the top of Cricket's box (y 124–162 with Bigger words), so the beat note pops below it. */
+.music--steady .music-musician[data-id="percussion"] .music-note { top: 40px; }
+
 /* Dialogue and command menu, the same regions as every encounter. */
 .music-dialogue { position: absolute; left: 16px; top: 388px; width: 472px; height: 136px; z-index: 5; }
 .music-menu { position: absolute; left: 504px; top: 388px; width: 440px; height: 136px; z-index: 5; }
-
-/* Tunes window. */
-.tunes { display: grid; gap: 12px; font-size: var(--text-field); }
-.tunes-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
-.tunes-tab { min-height: 44px; font-size: var(--text-field); }
-.tunes-tab[aria-selected="true"] { --chip: var(--musician); }
-.tunes-tab:hover { --chip: var(--white); }
-.tunes-tab[aria-selected="true"]:hover { --chip: var(--musician); }
-.tunes-editor { display: grid; gap: 10px; }
-.tunes-hint { font-size: var(--text-field); line-height: 1.3; }
-.tunes-patterns { display: flex; gap: 12px; }
-.tunes-pattern .icon { width: 20px; height: 20px; }
-.tunes-pattern[aria-pressed="true"] { --fill: var(--musician); --light: var(--white); }
-.tunes-beats { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
-.tunes-beat { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 56px; padding: 2px;
-  border: 4px solid var(--ink); background: var(--paper); color: var(--ink); font-size: var(--text-field); font-weight: 700; line-height: 1.1;
-  clip-path: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px)); }
-.tunes-beat b { font-family: var(--font-pixel); font-size: var(--text-small); }
-.tunes-beat:hover { background: var(--white); }
-.tunes-beat.is-on { background: var(--musician); box-shadow: inset 3px 3px 0 rgba(255, 255, 255, .55); }
-.tunes-beat:focus-visible { clip-path: none; }
-.tunes-slider { display: grid; grid-template-columns: 11em 1fr; align-items: center; gap: 12px; font-size: var(--text-field); }
-.tunes-slider input { width: 100%; min-height: 32px; accent-color: var(--ink); }
-.tunes-foot { display: flex; align-items: center; gap: 12px; }
-.tunes-record { flex: none; }
-.tunes-record .icon { width: 20px; height: 20px; }
-.tunes-status { font-size: var(--text-small); color: var(--ink-soft); }

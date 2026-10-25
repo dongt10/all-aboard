@@ -5,23 +5,20 @@
   background: var(--sky); color: var(--ink); font-family: var(--font-read);
   box-shadow: inset 0 -40px 0 var(--grass);
 }
-.ice-top { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 36px; }
-.ice-tag {
-  font-family: var(--font-pixel); font-size: var(--text-small); line-height: 1.1;
-  background: var(--paper); border: 3px solid var(--ink); padding: 3px 6px; white-space: nowrap;
-}
+.ice-top { position: relative; display: flex; align-items: center; justify-content: flex-end; gap: 8px; min-height: 40px; }
 .ice-clock {
   display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-small); line-height: 1.1; font-weight: 700;
   background: var(--paper); border: 3px solid var(--ink); padding: 3px 6px; white-space: nowrap;
 }
 .ice-clock .icon { flex: none; }
 
-/* The sun: a square core with four stepped rays. */
+/* The sun, over both trays: a square core with four stepped rays and a dotted glow ring. */
 .ice-sun { position: absolute; left: 50%; top: 0; width: 40px; height: 40px; margin-left: -20px; pointer-events: none; }
 .ice-sun::before, .ice-sun::after { content: ''; position: absolute; background: var(--lantern); }
 .ice-sun::before { left: 17px; top: 0; width: 6px; height: 40px; }
 .ice-sun::after { top: 17px; left: 0; width: 40px; height: 6px; }
-.ice-sun i { position: absolute; z-index: 1; inset: 8px; background: var(--lantern); border: 3px solid var(--ink); }
+.ice-sun i { position: absolute; z-index: 1; inset: 8px; background: var(--lantern); border: 3px solid var(--ink); box-shadow: inset -4px -4px 0 #e0a92f; }
+.ice-sun i::before { content: ''; position: absolute; inset: -11px; background: transparent; border: 3px dotted var(--lantern); }
 
 .ice-trays { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .ice-tray {
@@ -34,7 +31,7 @@
 .ice-tray:focus-visible { outline: 3px solid var(--paper); outline-offset: -7px; box-shadow: 0 0 0 4px var(--ink); }
 .ice-tray--shaded { background: var(--paper-shade); }
 
-/* Canopy: an awning band with a stepped fringe, that only shows over the shaded tray. */
+/* The shade: an awning band with a stepped fringe, drawn only over the shaded tray. */
 .ice-canopy {
   position: relative; flex: none; height: 20px; margin: 0 -4px 6px; visibility: hidden;
   background: var(--science); box-shadow: inset 0 3px 0 var(--white);
@@ -45,6 +42,8 @@
   box-shadow: 24px 0 var(--ink), 48px 0 var(--ink), 72px 0 var(--ink), 96px 0 var(--ink), 120px 0 var(--ink), 144px 0 var(--ink), 168px 0 var(--ink), 192px 0 var(--ink);
 }
 .ice-tray--shaded .ice-canopy { visibility: visible; }
+/* The shaded box goes dim and the sun side stays bright, so the two trays never look the same. */
+.ice-tray--shaded .ice-box { box-shadow: inset 0 10px 0 rgba(31, 33, 71, .18); }
 
 .ice-box {
   position: relative; flex: 1; min-height: 34px; overflow: hidden;
@@ -59,7 +58,7 @@
   transition: width 400ms steps(4), height 400ms steps(4);
 }
 .ice-name { font-family: var(--font-pixel); font-size: var(--text-field); line-height: 1.1; }
-.ice-left { font-size: var(--text-small); line-height: 1.1; font-weight: 700; }
+.ice-left { font-size: var(--text-small); line-height: 1.1; font-weight: 700; white-space: nowrap; }
 
 .calm .ice-water, .calm .ice-cube { transition: none; }
 @media (prefers-reduced-motion: reduce) { .ice-water, .ice-cube { transition: none; } }

@@ -7,7 +7,7 @@ import { creationMarkup } from '../creations.js';
 import { createCommandMenu } from '../menu.js';
 import { createDialogue } from '../dialogue.js';
 import { onceAtATime } from '../scenes.js';
-import { paradeLineup, paradeCommands, paradeStatus, paradeBackdropMarkup } from '../parade-lineup.js';
+import { paradeLineup, paradeCommands, paradeStatus, paradeOpening, paradeEnding, paradeBackdropMarkup, PARADE_LAPS } from '../parade-lineup.js';
 
 const STAGE_WIDTH = 960;
 const SPACING = 112;          // one marcher per slot; eight slots fill the stage for the still line-up
@@ -15,10 +15,10 @@ const FEET_Y = 360;           // feet on the street, clear of the dialogue's Hea
 const WALK = [1, 0, 2, 0];    // walk frames, one every 160 ms
 const STEP_MS = 160;
 const BUNTING = 18;
-const HELP_STEPS = [
+export const HELP_STEPS = [
   'Watch your friends march with what you made.',
-  'Play band plays the band you saved with Kiko.',
-  'March again starts the parade from the beginning.',
+  'Your friends march across the street two times. Then they stop. March again starts it over.',
+  'Play band plays the band you made with Kiko. No band yet? Visit Kiko first.',
   'Village takes you back to the village.',
 ];
 
@@ -27,19 +27,22 @@ const figureSlot = html => `<span class="parade-figure" style="left:${SPACING / 
 
 export function createParadeScene(ctx) {
   let root, menu, dialogue, engine, playback, ticker = null, tick = 0, marchers = [], destroyed = false;
+  let laps = 0, over = false;   // finished crossings of the stage; the march has stopped in a line-up
   const creations = getCreations(ctx.getState());
   const lineup = paradeLineup(creations);
   const band = creations.music ?? null;
+  const hasBand = Boolean(band);
   const settings = () => ctx.getState().settings ?? {};
   const calm = () => Boolean(settings().reducedMotion) || Boolean(root?.closest('.calm'))
     || Boolean(globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
   const playing = () => Boolean(playback?.active);
-  const refreshCommands = () => menu.set(paradeCommands({ hasBand: Boolean(band), playing: playing() }));
+  const refreshCommands = () => menu.set(paradeCommands({ hasBand, playing: playing() }));
+  const ending = () => paradeEnding({ laps, calm: calm(), made: lineup.length, hasBand });
 
-  // Marchers face right and walk; with Calm motion they stand still facing front, step 0.
+  // Marchers face right and walk; with Calm motion, or once the parade is over, they stand still facing front, step 0.
   function paintMarchers() {
-    const still = calm();
+    const still = calm() || over;
     const step = still ? 0 : WALK[tick % WALK.length];
     const facing = still ? 'front' : 'right';
     root.classList.toggle('is-still', still);
@@ -52,16 +55,50 @@ export function createParadeScene(ctx) {
   }
   function startTicker() {
     clearInterval(ticker);
-    ticker = setInterval(() => { tick++; paintMarchers(); }, STEP_MS);
+    ticker = setInterval(() => {
+      tick++;
+      const end = ending();   // Calm motion turned on mid-march: the line-up shows at once
+      if (end.over) finish(end.line);
+      else paintMarchers();
+    }, STEP_MS);
   }
-  // Restarts the CSS march from the left edge.
-  function marchAgain() {
+  // The march stops where the line-up stands (the line's resting transform, where the last lap ends), and the closing line shows.
+  function finish(line) {
+    over = true;
+    clearInterval(ticker); ticker = null;
+    root.classList.add('is-over');
+    root.querySelector('.parade-line').classList.remove('is-marching', 'is-last-lap');
+    paintMarchers();
+    dialogue.say(null, line);
+  }
+  // Starts (or restarts) the march from the left edge, or shows the line-up at once with Calm motion.
+  function beginMarch() {
+    laps = 0; tick = 0; over = false;
+    root.classList.remove('is-over');
     const line = root.querySelector('.parade-line');
-    line.classList.remove('is-marching');
+    line.classList.remove('is-marching', 'is-last-lap');
     void line.offsetWidth;   // reflow, so the animation starts over
     line.classList.add('is-marching');
-    tick = 0;
+    const end = ending();
+    if (end.over) { finish(end.line); return; }
+    dialogue.say(null, paradeOpening({ hasBand }));
     paintMarchers();
+    startTicker();
+  }
+  // One lap is one run of a CSS march animation. The full laps repeat (animationiteration); the last lap is
+  // its own animation that halts in the line-up (animationend), so the marchers stop instead of popping in.
+  function onLap(event) {
+    if (over) return;
+    const name = event.animationName;
+    if (event.type === 'animationiteration' ? name !== 'parade-march' : name !== 'parade-last-lap') return;
+    laps++;
+    const end = ending();
+    if (end.over) { finish(end.line); return; }
+    if (laps === PARADE_LAPS - 1) {
+      const line = root.querySelector('.parade-line');
+      line.classList.remove('is-marching');
+      line.classList.add('is-last-lap');
+    }
   }
 
   function streetMarkup() {
@@ -88,7 +125,7 @@ export function createParadeScene(ctx) {
   function choose(id) {
     if (id === 'play' && band && !playing()) playback.toggle(band);
     else if (id === 'stop') playback.stop();
-    else if (id === 'march') marchAgain();
+    else if (id === 'march') beginMarch();
     else if (id === 'village') leave();
   }
   const silence = () => { if (playing()) playback.stop(); };
@@ -122,9 +159,9 @@ export function createParadeScene(ctx) {
       } });
 
       refreshCommands();
-      dialogue.say(null, 'Your parade! Every idea belongs here.');
-      paintMarchers();
-      startTicker();
+      root.addEventListener('animationiteration', onLap);
+      root.addEventListener('animationend', onLap);
+      beginMarch();
       menu.focus();
     },
     handleIntent(intent) {

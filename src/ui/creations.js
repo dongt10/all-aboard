@@ -11,7 +11,7 @@ function stampShape(shape) {
   if (shape === 'star') return '<path d="m0-8 2 5 6 1-4 4 1 6-5-3-5 3 1-6-4-4 6-1z"/>';
   if (shape === 'leaf') return `<g transform="scale(.4) translate(-20 -20)"><path d="M5 35C-1 10 17 0 35 5c5 19-6 36-30 30Z"/><path d="m8 32 20-20" stroke="${INK}" fill="none" stroke-width="2"/></g>`;
   if (shape === 'heart') return '<path d="M0 6-7 0v-5l4-2 3 3 3-3 4 2v5z"/>';
-  if (shape === 'flower') return '<path d="M-3-7h6v4h4v6H3v4h-6V3h-4v-6h4z"/>';
+  if (shape === 'flower') return '<g transform="scale(.4) translate(-20 -20)"><path d="M20 12C7-5-4 18 12 20-5 33 18 44 20 28c13 17 24-6 8-8C45 7 22-4 20 12Z"/><circle cx="20" cy="20" r="5" fill="#fff1cf"/></g>';
   return '<path d="m0-7 7 7-7 7-7-7z"/>';
 }
 
@@ -25,9 +25,18 @@ export function creationMarkup(id, s = {}) {
     }).join('')}</svg>`;
   }
   if (id === 'music') {
+    // Eight bars: a melody note stands at a height by pitch (Do low, La high), so the lantern staircase
+    // carries to the stall and the parade; a beat with only other friends playing is a short bar.
     const tracks = Array.isArray(s.tracks) ? s.tracks : [];
-    const notes = Array.from({ length: 8 }, (_, i) => tracks.some(t => t?.enabled && (t.notes?.[i] != null || (Array.isArray(t.pattern) && t.pattern[i]))));
-    return `<span class="creation creation--music world-score" aria-label="Your eight beat song on display">${notes.map(n => `<i class="${n ? 'world-note-on' : ''}"></i>`).join('')}</span>`;
+    const melody = tracks.find(t => t?.enabled && t.id === 'melody');
+    const pitch = i => (Number.isInteger(melody?.notes?.[i]) && melody.notes[i] >= 0 && melody.notes[i] <= 4 ? melody.notes[i] : null);
+    const on = i => tracks.some(t => t?.enabled && (t.notes?.[i] != null || (Array.isArray(t.pattern) && t.pattern[i])));
+    const bars = Array.from({ length: 8 }, (_, i) => {
+      const p = pitch(i);
+      if (p !== null) return `<i class="world-note-on" data-pitch="${p}" style="height:${8 + p * 3}px"></i>`;
+      return on(i) ? '<i class="world-note-on" style="height:6px"></i>' : '<i></i>';
+    });
+    return `<span class="creation creation--music world-score" aria-label="Your eight beat song on display">${bars.join('')}</span>`;
   }
   if (id === 'writing') return `<span class="creation creation--writing world-sign">${esc(s.text || s.sentence || s.message || 'Hello, friend!')}</span>`;
   if (id === 'math') {

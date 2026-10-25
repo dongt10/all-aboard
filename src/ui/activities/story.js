@@ -1,9 +1,11 @@
 // Sora’s story bag (reading): read a part of the story, then pack the picture that fits it.
+// Every line is written in sentences of 56 characters or fewer, so a dialogue page never breaks mid-sentence.
 import { READING_ITEMS, READING_LABELS, readingStep, readingChoice, readingObjectSVG } from '../../reading.js';
 import { encounterReady, encounterOpeningDialogue, normalizeEncounterSnapshot } from '../../encounters.js';
 
 const PICTURES = ['key', 'umbrella', 'book', 'cup'];
 const READY_LINE = ' All three are packed. Your story is ready to share.';
+const START_OVER_LINE = 'The bag is empty again. Let’s read!';
 
 const question = (state, grade) => readingStep(state.found, grade)?.question ?? '';
 
@@ -19,7 +21,7 @@ function opening(state, ui, grade) {
 function commands(state, ui, grade) {
   const ready = encounterReady(state);
   if (ready) return [
-    { id: 'again', label: 'Read again', icon: 'undo' },
+    { id: 'again', label: 'Start over', icon: 'undo' },
     { id: 'finish', label: 'Share story', icon: 'check', finish: true },
   ];
   if (ui.review) return [{ id: 'next', label: 'Next part', icon: 'next' }];
@@ -33,7 +35,7 @@ function act(state, ui, action, grade) {
     if (!ui.review) return { state, ui };
     return { state, ui: { ...ui, review: null }, line: question(state, grade) };
   }
-  if (id === 'again') return { state: { ...state, found: [] }, ui: { ...ui, review: null }, line: 'Let’s read from the start and pack again.' };
+  if (id === 'again') return { state: { ...state, found: [] }, ui: { ...ui, review: null }, line: START_OVER_LINE };
   if (!id?.startsWith('pick-') || ui.review || encounterReady(state)) return { state, ui };
   const result = readingChoice(state.found, id.slice(5), grade);
   const next = { ...state, found: result.found };
@@ -81,6 +83,6 @@ function mountField(host, { grade = 1 } = {}) {
 export default {
   kind: 'reading',
   title: 'Pack for the festival',
-  help: ['Read the story page.', 'Choose the picture that fits.', 'Read why it belongs.', 'Choose Next part.'],
+  help: ['Read the story page.', 'Choose the picture that fits.', 'Read why it belongs.', 'Choose Next part, then Share story.'],
   start, opening, commands, act, mountField,
 };

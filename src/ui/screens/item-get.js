@@ -1,9 +1,11 @@
 import { keyIntent } from '../input.js';
+import { icon } from '../icons.js';
 
 let serial = 0;
 
 // The item-get card: "You made… {name}!", the creation drawn large beside the neighbor's joy pose, and
-// ▶ Put it in the festival. A (or any click on the card) resolves the promise once. artHTML and
+// a Put it in the festival button with the play icon like every other button. A (or any click on the
+// card) resolves the promise once. artHTML and
 // figureHTML are trusted markup from creations.js and figures; the name is set as text.
 export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {}) {
   return new Promise(resolve => {
@@ -18,7 +20,7 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {})
           <div class="px-frame item-get__art">${artHTML}</div>
           <div class="item-get__figure">${figureHTML}</div>
         </div>
-        <button type="button" class="px-button px-button--finish item-get__go">▶ Put it in the festival</button>
+        <button type="button" class="px-button px-button--finish item-get__go">${icon('play', { size: 22 })}<span>Put it in the festival</span></button>
       </section>`;
     backdrop.querySelector('.item-get__name').textContent = `${name ?? ''}!`;
     const card = backdrop.firstElementChild;
