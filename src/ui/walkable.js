@@ -69,7 +69,19 @@ export function createWalkable(mask, options = {}) {
   const straightClear = (a, b) => isWalkable(a) && validPoint(b) && same(trace(a, b), b);
   function step(from, to) {
     const end = trace(from, to);
-    if (!same(end, from) || !isWalkable(from) || !validPoint(to) || from.x === to.x || from.y === to.y) return { ...end };
+    if (!isWalkable(from) || !validPoint(to) || same(end, to)) return { ...end };
+    if (from.x === to.x || from.y === to.y) {
+      // Ease around corners with the smallest sideways nudge, only across a clear segment.
+      const axis = from.x === to.x ? 'x' : 'y';
+      for (let nudge = 2; nudge <= 12; nudge += 2) {
+        for (const offset of [nudge, -nudge]) {
+          const destination = { ...to, [axis]: to[axis] + offset };
+          if (straightClear(from, destination)) return destination;
+        }
+      }
+      return { ...end };
+    }
+    if (!same(end, from)) return { ...end };
     // Only an immediately blocked diagonal slides; partial moves stop before the corner.
     const slides = [trace(from, { x: to.x, y: from.y }), trace(from, { x: from.x, y: to.y })];
     slides.sort((a, b) => distance(from, b) - distance(from, a) || a.y - b.y || a.x - b.x);

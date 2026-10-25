@@ -57,6 +57,84 @@ test('straightClear checks the start, endpoint, and intermediate 2px samples', (
   assert.deepEqual(walk.step({ x: 20, y: 30 }, { x: 70, y: 30 }), { x: 32, y: 30 });
 });
 
+test('the lower road stays clear beside the half-open easel box at x 315–399, y 370–430', () => {
+  const mask = roads(480, 460, [[300, 350, 160, 100]]);
+  for (let y = 370; y < 430; y++) for (let x = 315; x < 399; x++) {
+    const i = y * mask.width + x;
+    mask.bits[i >> 3] &= ~(1 << (i & 7));
+  }
+  const walk = createWalkable(mask), from = { x: 405, y: 417 }, to = { x: 405, y: 393 };
+  assert.ok(walk.isWalkable(from));
+  assert.deepEqual(walk.step(from, to), to);
+});
+
+test('a shortened upward step drifts around the easel corner with the first clear nudge', () => {
+  // Include the right edge at x=399; start just below the carved box at y=430.
+  const mask = roads(480, 460, [[300, 350, 160, 100]]);
+  for (let y = 370; y < 430; y++) for (let x = 315; x <= 399; x++) {
+    const i = y * mask.width + x;
+    mask.bits[i >> 3] &= ~(1 << (i & 7));
+  }
+  const walk = createWalkable(mask), from = { x: 405, y: 433 }, to = { x: 405, y: 409 };
+  assert.ok(walk.isWalkable({ x: 405, y: 431 }));
+  assert.equal(walk.isWalkable({ x: 405, y: 429 }), false);
+  for (const nudge of [2, -2, 4, -4, 6, -6]) {
+    assert.equal(walk.straightClear(from, { ...to, x: to.x + nudge }), false);
+  }
+  const end = walk.step(from, to);
+  assert.deepEqual(end, { x: 413, y: 409 });
+  assert.ok(walk.isWalkable(end));
+  assert.ok(walk.straightClear(from, end));
+  assert.ok(Math.hypot(end.x - from.x, end.y - from.y) <= Math.hypot(24, 12));
+});
+
+test('immediately blocked steps try both perpendicular directions on either axis', () => {
+  for (const horizontalMove of [false, true]) for (const sign of [1, -1]) {
+    const mask = roads(120, 120, [[0, 0, 120, 120]]);
+    // A corner just beyond the fractional feet position blocks the first straight sample.
+    const transform = p => horizontalMove ? { x: p.y, y: p.x } : p;
+    for (let y = 0; y < 57; y++) for (let x = 0; x < 45; x++) {
+      const p = transform({ x: sign === 1 ? x : 119 - x, y });
+      const i = p.y * mask.width + p.x;
+      mask.bits[i >> 3] &= ~(1 << (i & 7));
+    }
+    // A point footprint isolates direction/order; the easel regression uses full feet.
+    const walk = createWalkable(mask, { footprint: [[0, 0]] });
+    const from = transform({ x: sign === 1 ? 44.75 : 75.25, y: 58 });
+    const to = transform({ x: from[horizontalMove ? 'y' : 'x'], y: 34 });
+    assert.equal(walk.isWalkable(transform({ x: from[horizontalMove ? 'y' : 'x'], y: 56 })), false);
+    const end = walk.step(from, to);
+    const expected = { ...to }, axis = horizontalMove ? 'y' : 'x';
+    expected[axis] += sign * 4;
+    assert.deepEqual(end, expected);
+    assert.ok(walk.straightClear(from, end));
+  }
+});
+
+test('corner nudges cannot teleport out of a dead end to clear destinations', () => {
+  const walk = createWalkable(roads(120, 100, [[10, 50, 100, 40], [10, 10, 100, 36]]));
+  const from = { x: 60, y: 60 }, to = { x: 60, y: 36 };
+  for (let nudge = -12; nudge <= 12; nudge += 2) {
+    const destination = { ...to, x: to.x + nudge };
+    assert.ok(walk.isWalkable(destination));
+    assert.equal(walk.straightClear(from, destination), false);
+  }
+  assert.deepEqual(walk.step(from, to), { x: 60, y: 54 });
+  assert.deepEqual(walk.step({ x: 60, y: 54 }, to), { x: 60, y: 54 });
+});
+
+test('corner nudges include 12px but stop before a corner that needs 14px', () => {
+  const from = { x: 50, y: 60 }, to = { x: 50, y: 36 };
+  for (const left of [55, 57]) {
+    const walk = createWalkable(roads(120, 100, [[0, 38, 120, 62], [left, 0, 120 - left, 38]]));
+    assert.ok(walk.straightClear(from, { ...to, x: 64 }));
+    const end = walk.step(from, to);
+    assert.deepEqual(end, left === 55 ? { x: 62, y: 36 } : { x: 50, y: 42 });
+    assert.ok(walk.isWalkable(end));
+    assert.ok(walk.straightClear(from, end));
+  }
+});
+
 test('only immediately blocked diagonal moves slide along a clear axis', () => {
   const walk = horizontal();
   assert.deepEqual(walk.step({ x: 50, y: 59 }, { x: 74, y: 83 }), { x: 74, y: 59 });

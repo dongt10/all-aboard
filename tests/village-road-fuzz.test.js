@@ -86,7 +86,7 @@ test('road fuzz: 60,000 keyboard steps with long repeated-key runs', t => {
     player = stepPlayer(before, intent);
     checkPlayer(player, `keyboard step=${step}`, { intent, from: before });
     const distance = Math.hypot(player.x - before.x, player.y - before.y);
-    if (distance > 26) fail('Keyboard teleport exceeds 24px + 2px', `keyboard step=${step}`, player, { from: before, intent, distance });
+    if (distance > Math.hypot(24, 12) + 0.01) fail('Keyboard step exceeds 24px plus a 12px corner nudge', `keyboard step=${step}`, player, { from: before, intent, distance });
     if (!road().straightClear(before, player)) fail('Keyboard step crosses an obstacle', `keyboard step=${step}`, player, { from: before, intent });
     if (!distance) blocked++;
   }
