@@ -43,7 +43,7 @@ export function paginate(text, maxChars, fitsRendered = () => true) {
 }
 
 // A dialogue box: a speaker tab, one short page of text, ▼ More when a page follows, and Hear / Help tabs.
-export function createDialogue(host, { speak = () => false, onHelp = () => {}, isLarge = () => false, autoRead = () => false } = {}) {
+export function createDialogue(host, { speak = () => false, onHelp = () => {}, isLarge = () => false, autoRead = () => false, onPage = () => {} } = {}) {
   const root = document.createElement('div');
   root.className = 'dlg';
   root.tabIndex = -1;   // where focus lands if the More button disappears under it
@@ -64,6 +64,8 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
   const tab = root.querySelector('.dlg__speaker');
   const limit = () => isLarge() ? PAGE_CHARS.large : PAGE_CHARS.normal;
   let queue = [], remaining = '', large = Boolean(isLarge());   // queue[0] is the page on screen
+  let speech = null;
+  const reportPage = () => onPage({ text: queue[0] ?? '', hasMore: queue.length > 1, speech });
   const fitsRendered = page => {
     measure.textContent = page;
     return !measure.clientHeight || measure.scrollHeight <= measure.clientHeight;
@@ -77,7 +79,8 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
   }
   function show() {
     render();
-    if (queue[0] && autoRead()) speak(queue[0]);
+    speech = queue[0] && autoRead() ? speak(queue[0]) : null;
+    reportPage();
   }
   function next() {
     if (queue.length < 2) return false;
@@ -89,7 +92,7 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
   more.addEventListener('click', next);
   root.addEventListener('click', event => {
     const act = event.target.closest('[data-act]')?.dataset.act;
-    if (act === 'hear' && queue[0]) speak(queue[0]);
+    if (act === 'hear' && queue[0]) { speech = speak(queue[0]); reportPage(); }
     if (act === 'help') onHelp();
     if (event.target === text) next();   // tapping the words turns the page too
   });
@@ -98,6 +101,7 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
   function repaginate() {
     queue = paginate(remaining, limit(), fitsRendered);
     render();
+    reportPage();
   }
   const watch = new MutationObserver(() => {
     if (Boolean(isLarge()) === large) return;

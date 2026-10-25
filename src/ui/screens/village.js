@@ -94,13 +94,16 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   const actors = new Map();          // id → { id, el, fig, pos, target, facing, step, clock, waitUntil, render }
   const player = { pos: { ...PLAYER_START }, target: null, tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
   let near = null;
+  let opening = false, closeTimer = null, unwatchSpeech = null;
 
   const state = () => ctx.getState();
+  const largeText = () => Boolean(ctx.stage?.classList.contains('large-text'));
   const calm = () => Boolean(ctx.stage?.classList.contains('calm') || ctx.stage?.closest?.('.calm') || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   const nameOf = id => SIDE[id]?.name ?? CHARACTERS.find(c => c.id === id)?.name ?? id;
   const positions = () => Object.fromEntries([...actors.values()].map(a => [a.id, a.pos]));
 
   const visit = onceAtATime(async id => {
+    hush();
     if (id === findTarget) clearFind();
     if (SIDE[id]) { say(id, SIDE[id].line); return; }
     if (leaving) return;
@@ -109,9 +112,46 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (went === false) leaving = false;   // the scene manager was busy; stay and let them try again
   });
 
-  // The box sits bottom right; when the speaker stands there (Kiko), it moves to the top so they stay in view.
-  function say(id, words) {
+  function clearCloseTimer() {
+    clearTimeout(closeTimer);
+    closeTimer = null;
+    unwatchSpeech?.();
+    unwatchSpeech = null;
+  }
+  function cancelOpening() {
+    opening = false;
+    clearCloseTimer();
+  }
+  function onPage({ text, hasMore, speech }) {
+    clearCloseTimer();
+    if (!opening || hasMore || !text || paused || !alive) return;
+    const delay = largeText() ? 6000 : 4000;
+    const close = () => {
+      // Windows can open between frames, before pause() reaches this scene.
+      if (ctx.stage?.querySelector('.win-backdrop')) { cancelOpening(); return; }
+      hush();
+    };
+    // Allow 500ms per word plus 500ms to start when the voice supplies no end event.
+    const estimate = speech ? (String(speech.text ?? text).split(/\s+/).length * 500 + 500) : 0;
+    closeTimer = setTimeout(close, delay + estimate);
+    if (speech?.addEventListener) {
+      const ended = () => {
+        clearCloseTimer();
+        closeTimer = setTimeout(close, delay);
+      };
+      speech.addEventListener('end', ended);
+      speech.addEventListener('error', ended);
+      unwatchSpeech = () => {
+        speech.removeEventListener('end', ended);
+        speech.removeEventListener('error', ended);
+      };
+    }
+  }
+  // The box sits bottom right; when the speaker stands there (Kiko), it moves to the top.
+  function say(id, words, isOpening = false) {
+    cancelOpening();
     if (!dialogue) return;
+    opening = isOpening;
     const host = root.querySelector('.village-dialogue'), feet = actors.get(id)?.pos;
     // Pip's welcome also goes to the top, so the first thing a new player reads never hides Kiko's stall.
     host.classList.toggle('village-dialogue--top', Boolean(feet && feet.x > 440 && feet.y > 330) || words === WELCOME_LINE);
@@ -119,6 +159,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     dialogue.say(nameOf(id), words);
   }
   function hush() {
+    cancelOpening();
     const host = root?.querySelector('.village-dialogue');
     if (!host || host.hidden) return;
     const held = host.contains(document.activeElement);
@@ -190,9 +231,10 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     }
     dialogue = createDialogue(root.querySelector('.village-dialogue'), {
       speak: text => ctx.speak?.(text),
-      onHelp: () => ctx.open?.help?.('Willow Bay', [...HELP_STEPS]),
-      isLarge: () => ctx.stage?.classList.contains('large-text'),
+      onHelp: () => { cancelOpening(); paused = true; ctx.open?.help?.('Willow Bay', [...HELP_STEPS]); },
+      isLarge: largeText,
       autoRead: () => Boolean(state().settings?.autoRead),
+      onPage,
     });
   }
 
@@ -302,6 +344,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
 
   function tick(t) {
     if (!alive) return;
+    if (ctx.stage?.querySelector('.win-backdrop')) cancelOpening();
     const dt = Math.min(100, last ? t - last : 16);
     last = t;
     if (paused && !ctx.stage?.querySelector('.win-backdrop')) paused = false;   // the window closed
@@ -373,7 +416,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
 
   function onClick(event) {
     const act = event.target.closest('[data-act]')?.dataset.act;
-    if (act && ['grade', 'guide', 'comfort', 'pause'].includes(act)) { paused = true; ctx.open?.[act]?.(); return; }
+    if (act && ['grade', 'guide', 'comfort', 'pause'].includes(act)) { cancelOpening(); paused = true; ctx.open?.[act]?.(); return; }
     if (event.target.closest('.village-parade')) { if (canStartParade(state())) ctx.go('parade'); return; }
     if (event.target.closest('.village-talk')) { if (near) { player.facing = 'back'; visit(near); } return; }
     const actor = event.target.closest('.village-actor[data-id]');
@@ -412,7 +455,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       drawTalk();
       drawFind();
       const opening = openingLine({ creations: getCreations(state()), celebrate });
-      if (opening) { if (opening.id !== 'pip') sparkle(opening.id); say(opening.id, opening.words); }   // nothing made yet: Pip says what to do
+      if (opening) { if (opening.id !== 'pip') sparkle(opening.id); say(opening.id, opening.words, true); }   // nothing made yet: Pip says what to do
       if (findTarget) ctx.announce?.(`Find ${nameOf(findTarget)}. Follow the arrow.`);
       const button = focus && root.querySelector(`.village-actor[data-id="${focus}"]`);
       (button || root).focus({ preventScroll: true });   // the welcome never takes focus from the player controls
@@ -426,12 +469,14 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       return false;
     },
     pause() {
+      cancelOpening();
       paused = true;
       player.target = null;
       player.tapWalk = false;
       player.visitOnArrive = null;
     },
     destroy() {
+      cancelOpening();
       alive = false;
       cancelFrame(frame);
       previews?.();

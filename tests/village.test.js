@@ -310,10 +310,11 @@ test('banded creations use their own safe drawings and preserve legacy fallbacks
 
 // Scene regressions use the same small fake DOM as fixes-behavior.test.js.
 // It models the browser's focus loss when a focused control becomes hidden.
-import { Doc, Event, pressKey } from './helpers/dom.js';
+import { Doc, Event, Target, pressKey } from './helpers/dom.js';
+import { speak } from '../src/ui/voice.js';
 
 
-function villageFixture(t, { calm = false, large = false, state = createState(), ...options } = {}) {
+function villageFixture(t, { calm = false, large = false, state = createState(), voice = () => false, ...options } = {}) {
   const doc = new Doc(), frames = new Map(), restore = [];
   let frameId = 0, time = 0;
   for (const [key, value] of Object.entries({
@@ -333,7 +334,7 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
   const scene = createVillageScene({
     stage, getState: () => state,
     go: (...args) => { gone.push(args); return true; },
-    speak: text => spoken.push(text),
+    speak: text => { spoken.push(text); return voice(text); },
     open: Object.fromEntries(['grade', 'guide', 'comfort', 'pause', 'help'].map(act => [act, () => opened.push(act)])),
   }, options);
   scene.mount();
@@ -359,6 +360,171 @@ const readAloudState = () => {
   const state = createState();
   return { ...state, settings: { ...state.settings, autoRead: true } };
 };
+
+function openingClock(t) {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const schedule = globalThis.setTimeout, callbacks = [];
+  t.mock.method(globalThis, 'setTimeout', (fn, delay) => {
+    const callback = t.mock.fn(fn);
+    callbacks.push(callback);
+    return schedule(callback, delay);
+  });
+  return { advance: ms => t.mock.timers.tick(ms), callbacks };
+}
+
+function speechFixture(t) {
+  const utterances = [];
+  for (const [key, value] of Object.entries({
+    SpeechSynthesisUtterance: class extends Target { constructor(text) { super(); this.text = text; } },
+    speechSynthesis: { cancel() {}, speak: utterance => utterances.push(utterance) },
+  })) {
+    const original = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
+    t.after(() => original ? Object.defineProperty(globalThis, key, original) : delete globalThis[key]);
+  }
+  return utterances;
+}
+
+for (const calm of [false, true]) for (const large of [false, true]) {
+  test(`opening welcome closes after ${large ? 6 : 4}s on its last page and leaves Pip's name visible (calm=${calm})`, t => {
+    const clock = openingClock(t), f = villageFixture(t, { calm, large });
+    const box = f.root.querySelector('.village-dialogue');
+    if (large) {
+      assert.equal(f.root.querySelector('.dlg__text').textContent, 'Welcome to Willow Bay!');
+      clock.advance(60000);
+      assert.equal(box.hidden, false, 'page one never times out');
+      assert.equal(clock.callbacks.length, 0);
+      f.scene.handleIntent('a');
+      assert.equal(f.root.querySelector('.dlg__text').textContent, 'Tap a neighbor to help them make something.');
+    }
+    const delay = large ? 6000 : 4000;
+    clock.advance(delay - 1);
+    assert.equal(box.hidden, false);
+    clock.advance(1);
+    assert.equal(box.hidden, true);
+    f.tick();
+    const pip = f.root.querySelector('.village-actor[data-id="pip"]');
+    assert.equal(pip.classList.contains('village-actor--near'), false, 'the name is not swapped for Talk');
+    const name = pip.querySelector('.village-name');
+    assert.equal(name.hidden, false);
+    assert.equal(name.textContent, 'Pip');
+    assert.equal(f.doc.activeElement, f.root);
+  });
+}
+
+for (const via of ['more', 'text']) test(`turning the welcome via ${via} starts the last-page timeout and restores focus`, t => {
+  const clock = openingClock(t), f = villageFixture(t, { large: true });
+  f.root.querySelector('.dlg__more').focus();
+  f.root.querySelector(via === 'more' ? '.dlg__more' : '.dlg__text').click();
+  clock.advance(5999);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  clock.advance(1);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+  assert.equal(f.doc.activeElement, f.root, 'focus leaves the dismissed box');
+});
+
+for (const large of [false, true]) test(`a rebuilt village's creation celebration closes and leaves Kiko · Music visible (large=${large})`, t => {
+  const clock = openingClock(t);
+  const state = publishCreation(createState(), 'music', { kind: 'music' });
+  const f = villageFixture(t, { state, celebrate: 'music', large });
+  assert.equal(f.root.querySelector('.dlg__speaker').textContent, 'Kiko');
+  assert.equal(f.root.querySelector('.dlg__text').textContent, 'That’s going straight into the festival!');
+  clock.advance((large ? 6000 : 4000) - 1);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  clock.advance(1);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+  f.tick();
+  const kiko = f.root.querySelector('.village-actor[data-id="music"]');
+  assert.equal(kiko.classList.contains('village-actor--near'), false);
+  assert.equal(kiko.querySelector('.village-name').hidden, false);
+  assert.equal(kiko.querySelector('.village-name').textContent, 'Kiko · Music');
+});
+
+test('a child-started neighbor conversation cancels the opening timeout and stays open', t => {
+  const clock = openingClock(t), f = villageFixture(t, { calm: true });
+  clock.advance(1000);
+  f.root.querySelector('.village-actor[data-id="pip"]').click();
+  f.tick();
+  const line = f.root.querySelector('.dlg__text').textContent;
+  assert.match(line, /I delivered every invitation/);
+  clock.advance(60000);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  assert.equal(f.root.querySelector('.dlg__text').textContent, line);
+  assert.ok(clock.callbacks.every(callback => callback.mock.callCount() === 0));
+  assert.equal(f.root.querySelector('.village-talk').hidden, false, 'ordinary proximity still shows Talk');
+  assert.equal(f.root.querySelector('.village-actor[data-id="pip"]').classList.contains('village-actor--near'), true);
+});
+
+for (const input of ['Escape', 'step', 'last-page A', 'destroy', 'pause', 'guide', 'help', 'window']) {
+  test(`${input} cancels the opening timer before it can fire`, t => {
+    const clock = openingClock(t), f = villageFixture(t, { calm: true });
+    const box = f.root.querySelector('.village-dialogue');
+    clock.advance(1000);
+    if (input === 'Escape') f.scene.handleIntent('b'); // app maps Escape to B
+    if (input === 'step') f.scene.handleIntent('left');
+    if (input === 'last-page A') f.scene.handleIntent('a');
+    if (input === 'destroy') f.scene.destroy();
+    if (input === 'pause') f.scene.pause();
+    if (input === 'guide' || input === 'help') f.root.querySelector(`[data-act="${input}"]`).click();
+    if (input === 'window') {
+      const backdrop = f.doc.createElement('div');
+      backdrop.className = 'win-backdrop';
+      f.stage.append(backdrop); f.tick();
+    }
+    if (input === 'Escape' || input === 'step') assert.equal(box.hidden, true, 'closes immediately');
+    if (input === 'last-page A') assert.equal(f.root.querySelector('.dlg__text').textContent, WALK_HINT);
+    clock.advance(60000);
+    assert.ok(clock.callbacks.every(callback => callback.mock.callCount() === 0), 'cancelled callback never runs');
+  });
+}
+
+for (const large of [false, true]) test(`Read to me waits for the final page's speech end, then ${large ? 6 : 4}s`, t => {
+  const clock = openingClock(t), utterances = speechFixture(t);
+  const f = villageFixture(t, { large, state: readAloudState(), voice: speak });
+  if (large) {
+    utterances[0].fire(new Event('end'));
+    clock.advance(60000);
+    assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+    f.scene.handleIntent('a');
+  }
+  clock.advance(4000);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false, 'still being read');
+  utterances.at(-1).fire(new Event('end'));
+  clock.advance((large ? 6000 : 4000) - 1);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  clock.advance(1);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+});
+
+for (const voiceKind of ['no end event', 'boolean success', 'unavailable']) test(`Read to me timeout fallback: ${voiceKind}`, t => {
+  const clock = openingClock(t);
+  speechFixture(t);
+  const voice = voiceKind === 'no end event' ? speak : () => voiceKind === 'boolean success';
+  const f = villageFixture(t, { state: readAloudState(), voice });
+  const words = f.root.querySelector('.dlg__text').textContent.split(/\s+/).length;
+  const delay = 4000 + (voiceKind === 'unavailable' ? 0 : words * 500 + 500);
+  clock.advance(delay - 1);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  clock.advance(1);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+});
+
+test('Hear restarts the opening speech wait; Escape removes listeners so late speech cannot restart it', t => {
+  const clock = openingClock(t), utterances = speechFixture(t);
+  const f = villageFixture(t, { state: readAloudState(), voice: speak });
+  clock.advance(3000);
+  f.root.querySelector('[data-act="hear"]').click();
+  utterances[0].fire(new Event('end'));
+  clock.advance(4000);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  f.scene.handleIntent('b');
+  const scheduled = clock.callbacks.length;
+  utterances.at(-1).fire(new Event('end'));
+  assert.equal(clock.callbacks.length, scheduled);
+  clock.advance(60000);
+  assert.ok(clock.callbacks.every(callback => callback.mock.callCount() === 0));
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+});
 
 for (const calm of [false, true]) for (const focus of ['actor', 'root']) for (const [key, label] of A_KEY_CASES) {
   test(`${label} with ${focus} focus and nobody near gives one hint without clicking or walking (calm=${calm})`, t => {
