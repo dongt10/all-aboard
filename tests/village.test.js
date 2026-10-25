@@ -8,7 +8,7 @@ import { createEncounterScene } from '../src/ui/screens/encounter.js';
 import { createState, publishCreation, loadState, STORAGE_KEY } from '../src/progress.js';
 import { paradeStatus } from '../src/ui/parade-lineup.js';
 import { createDefaultBand } from '../src/audio.js';
-import { HUD_ZONES, WALK_SHAPE, setRoad, road, loadRoad, roadPath, talkGoal, VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, clampWalk, hotspotRect, roamRect, talkPoint, nearestNeighbor, stepPlayer, stallState, overlaps, wanderTarget, stepToward, guideArrow } from '../src/ui/village-map.js';
+import { HUD_ZONES, WALK_SHAPE, setRoad, road, loadRoad, roadPath, talkGoal, VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, clampWalk, hotspotRect, roamRect, wanderBounds, talkPoint, nearestNeighbor, stepPlayer, stallState, overlaps, wanderTarget, stepToward, guideArrow } from '../src/ui/village-map.js';
 import { creationMarkup, fitSignPreviews } from '../src/ui/creations.js';
 import { STAGE } from '../src/ui/stage.js';
 import { CHARACTERS } from '../src/data.js';
@@ -35,8 +35,24 @@ test('all neighbor, side character and player footprints stand on the real road'
   }
 });
 
+test('complete live roam rectangles fit below the HUD and never overlap', () => {
+  for (const [i, id] of CAST.entries()) {
+    const roam = roamRect(id), bounds = wanderBounds(id);
+    const low = hotspotRect(id, { x: bounds.minX, y: bounds.minY });
+    const high = hotspotRect(id, { x: bounds.maxX, y: bounds.maxY });
+    assert.deepEqual(roam, { x: low.x, y: low.y, w: high.x + high.w - low.x, h: high.y + high.h - low.y });
+    assert.ok(roam.x >= 0 && roam.y >= 72 && roam.x + roam.w <= STAGE.width && roam.y + roam.h <= STAGE.height, id);
+    for (const hud of HUD_ZONES) assert.equal(overlaps(roam, hud), false, `${id} HUD`);
+    for (const other of CAST.slice(i + 1)) assert.equal(overlaps(roam, roamRect(other)), false, `${id}/${other}`);
+    for (const random of [() => 0, () => 1, () => 0.5]) {
+      const p = wanderTarget(id, random);
+      assert.ok(p.x - 32 >= 0 && p.x + 60 <= STAGE.width && p.y - 57 >= 72 && p.y + 7 <= STAGE.height, id);
+    }
+  }
+});
+
 test('hotspots follow the feet they are given', () => {
-  assert.deepEqual(hotspotRect('math'), { x: 258, y: 270, w: 112, h: 112 });
+  assert.deepEqual(hotspotRect('math'), hotspotRect('math', VILLAGE_SPOTS.math));
   assert.deepEqual(hotspotRect('math', { x: 150, y: 302 }), { x: 94, y: 222, w: 112, h: 112 });
   assert.deepEqual(hotspotRect('pip', { x: 100, y: 200 }), { x: 64, y: 128, w: 72, h: 88 });
   assert.deepEqual(talkPoint('math', { x: 150, y: 302 }), { x: 150, y: 342 });
@@ -55,6 +71,7 @@ test('500 seeded wander targets per character stay on clear road segments inside
       const t = wanderTarget(id, random);
       assert.ok(Math.abs(t.x - home.x) <= WANDER.x && Math.abs(t.y - home.y) <= WANDER.y, `${id} target ${t.x},${t.y}`);
       assert.ok(realRoad.isWalkable(t), id);
+      assert.ok(t.x - 32 >= 0 && t.x + 60 <= STAGE.width && t.y - 57 >= 72 && t.y + 7 <= STAGE.height, `${id} visible actor`);
       assert.ok(realRoad.straightClear(home, t), id);
       const hot = hotspotRect(id, t), roam = roamRect(id);
       assert.ok(hot.x >= roam.x && hot.y >= roam.y && hot.x + hot.w <= roam.x + roam.w && hot.y + hot.h <= roam.y + roam.h, `${id} hotspot stays in its roam rect`);
@@ -89,7 +106,7 @@ test('the player can talk only when standing near a neighbor', () => {
 });
 
 test('walking moves 24px, respects HUD bounds and stops at the road edge', () => {
-  assert.deepEqual(stepPlayer(PLAYER_START, 'up'), { x: 490, y: 486 });
+  assert.deepEqual(stepPlayer(PLAYER_START, 'up'), { x: PLAYER_START.x, y: PLAYER_START.y - 24 });
   assert.deepEqual(stepPlayer(PLAYER_START, 'down'), PLAYER_START);
   assert.deepEqual(stepPlayer(PLAYER_START, 'a'), PLAYER_START);
   const from = { x: 420, y: 196 };
@@ -131,7 +148,8 @@ test('all nine talk goals are reachable, in range and joined by clear road segme
 test('road projections stay on the mask and all accepted paths preserve HUD clearance', () => {
   for (let x = 0; x <= 960; x += 40) for (let y = 80; y <= 540; y += 40) {
     const point = { x, y }, snapped = clampWalk(point);
-    if (realRoad.isWalkable(snapped)) { assertVisiblePlayer(snapped); assert.deepEqual(clampWalk(snapped), snapped); }
+    if (realRoad.nearest(point, 96)) assert.ok(snapped, `near-road projection ${x},${y}`);
+    if (snapped) { assert.ok(realRoad.isWalkable(snapped)); assertVisiblePlayer(snapped); assert.deepEqual(clampWalk(snapped), snapped); }
     const path = roadPath(PLAYER_START, point);
     if (!path) continue;
     for (let i = 1; i < path.length; i++) {
@@ -342,11 +360,11 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
     Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
     restore.push(() => original ? Object.defineProperty(globalThis, key, original) : delete globalThis[key]);
   }
-  const stage = doc.createElement('div'), gone = [], opened = [], spoken = [];
+  const stage = doc.createElement('div'), gone = [], opened = [], spoken = [], announced = [];
   stage.className = `stage${calm ? ' calm' : ''}${large ? ' large-text' : ''}`;
   doc.body.append(stage);
   const scene = createVillageScene({
-    stage, walkable, getState: () => state,
+    stage, walkable, getState: () => state, announce: text => announced.push(text),
     go: (...args) => { gone.push(args); return true; },
     speak: text => { spoken.push(text); return voice(text); },
     open: Object.fromEntries(['grade', 'guide', 'comfort', 'pause', 'help'].map(act => [act, () => opened.push(act)])),
@@ -365,7 +383,7 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
   };
   const tap = (x, y) => root.querySelector('.village-map').dispatchEvent(new Event('click', { clientX: x, clientY: y }));
   t.after(() => { scene.destroy(); restore.forEach(reset => reset()); });
-  return { doc, scene, root, stage, gone, opened, spoken, tick, pos, tap, mounted, frames };
+  return { doc, scene, root, stage, gone, opened, spoken, announced, tick, pos, tap, mounted, frames };
 }
 
 test('the scene uses the fixed-size background and the supplied furniture geometry', t => {
@@ -1185,4 +1203,94 @@ test('reward sign exposes its natural wrapping board before measured scaling', (
   for (const rule of [/max-width:\s*none/, /max-height:\s*none/, /height:\s*auto/, /overflow:\s*visible/, /overflow-wrap:\s*anywhere/, /zoom:\s*1/, /scale\(var\(--sign-scale/]) assert.match(block, rule);
   assert.equal(cssPx(block, 'width'), 240);
   assert.match(cssBlock(css, '.item-get__art'), /position:\s*relative/);
+});
+
+
+for (const failure of ['error', 'timeout', 'size', 'empty']) test(`map ${failure} shows a persistent explanation and Retry restores walking`, async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const images = pendingRoad(t), f = villageFixture(t, { walkable: null, calm: true });
+  const lateLoad = images[0].onload;
+  if (failure === 'error') images[0].onerror();
+  if (failure === 'timeout') { t.mock.timers.tick(2999); assert.equal(f.frames.size, 0); t.mock.timers.tick(1); }
+  if (failure === 'size') { images[0].naturalWidth = 1; images[0].onload(); }
+  if (failure === 'empty') {
+    const create = f.doc.createElement.bind(f.doc);
+    t.mock.method(f.doc, 'createElement', tag => tag === 'canvas' ? {
+      getContext: () => ({ drawImage() {}, getImageData: () => ({ width: STAGE.width, height: STAGE.height, data: new Uint8Array(STAGE.width * STAGE.height * 4) }) }),
+    } : create(tag));
+    images[0].onload();
+  }
+  await f.mounted;
+  const host = f.root.querySelector('.village-dialogue');
+  assert.equal(host.hidden, false);
+  assert.equal(host.querySelector('.dlg__text').textContent, 'The village map did not load.');
+  assert.match(host.textContent, /Check your connection/);
+  assert.match(f.announced.at(-1), /The village map did not load.*Retry/);
+  for (const key of ['up', 'a', 'b']) f.scene.handleIntent(key);
+  f.tap(500, 320); t.mock.timers.tick(10000); f.tick(100);
+  assert.equal(host.hidden, false, 'movement and old welcome timers cannot dismiss the error');
+  assert.deepEqual(f.pos(), PLAYER_START);
+  assert.equal(f.frames.size, 0);
+  const retry = host.querySelector('[data-act="retry-road"]');
+  retry.click();
+  assert.equal(images.length, 2);
+  assert.equal(retry.disabled, true);
+  supplyRoadPixels(t, f.doc);
+  lateLoad();
+  assert.equal(road(), null, 'a late response to the old attempt cannot unlock movement');
+  const loaded = loadRoad();
+  images[1].onload();
+  await loaded;
+  await Promise.resolve();
+  assert.ok(road().isWalkable(PLAYER_START));
+  assert.equal(f.frames.size, 1);
+  assert.equal(host.querySelector('[data-act="retry-road"]'), null);
+  f.scene.handleIntent('up');
+  assert.notDeepEqual(f.pos(), PLAYER_START);
+});
+
+test('every reserved empty easel is a visible wooden frame; creations retain their markup', t => {
+  const f = villageFixture(t);
+  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
+  const empty = cssBlock(css, '.village-easel--empty');
+  assert.doesNotMatch(empty, /display:\s*none|visibility:\s*hidden|opacity:\s*0/);
+  assert.match(empty, /var\(--wood\)/);
+  for (const id of Object.keys(EASELS)) {
+    assert.ok(f.root.querySelector(`.village-easel--empty[data-id="${id}"]`));
+  }
+});
+
+for (const calm of [false, true]) test(`review tap, Left, Down still allows every neighbor route (calm=${calm})`, t => {
+  const f = villageFixture(t, { calm, guide: 'science' });
+  f.tap(870, 388);
+  for (let i = 0; i < 100; i++) f.tick(50);
+  for (const key of ['left', 'down']) {
+    f.scene.handleIntent(key);
+    for (let i = 0; i < 10; i++) f.tick(50);
+  }
+  assertVisiblePlayer(f.pos());
+  for (const id of CAST) assert.ok(roadPath(f.pos(), talkGoal(id), 0), id);
+  const path = roadPath(f.pos(), PLAYER_START, 0);
+  assert.ok(path);
+  f.tap(PLAYER_START.x, PLAYER_START.y);
+  for (let i = 0; i < 100; i++) f.tick(50);
+  assert.deepEqual(f.pos(), PLAYER_START);
+});
+
+
+test('high neighbors lower their badges so the full status mark clears the HUD', t => {
+  const f = villageFixture(t), css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
+  assert.match(cssBlock(css, '.village-badge'), /top:\s*var\(--badge-drop/);
+  assert.match(cssBlock(css, '.village-badge__mark--visited'), /right:\s*-10px/);
+  for (let frame = 0; frame < 100; frame++) {
+    f.tick(100);
+    for (const id of Object.keys(VILLAGE_SPOTS)) {
+      const el = f.root.querySelector(`.village-actor[data-id="${id}"]`);
+      const feet = { x: parseFloat(el.style.left) + 56, y: parseFloat(el.style.top) + 80 };
+      const drop = parseFloat(el.style['--badge-drop']);
+      assert.ok(feet.y - 96 + drop >= 72, `${id} mark top`);
+      assert.ok(feet.x + 60 <= STAGE.width, `${id} mark right`);
+      assert.ok(feet.y - 80 + drop + 32 <= STAGE.height, `${id} badge bottom`);
+    }
+  }
 });

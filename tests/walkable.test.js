@@ -75,14 +75,14 @@ test('a shortened upward step drifts around the easel corner with the first clea
     const i = y * mask.width + x;
     mask.bits[i >> 3] &= ~(1 << (i & 7));
   }
-  const walk = createWalkable(mask), from = { x: 405, y: 433 }, to = { x: 405, y: 409 };
-  assert.ok(walk.isWalkable({ x: 405, y: 431 }));
+  const walk = createWalkable(mask), from = { x: 405, y: 437 }, to = { x: 405, y: 413 };
+  assert.equal(walk.isWalkable({ x: 405, y: 431 }), false);
   assert.equal(walk.isWalkable({ x: 405, y: 429 }), false);
   for (const nudge of [2, -2, 4, -4, 6, -6]) {
     assert.equal(walk.straightClear(from, { ...to, x: to.x + nudge }), false);
   }
   const end = walk.step(from, to);
-  assert.deepEqual(end, { x: 413, y: 409 });
+  assert.deepEqual(end, { x: 413, y: 413 });
   assert.ok(walk.isWalkable(end));
   assert.ok(walk.straightClear(from, end));
   assert.ok(Math.hypot(end.x - from.x, end.y - from.y) <= Math.hypot(24, 12));
@@ -105,7 +105,7 @@ test('immediately blocked steps try both perpendicular directions on either axis
     assert.equal(walk.isWalkable(transform({ x: from[horizontalMove ? 'y' : 'x'], y: 56 })), false);
     const end = walk.step(from, to);
     const expected = { ...to }, axis = horizontalMove ? 'y' : 'x';
-    expected[axis] += sign * 4;
+    expected[axis] += sign * 8;
     assert.deepEqual(end, expected);
     assert.ok(walk.straightClear(from, end));
   }
@@ -125,11 +125,11 @@ test('corner nudges cannot teleport out of a dead end to clear destinations', ()
 
 test('corner nudges include 12px but stop before a corner that needs 14px', () => {
   const from = { x: 50, y: 60 }, to = { x: 50, y: 36 };
-  for (const left of [55, 57]) {
+  for (const left of [53, 54]) {
     const walk = createWalkable(roads(120, 100, [[0, 38, 120, 62], [left, 0, 120 - left, 38]]));
     assert.ok(walk.straightClear(from, { ...to, x: 64 }));
     const end = walk.step(from, to);
-    assert.deepEqual(end, left === 55 ? { x: 62, y: 36 } : { x: 50, y: 42 });
+    assert.deepEqual(end, left === 53 ? { x: 62, y: 36 } : { x: 50, y: 42 });
     assert.ok(walk.isWalkable(end));
     assert.ok(walk.straightClear(from, end));
   }
@@ -282,4 +282,34 @@ test('a 900px trip across a 960×540 maze computes in under 30ms', t => {
   assert.ok(path.length >= 16, 'The route must traverse the alternating corridors.');
   t.diagnostic(`Maze: ${elapsed.toFixed(3)}ms; ${path.length} waypoints; 900px endpoint separation.`);
   assert.ok(elapsed < 30, `Maze took ${elapsed.toFixed(3)}ms (budget: 30ms)`);
+});
+
+
+test('every interior footprint pixel participates in precomputed clearance', () => {
+  for (let dy = -3; dy <= 0; dy++) for (let dx = -6; dx <= 6; dx++) {
+    const mask = roads(40, 30, [[0, 0, 40, 30]]), i = (15 + dy) * 40 + 20 + dx;
+    mask.bits[i >> 3] &= ~(1 << (i & 7));
+    const walk = createWalkable(mask);
+    assert.equal(walk.isWalkable({ x: 20, y: 15 }), false, `${dx},${dy}`);
+    assert.equal(walk.isWalkable({ x: 20.99, y: 15.99 }), false);
+    assert.ok(walk.isWalkable({ x: 10, y: 7 }));
+  }
+});
+
+test('a one-pixel obstacle between 2px samples blocks straight movement', () => {
+  const mask = roads(20, 20, [[0, 0, 20, 20]]), i = 10 * 20 + 11;
+  mask.bits[i >> 3] &= ~(1 << (i & 7));
+  const walk = createWalkable(mask, { footprint: [[0, 0]] });
+  const from = { x: 10.1, y: 10.1 }, to = { x: 12.1, y: 10.1 };
+  assert.equal(walk.straightClear(from, to), false);
+  assert.equal(walk.straightClear(to, from), false);
+});
+
+test('start reconnection searches outward to 24px without crossing an obstacle', () => {
+  // Thin spur contains no 4px center until it joins the room 20px away.
+  const walk = createWalkable(roads(80, 80, [[9, 9, 24, 1], [29, 4, 40, 60]]), { footprint: [[0, 0]] });
+  const from = { x: 10, y: 9.5 }, to = { x: 60, y: 50 };
+  const snap = walk.snapStart(from);
+  assert.ok(snap && Math.hypot(snap.x - from.x, snap.y - from.y) > 2);
+  clearPath(walk, walk.findPath(from, to, { maxRadius: 0 }), from, to);
 });

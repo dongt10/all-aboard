@@ -108,7 +108,7 @@ export function neighborMarkup(c, made = {}) {
 
 export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   let root = null, dialogue = null, previews = null, frame = 0, last = 0, paused = false, alive = false, leaving = false;
-  let ready = false;
+  let ready = false, mapFailed = false, mapLoading = false;
   let findTarget = homeSpot(guide) ? guide : null;
   const actors = new Map();          // id → { id, el, fig, pos, target, facing, step, clock, waitUntil, render }
   const player = { pos: { ...PLAYER_START }, target: null, path: [], tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
@@ -169,7 +169,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   // Both hints and neighbor lines keep the player's sprite clear.
   function say(id, words, { opening = false, closeAfter = null } = {}) {
     cancelOpening();
-    if (!dialogue) return;
+    if (!dialogue || mapFailed) return;
     if (opening || closeAfter !== null) timing = { closeAfter };
     const host = root.querySelector('.village-dialogue');
     const box = dialogueBox(player.pos, words);
@@ -180,7 +180,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   function hush() {
     cancelOpening();
     const host = root?.querySelector('.village-dialogue');
-    if (!host || host.hidden) return;
+    if (!host || host.hidden || mapFailed) return;
     const held = host.contains(document.activeElement);
     host.hidden = true;
     if (held) root.focus({ preventScroll: true });   // focus never falls back to <body>
@@ -264,6 +264,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     a.el.style.left = px(rect.x);
     a.el.style.top = px(rect.y);
     a.el.style.zIndex = String(Math.round(a.pos.y));
+    a.el.style.setProperty('--badge-drop', px(Math.max(0, 72 + 96 - a.pos.y)));
     const key = `${a.facing}:${a.step}`;
     if (a.drawn !== key) { a.fig.innerHTML = figureMarkup(a.id, { facing: a.facing, step: a.step }); a.drawn = key; }
   }
@@ -428,6 +429,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   }
   // The A button: finish unread pages, then follow the Talk chip without starting a walk.
   function pressA() {
+    if (mapFailed) return;
     const box = root.querySelector('.village-dialogue');
     const next = aAction({ near, dialogueOpen: !box.hidden, hasMore: dialogue.hasMore() });
     if (next.act === 'next') dialogue.next();
@@ -455,6 +457,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
 
   function onClick(event) {
     const act = event.target.closest('[data-act]')?.dataset.act;
+    if (act === 'retry-road') { startRoad(); return; }
     if (act && ['grade', 'guide', 'comfort', 'pause'].includes(act)) { cancelOpening(); paused = true; ctx.open?.[act]?.(); return; }
     if (event.target.closest('.village-parade')) { if (canStartParade(state())) ctx.go('parade'); return; }
     if (event.target.closest('.village-talk')) { if (near) { player.facing = 'back'; visit(near); } return; }
@@ -484,6 +487,41 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (!calm()) stall.addEventListener('animationend', () => stall.classList.remove('village-stall--sparkle'), { once: true });
   }
 
+  async function startRoad() {
+    if (mapLoading || !alive) return;
+    mapLoading = true;
+    const retry = root.querySelector('[data-act="retry-road"]');
+    if (retry) { retry.disabled = true; retry.textContent = 'Loading…'; }
+    try {
+      if (ctx.walkable) setRoad(ctx.walkable);
+      else await loadRoad();
+      if (!alive) return;
+      mapFailed = false;
+      if (retry) { root.querySelector('.village-map-error')?.remove(); hush(); }
+      ready = true;
+      frame = nextFrame(tick);
+    } catch {
+      if (!alive) return;
+      cancelOpening();
+      const words = 'The village map did not load.';
+      mapFailed = false;
+      say(null, words);
+      mapFailed = true;
+      const host = root.querySelector('.village-dialogue');
+      let help = host.querySelector('.village-map-error');
+      if (!help) {
+        help = document.createElement('div');
+        help.className = 'px-frame village-map-error';
+        help.innerHTML = '<p>We need the map to walk safely. Check your connection, then try again.</p><button type="button" class="px-chip" data-act="retry-road">Retry</button>';
+        host.append(help);
+      }
+      const button = help.querySelector('button');
+      button.disabled = false;
+      button.textContent = 'Retry';
+      ctx.announce?.(`${words} We need the map to walk safely. Check your connection, then choose Retry.`);
+    } finally { mapLoading = false; }
+  }
+
   return {
     async mount() {
       build();
@@ -502,15 +540,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       if (findTarget) ctx.announce?.(`Find ${nameOf(findTarget)}. Follow the arrow.`);
       const button = focus && root.querySelector(`.village-actor[data-id="${focus}"]`);
       (button || root).focus({ preventScroll: true });   // the welcome never takes focus from the player controls
-      try {
-        if (ctx.walkable) setRoad(ctx.walkable);
-        else await loadRoad();
-        if (!alive) return;
-        ready = true;
-        frame = nextFrame(tick);
-      } catch {
-        if (alive) ctx.announce?.('The village road could not load. Please reopen the village.');
-      }
+      await startRoad();
     },
     handleIntent(intent) {
       if (!root) return false;

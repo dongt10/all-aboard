@@ -14,7 +14,7 @@ export function maskFromRGBA({ width, height, rgba }) {
   return { width, height, bits };
 }
 
-const FOOTPRINT = [{ x: 0, y: 0 }, { x: -6, y: 0 }, { x: 6, y: 0 }, { x: 0, y: -3 }];
+const FOOTPRINT = Array.from({ length: 52 }, (_, i) => ({ x: i % 13 - 6, y: Math.floor(i / 13) - 3 }));
 const validPoint = p => Number.isFinite(p?.x) && Number.isFinite(p?.y);
 const same = (a, b) => a.x === b.x && a.y === b.y;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -22,13 +22,41 @@ const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 export function createWalkable(mask, options = {}) {
   const { width, height, bits } = mask;
   const footprint = (options.footprint ?? FOOTPRINT).map(p => Array.isArray(p) ? { x: p[0], y: p[1] } : p);
-  function isWalkable(point) {
-    if (!validPoint(point) || point.x < 0 || point.y < 0 || point.x >= width || point.y >= height) return false;
-    for (const offset of footprint) {
-      const x = Math.floor(point.x + offset.x), y = Math.floor(point.y + offset.y);
-      if (x < 0 || y < 0 || x >= width || y >= height) return false;
+  // Erode once by every footprint pixel. All movement queries share this bitset.
+  const clearance = new Uint8Array(Math.ceil(width * height / 8));
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    if (footprint.every(offset => {
+      const px = x + offset.x, py = y + offset.y, i = py * width + px;
+      return px >= 0 && py >= 0 && px < width && py < height && (bits[i >> 3] & (1 << (i & 7)));
+    })) {
       const i = y * width + x;
-      if (!(bits[i >> 3] & (1 << (i & 7)))) return false;
+      clearance[i >> 3] |= 1 << (i & 7);
+    }
+  }
+  const clearPixel = (x, y) => {
+    const i = y * width + x;
+    return x >= 0 && y >= 0 && x < width && y < height && Boolean(clearance[i >> 3] & (1 << (i & 7)));
+  };
+  function isWalkable(point) {
+    return validPoint(point) && (!options.bounds || options.bounds(point)) && clearPixel(Math.floor(point.x), Math.floor(point.y));
+  }
+
+  // Visit every pixel crossed by the feet, including thin obstacles between samples.
+  function straightClear(a, b) {
+    if (!isWalkable(a) || !isWalkable(b)) return false;
+    let x = Math.floor(a.x), y = Math.floor(a.y);
+    const endX = Math.floor(b.x), endY = Math.floor(b.y);
+    const dx = b.x - a.x, dy = b.y - a.y, sx = Math.sign(dx), sy = Math.sign(dy);
+    const stepX = dx ? 1 / Math.abs(dx) : Infinity, stepY = dy ? 1 / Math.abs(dy) : Infinity;
+    let tx = dx ? (sx > 0 ? x + 1 - a.x : a.x - x) * stepX : Infinity;
+    let ty = dy ? (sy > 0 ? y + 1 - a.y : a.y - y) * stepY : Infinity;
+    while (x !== endX || y !== endY) {
+      const crossX = x !== endX && (y === endY || tx <= ty + 1e-12);
+      const crossY = y !== endY && (x === endX || ty <= tx + 1e-12);
+      if (crossX && crossY && (!clearPixel(x + sx, y) || !clearPixel(x, y + sy))) return false;
+      if (crossX) { x += sx; tx += stepX; }
+      if (crossY) { y += sy; ty += stepY; }
+      if (!clearPixel(x, y)) return false;
     }
     return true;
   }
@@ -60,13 +88,12 @@ export function createWalkable(mask, options = {}) {
     let last = from;
     for (let d = 2; d < length + 2; d += 2) {
       const p = d >= length ? to : { x: from.x + (to.x - from.x) * d / length, y: from.y + (to.y - from.y) * d / length };
-      if (!isWalkable(p)) break;
+      if (!straightClear(last, p)) break;
       last = p;
       if (d >= length) break;
     }
     return last;
   }
-  const straightClear = (a, b) => isWalkable(a) && validPoint(b) && same(trace(a, b), b);
   function step(from, to) {
     const end = trace(from, to);
     if (!isWalkable(from) || !validPoint(to) || same(end, to)) return { ...end };
@@ -88,10 +115,22 @@ export function createWalkable(mask, options = {}) {
     return { ...slides[0] };
   }
 
+  function snapStart(from, cell = 4, radius = 24) {
+    if (!validPoint(from)) return null;
+    let best = null, bestD = Infinity;
+    for (let y = Math.max(0, Math.ceil((from.y - radius) / cell - 0.5)); y < height / cell && (y + 0.5) * cell <= from.y + radius; y++) {
+      for (let x = Math.max(0, Math.ceil((from.x - radius) / cell - 0.5)); x < width / cell && (x + 0.5) * cell <= from.x + radius; x++) {
+        const p = { x: (x + 0.5) * cell, y: (y + 0.5) * cell }, d = distance(from, p);
+        if (d <= radius && d < bestD && straightClear(from, p)) { best = p; bestD = d; }
+      }
+    }
+    return best;
+  }
+
   function findPath(from, to, options = {}) {
     const cell = options.cell ?? 4;
     if (!Number.isFinite(cell) || cell < 1) throw new RangeError('Grid cells must be at least 1px.');
-    const start = nearest(from, options.maxRadius), end = nearest(to, options.maxRadius);
+    const start = nearest(from, options.maxRadius ?? 48), end = nearest(to, options.maxRadius);
     if (!start || !end) return null;
     if (same(start, end)) return [start];
     if (straightClear(start, end)) return [start, end];
@@ -111,7 +150,9 @@ export function createWalkable(mask, options = {}) {
       }
       return out;
     }
-    const starts = links(start), goals = links(end, true), goalCost = new Map(goals.map(g => [g.id, g.cost]));
+    const snapped = snapStart(start, cell) ?? snapStart(nearest(start, 48), cell, 48);
+    const starts = snapped ? [{ id: Math.floor(snapped.y / cell) * cols + Math.floor(snapped.x / cell), cost: distance(start, snapped) }] : [];
+    const goals = links(end, true), goalCost = new Map(goals.map(g => [g.id, g.cost]));
     if (!starts.length || !goals.length) return null;
     const heuristic = id => {
       if (id === count) return 0;
@@ -183,12 +224,12 @@ export function createWalkable(mask, options = {}) {
     return null;
   }
 
-  function randomWalkableNear(home, range, random = Math.random, tries = 12) {
+  function randomWalkableNear(home, range, random = Math.random, tries = 12, options = {}) {
     for (let i = 0; i < tries; i++) {
       const p = { x: home.x + (random() * 2 - 1) * range.x, y: home.y + (random() * 2 - 1) * range.y };
-      if (straightClear(home, p)) return p;
+      if ((!options.bounds || options.bounds(p)) && straightClear(home, p)) return p;
     }
     return { ...home };
   }
-  return { isWalkable, nearest, step, findPath, randomWalkableNear, straightClear };
+  return { isWalkable, nearest, step, findPath, snapStart, randomWalkableNear, straightClear };
 }

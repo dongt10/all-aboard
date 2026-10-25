@@ -16,19 +16,34 @@ export async function loadRoad(src = ROAD_MASK) {
   if (current) return current;
   if (!loading) loading = new Promise((resolve, reject) => {
     const img = new Image();
+    let settled = false;
+    const finish = (error, walkable) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      img.onload = img.onerror = null;
+      if (error) reject(error);
+      else { setRoad(walkable); resolve(walkable); }
+    };
+    const timer = setTimeout(() => finish(new Error('The village map took too long to load.')), 3000);
     img.onload = () => {
+      if (settled) return;
       try {
+        if (img.naturalWidth !== STAGE.width || img.naturalHeight !== STAGE.height) throw new Error('The village map has the wrong size.');
         const canvas = document.createElement('canvas');
         canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
         const context = canvas.getContext('2d', { willReadFrequently: true });
         context.drawImage(img, 0, 0);
         const { width, height, data } = context.getImageData(0, 0, canvas.width, canvas.height);
+        if (width !== STAGE.width || height !== STAGE.height) throw new Error('The village map has the wrong size.');
         const walkable = createWalkable(maskFromRGBA({ width, height, rgba: data }));
-        setRoad(walkable);
-        resolve(walkable);
-      } catch (error) { reject(error); }
+        if (![PLAYER_START, ...Object.values(VILLAGE_SPOTS), ...Object.values(SIDE_SPOTS)].every(walkable.isWalkable)) {
+          throw new Error('The village map has no safe starting places.');
+        }
+        finish(null, walkable);
+      } catch (error) { finish(error); }
     };
-    img.onerror = () => reject(new Error('The village road could not be loaded.'));
+    img.onerror = () => finish(new Error('The village road could not be loaded.'));
     img.src = src;
   }).finally(() => { loading = null; });
   return loading;
@@ -50,11 +65,40 @@ export function hotspotRect(id, feet = homeSpot(id)) {
   return VILLAGE_SPOTS[id] ? { x: x - 56, y: y - 80, w: 112, h: 112 } : { x: x - 36, y: y - 72, w: 72, h: 88 };
 }
 
-// The union of the hotspot over every place the character may wander.
+// Keep the entire moving hotspot and actor inside the stage. Very high neighbors'
+// badges are lowered in drawActor so their status marks stay below the HUD too.
+export function wanderBounds(id) {
+  const home = homeSpot(id), hot = hotspotRect(id, home);
+  const bounds = {
+    minX: Math.max(home.x - WANDER.x, home.x - hot.x),
+    maxX: Math.min(home.x + WANDER.x, STAGE.width - Math.max(60, hot.x + hot.w - home.x)),
+    minY: Math.max(home.y - WANDER.y, HUD_ZONES[0].h + home.y - hot.y),
+    maxY: Math.min(home.y + WANDER.y, STAGE.height - (hot.y + hot.h - home.y)),
+  };
+  // Split each gap between home hotspots at its midpoint. Prefer the axis with
+  // the most spare wander room, so separated rows can still roam sideways.
+  for (const other of Object.keys({ ...VILLAGE_SPOTS, ...SIDE_SPOTS })) {
+    if (other === id) continue;
+    const box = hotspotRect(other), gaps = [];
+    if (hot.x + hot.w <= box.x) gaps.push({ axis: 'X', high: true, gap: box.x - hot.x - hot.w, range: WANDER.x });
+    if (box.x + box.w <= hot.x) gaps.push({ axis: 'X', high: false, gap: hot.x - box.x - box.w, range: WANDER.x });
+    if (hot.y + hot.h <= box.y) gaps.push({ axis: 'Y', high: true, gap: box.y - hot.y - hot.h, range: WANDER.y });
+    if (box.y + box.h <= hot.y) gaps.push({ axis: 'Y', high: false, gap: hot.y - box.y - box.h, range: WANDER.y });
+    gaps.sort((a, b) => b.gap / b.range - a.gap / a.range);
+    const gap = gaps[0];
+    if (!gap) continue;
+    const coordinate = home[gap.axis.toLowerCase()];
+    if (gap.high) bounds[`max${gap.axis}`] = Math.min(bounds[`max${gap.axis}`], coordinate + gap.gap / 2);
+    else bounds[`min${gap.axis}`] = Math.max(bounds[`min${gap.axis}`], coordinate - gap.gap / 2);
+  }
+  return bounds;
+}
+
+// The union of the hotspot over the complete allowed wander range.
 export function roamRect(id) {
-  const home = homeSpot(id);
-  const low = hotspotRect(id, { x: home.x - WANDER.x, y: home.y - WANDER.y });
-  return { x: low.x, y: low.y, w: low.w + 2 * WANDER.x, h: low.h + 2 * WANDER.y };
+  const bounds = wanderBounds(id);
+  const low = hotspotRect(id, { x: bounds.minX, y: bounds.minY });
+  return { x: low.x, y: low.y, w: low.w + bounds.maxX - bounds.minX, h: low.h + bounds.maxY - bounds.minY };
 }
 
 export const talkPoint = (id, feet = homeSpot(id)) => ({ x: feet.x, y: feet.y + TALK_OFFSET });
@@ -84,9 +128,7 @@ function clampHUD(point, fixedAxis = null) {
     .sort((a, b) => Math.hypot(a.x - pos.x, a.y - pos.y) - Math.hypot(b.x - pos.x, b.y - pos.y))[0];
 }
 
-// The engine also plans around the HUD, reserving the full figure and Find chip.
-// Each bit includes the feet footprint plus a 1px road margin: the engine samples
-// paths every 2px, so the margin keeps unsampled corners off obstacles too.
+// Keyboard steps and paths use identical footprint and HUD clearance.
 function playerWalkable() {
   if (!current) return null;
   if (!playerRoad) {
@@ -94,38 +136,28 @@ function playerWalkable() {
     for (let y = WALK_BOUNDS.minY; y <= WALK_BOUNDS.maxY; y++) for (let x = WALK_BOUNDS.minX; x <= WALK_BOUNDS.maxX; x++) {
       const p = { x, y }, i = y * width + x;
       if (!hudClear(p) || HUD_ZONES.some(zone => overlaps(walkRect({ x: x + 0.999, y: y + 0.999 }), zone))) continue;
-      let clear = true;
-      for (let dy = -1; dy <= 1 && clear; dy++) for (let dx = -1; dx <= 1; dx++) {
-        if (!current.isWalkable({ x: x + dx, y: y + dy })) { clear = false; break; }
-      }
-      if (clear) bits[i >> 3] |= 1 << (i & 7);
+      if (current.isWalkable(p)) bits[i >> 3] |= 1 << (i & 7);
     }
-    playerRoad = createWalkable({ width, height, bits }, { footprint: [[0, 0]] });
+    playerRoad = createWalkable({ width, height, bits }, { footprint: [[0, 0]], bounds: hudClear });
   }
   return playerRoad;
 }
 
-// An unsnappable result remains a destination only: movement must reject it.
+// Never present an off-road point as a usable projection.
 export function clampWalk(point, fixedAxis = null) {
   const clamped = clampHUD(point, fixedAxis);
-  if (!current) return clamped;
-  const nearest = current.nearest(clamped, 96);
-  return nearest && hudClear(nearest) ? nearest : playerWalkable().nearest(clamped, 96) ?? clamped;
+  const walkable = playerWalkable();
+  if (!walkable) return null;
+  return walkable.nearest(clamped, 96) ?? (current.nearest(point, 96)
+    ? walkable.nearest(clamped, Math.hypot(STAGE.width, STAGE.height)) : null);
 }
 
 export function roadPath(from, point, maxRadius = 96) {
   const walkable = playerWalkable();
   if (!walkable) return null;
   const goal = walkable.nearest(clampHUD(point), maxRadius);
-  const start = walkable.nearest(from, 2);
-  if (!goal || !start || !current.straightClear(from, start)) return null;
-  // A keyboard step may finish on the road edge, just outside the planning margin.
-  for (const t of [0.25, 0.5, 0.75]) {
-    if (!hudClear({ x: from.x + (start.x - from.x) * t, y: from.y + (start.y - from.y) * t })) return null;
-  }
-  const path = walkable.findPath(start, goal, { maxRadius: 0 });
-  if (path && (from.x !== start.x || from.y !== start.y)) path.unshift({ ...from });
-  return path;
+  if (!goal || !walkable.isWalkable(from)) return null;
+  return walkable.findPath(from, goal, { maxRadius: 0 });
 }
 
 export function talkGoal(id, feet = homeSpot(id)) {
@@ -138,7 +170,7 @@ export function stepPlayer(player, intent) {
   const move = MOVES[intent];
   if (!move || !current) return { x: player.x, y: player.y };
   const to = clampHUD({ x: player.x + move[0] * STEP, y: player.y + move[1] * STEP }, move[0] ? 'y' : 'x');
-  return current.step(player, to);
+  return playerWalkable().step(player, to);
 }
 
 // 'made': a creation stands at the stall. 'visited': an older save finished it without a creation.
@@ -169,7 +201,9 @@ export const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.
 
 export function wanderTarget(id, random = Math.random) {
   const home = homeSpot(id);
-  return current ? current.randomWalkableNear(home, WANDER, random) : { ...home };
+  const bounds = wanderBounds(id);
+  const contains = p => p.x >= bounds.minX && p.x <= bounds.maxX && p.y >= bounds.minY && p.y <= bounds.maxY;
+  return current ? current.randomWalkableNear(home, WANDER, random, 12, { bounds: contains }) : { ...home };
 }
 
 export function stepToward(pos, target, maxStep) {

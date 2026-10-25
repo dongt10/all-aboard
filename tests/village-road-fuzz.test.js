@@ -6,7 +6,7 @@ import { ROAD_MASK, STAGE } from '../src/ui/village-layout.js';
 import {
   setRoad, road, clampWalk, stepPlayer, wanderTarget, roadPath, talkGoal,
   nearestNeighbor, stepToward, PLAYER_START, VILLAGE_SPOTS, SIDE_SPOTS,
-  WANDER, WALK_SHAPE, HUD_ZONES,
+  WANDER, WALK_SHAPE, WALK_BOUNDS, HUD_ZONES,
 } from '../src/ui/village-map.js';
 
 // Fixed unsigned 32-bit arithmetic makes failures replayable on every platform.
@@ -14,16 +14,50 @@ const SEED = 0x7a11ab1e;
 function seeded(seed) {
   return () => ((seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0) / 0x100000000);
 }
-setRoad(createWalkable(maskFromRGBA(readPNG(new URL(`../${ROAD_MASK}`, import.meta.url)))));
+const png = readPNG(new URL(`../${ROAD_MASK}`, import.meta.url));
+setRoad(createWalkable(maskFromRGBA(png)));
 const cast = { ...VILLAGE_SPOTS, ...SIDE_SPOTS };
 const pointText = p => JSON.stringify(p);
 function fail(reason, context, position, extra = {}) {
   assert.fail(`${reason}; seed=0x${SEED.toString(16)}; ${context}; position=${pointText(position)}; ${JSON.stringify(extra)}`);
 }
 
+// Independent oracle: inspect the original PNG, never the runtime mask or clearance bits.
+function footprintOracle(p) {
+  if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) return false;
+  const x = Math.floor(p.x), y = Math.floor(p.y);
+  for (let py = y - 3; py <= y; py++) for (let px = x - 6; px <= x + 6; px++) {
+    if (px < 0 || py < 0 || px >= png.width || py >= png.height) return false;
+    const i = (py * png.width + px) * 4;
+    if (png.rgba[i] !== 255 || png.rgba[i + 1] !== 255 || png.rgba[i + 2] !== 255 || png.rgba[i + 3] !== 255) return false;
+  }
+  return true;
+}
+
+// Partition a segment at every pixel boundary and check both boundaries and open intervals.
+// This differs from the engine's grid traversal and catches fractional corner intrusions.
+function sweptOracle(a, b) {
+  const times = [0, 1];
+  for (const axis of ['x', 'y']) {
+    const delta = b[axis] - a[axis];
+    if (!delta) continue;
+    for (let line = Math.floor(Math.min(a[axis], b[axis])) + 1; line <= Math.ceil(Math.max(a[axis], b[axis])) - 1; line++) {
+      times.push((line - a[axis]) / delta);
+    }
+  }
+  times.sort((a, b) => a - b);
+  const at = t => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  for (let i = 0; i < times.length; i++) {
+    if (!footprintOracle(at(times[i]))) return false;
+    if (i && !footprintOracle(at((times[i - 1] + times[i]) / 2))) return false;
+  }
+  return true;
+}
+
 // Only construct diagnostics on failure: hundreds of thousands of samples stay cheap.
 function checkRoad(p, context, extra) {
   if (!road().isWalkable(p)) fail('Footprint left the road', context, p, extra);
+  if (!footprintOracle(p)) fail('PNG footprint contains a blocked pixel', context, p, extra);
 }
 function checkPlayer(p, context, extra) {
   checkRoad(p, context, extra);
@@ -52,6 +86,7 @@ function walkPath(path, from, goal, context, playerClearance = false) {
     const a = path[waypoint - 1], b = path[waypoint];
     const segment = `${context}, waypoint=${waypoint}`;
     if (!road().straightClear(a, b)) fail('Waypoint pair crosses an obstacle', segment, b, { from: a });
+    if (!sweptOracle(a, b)) fail('Swept PNG footprint crosses an obstacle', segment, b, { from: a });
     const length = Math.hypot(b.x - a.x, b.y - a.y);
     // Include every 2px sample and the exact final endpoint, even for short segments.
     for (let distance = 2; distance < length + 2; distance += 2) {
@@ -87,6 +122,7 @@ test('road fuzz: 60,000 keyboard steps with long repeated-key runs', t => {
     checkPlayer(player, `keyboard step=${step}`, { intent, from: before });
     const distance = Math.hypot(player.x - before.x, player.y - before.y);
     if (distance > Math.hypot(24, 12) + 0.01) fail('Keyboard step exceeds 24px plus a 12px corner nudge', `keyboard step=${step}`, player, { from: before, intent, distance });
+    if (!sweptOracle(before, player)) fail('Keyboard sweep crosses a blocked PNG pixel', `keyboard step=${step}`, player, { from: before, intent });
     if (!road().straightClear(before, player)) fail('Keyboard step crosses an obstacle', `keyboard step=${step}`, player, { from: before, intent });
     if (!distance) blocked++;
   }
@@ -153,4 +189,108 @@ test('road fuzz: every scene talk goal is reachable from PLAYER_START and in tal
     if (nearest !== id) fail('Reached goal is outside this neighbor\'s talk range', context, goal, { nearest, expected: id, home });
   }
   t.diagnostic(`${Object.keys(cast).length} talk goals; ${samples} path samples`);
+});
+
+
+test('road fuzz: every accepted integer position satisfies the full PNG footprint oracle', t => {
+  let accepted = 0;
+  for (let y = 0; y < png.height; y++) for (let x = 0; x < png.width; x++) {
+    const p = { x, y };
+    if (!road().isWalkable(p)) continue;
+    checkRoad(p, 'all accepted integer centers');
+    checkRoad({ x: x + 0.999, y: y + 0.999 }, 'fractional accepted centers');
+    accepted++;
+  }
+  t.diagnostic(`${accepted} accepted centers and their fractional interiors checked directly against PNG pixels`);
+});
+
+test('road fuzz: review tap (870,388), Left, Down reconnects to every talk goal', () => {
+  const path = roadPath(PLAYER_START, { x: 870, y: 388 });
+  assert.ok(path);
+  walkPath(path, PLAYER_START, path.at(-1), 'review initial tap', true);
+  let p = path.at(-1);
+  for (const key of ['left', 'down']) {
+    const next = stepPlayer(p, key);
+    assert.ok(sweptOracle(p, next));
+    checkPlayer(next, `review ${key}`);
+    p = next;
+  }
+  for (const id of Object.keys(cast)) {
+    const goal = talkGoal(id);
+    walkPath(roadPath(p, goal, 0), p, goal, `review return to ${id}`, true);
+  }
+});
+
+test('road fuzz: exhaustive keyboard flood has a graph route to every talk goal', t => {
+  const safe = p => footprintOracle(p)
+    && p.x >= WALK_BOUNDS.minX && p.x <= WALK_BOUNDS.maxX && p.y >= WALK_BOUNDS.minY && p.y <= WALK_BOUNDS.maxY
+    && HUD_ZONES.every(h => p.x - WALK_SHAPE.left >= h.x + h.w || p.x + WALK_SHAPE.right <= h.x
+      || p.y - WALK_SHAPE.top >= h.y + h.h || p.y + WALK_SHAPE.bottom <= h.y);
+  // Prove all pairs by connected components, instead of repeating the same A* search
+  // for each goal at each feet position. Every graph edge and connector is traversable.
+  const cols = Math.ceil(png.width / 4), rows = Math.ceil(png.height / 4);
+  const nodes = new Uint8Array(cols * rows), components = new Int32Array(nodes.length);
+  const center = id => ({ x: (id % cols) * 4 + 2, y: Math.floor(id / cols) * 4 + 2 });
+  for (let id = 0; id < nodes.length; id++) nodes[id] = Number(safe(center(id)));
+  let component = 0;
+  for (let seed = 0; seed < nodes.length; seed++) {
+    if (!nodes[seed] || components[seed]) continue;
+    const queue = [seed]; components[seed] = ++component;
+    for (let i = 0; i < queue.length; i++) {
+      const id = queue[i], x = id % cols, y = Math.floor(id / cols), a = center(id);
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if ((!dx && !dy) || x + dx < 0 || x + dx >= cols || y + dy < 0 || y + dy >= rows) continue;
+        const next = id + dx + dy * cols;
+        if (!nodes[next] || components[next]) continue;
+        if (dx && dy && (!nodes[id + dx] || !nodes[id + dy * cols])) continue;
+        const b = center(next);
+        if (!sweptOracle(a, b) || !road().straightClear(a, b)) continue;
+        components[next] = component; queue.push(next);
+      }
+    }
+  }
+  function connector(p) {
+    let best = null, distance = Infinity;
+    for (let y = Math.max(0, Math.ceil((p.y - 24) / 4 - 0.5)); y < rows && y * 4 + 2 <= p.y + 24; y++) {
+      for (let x = Math.max(0, Math.ceil((p.x - 24) / 4 - 0.5)); x < cols && x * 4 + 2 <= p.x + 24; x++) {
+        const id = y * cols + x;
+        if (!nodes[id]) continue;
+        const q = center(id), d = Math.hypot(q.x - p.x, q.y - p.y);
+        if (d > 24 || d >= distance || !road().straightClear(p, q) || !sweptOracle(p, q)) continue;
+        best = id; distance = d;
+      }
+    }
+    return best;
+  }
+  const startNode = connector(PLAYER_START);
+  assert.notEqual(startNode, null);
+  const connected = components[startNode];
+  for (const id of Object.keys(cast)) {
+    const goal = talkGoal(id), link = connector(goal);
+    assert.notEqual(link, null, `${id} goal connects to grid`);
+    assert.equal(components[link], connected, `${id} shares the spawn component`);
+    walkPath(roadPath(PLAYER_START, goal, 0), PLAYER_START, goal, `flood goal ${id}`, true);
+  }
+  const queue = [{ ...PLAYER_START }], seen = new Set([`${PLAYER_START.x},${PLAYER_START.y}`]);
+  let slides = 0;
+  for (let i = 0; i < queue.length; i++) {
+    const p = queue[i], link = connector(p);
+    assert.notEqual(link, null, `No graph connector at ${pointText(p)}`);
+    assert.equal(components[link], connected, `Disconnected keyboard endpoint ${pointText(p)}`);
+    // Exercise the actual planner for every endpoint's connector, retaining the exact start.
+    const path = roadPath(p, center(link), 0);
+    assert.ok(path, `Planner cannot reconnect ${pointText(p)}`);
+    assert.deepEqual(path[0], p);
+    assert.deepEqual(path.at(-1), center(link));
+    checkPlayer(p, `flood endpoint=${i}`);
+    for (const key of ['up', 'down', 'left', 'right']) {
+      const next = stepPlayer(p, key);
+      assert.ok(sweptOracle(p, next), `flood ${key} from ${pointText(p)}`);
+      if (p.x !== next.x && p.y !== next.y) slides++;
+      const tag = `${next.x},${next.y}`;
+      if (!seen.has(tag)) { seen.add(tag); queue.push(next); }
+    }
+  }
+  assert.ok(slides > 0, 'Flood includes corner sliding');
+  t.diagnostic(`${queue.length} keyboard-reachable positions × ${Object.keys(cast).length} talk goals proven connected; ${slides} slide edges`);
 });

@@ -19,7 +19,10 @@
   border: 1px solid var(--ink); background: var(--wood); box-shadow: inset 1px 1px 0 #dca372, inset 0 -2px 0 #885036;
 }
 .village-easel::before { left: 15px; } .village-easel::after { right: 15px; }
-.village-easel--empty { display: none; }
+.village-easel--empty {
+  background: transparent;
+  box-shadow: inset 1px 1px 0 #dca372, inset -1px -2px 0 #885036, inset 0 0 0 5px var(--wood), inset 0 0 0 6px var(--ink);
+}
 .village-easel > svg { display: block; width: 100%; max-height: 40px; }
 
 /* Neighbors and the side cast: the whole hotspot is one button that moves with its figure */
@@ -41,7 +44,7 @@
 
 /* Subject badge at (feet.x + 16, feet.y − 80): the subject icon on its color, with a status mark */
 .village-badge {
-  position: absolute; left: 72px; top: 0; width: 32px; height: 32px; box-sizing: border-box; display: grid; place-items: center;
+  position: absolute; left: 72px; top: var(--badge-drop, 0px); width: 32px; height: 32px; box-sizing: border-box; display: grid; place-items: center;
   background: var(--subject); color: var(--ink); border: 2px solid var(--ink); box-shadow: 2px 2px 0 var(--ink); pointer-events: none;
 }
 .village-badge > .icon { width: 24px; height: 24px; }
@@ -54,7 +57,7 @@
 .village-badge__mark--started { background: var(--paper); color: var(--ink); padding: 0 3px 4px; letter-spacing: 1px; }
 .village-badge__mark--made { background: var(--finish); color: var(--paper); }
 .village-badge__mark--made .icon { width: 16px; height: 16px; }
-.village-badge__mark--visited { left: 30px; top: 6px; padding: 0 4px; background: var(--paper); color: var(--ink); font-family: var(--font-read); font-size: var(--text-small); height: auto; white-space: nowrap; }
+.village-badge__mark--visited { left: auto; right: -10px; top: 6px; padding: 0 4px; background: var(--paper); color: var(--ink); font-family: var(--font-read); font-size: var(--text-small); height: auto; white-space: nowrap; }
 
 /* The player, the Talk chip, and the Find arrows */
 .village-player { position: absolute; width: 64px; height: 64px; pointer-events: none; }
@@ -150,3 +153,7 @@
 .village-dialogue .dlg__tabs { gap: 4px; }
 .village-dialogue .dlg__tab { width: 28px; padding: 0; }
 .village-dialogue .dlg__tab > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.village-map-error { margin-top: 8px; padding: 12px; font-size: var(--text-small); }
+.village-map-error p { margin: 0 0 8px; }
+.village-map-error button { min-height: 40px; cursor: pointer; }
