@@ -135,7 +135,7 @@ for (const [id, reference] of Object.entries(manifest.characters)) {
     }
   });
 
-  test(`${reference.name}: right frames mirror the left frames`, () => {
+  test(`${reference.name}: right frames mirror the left frames`, { skip: reference.rightMirrorColumns === null }, () => {
     for (let col = 0; col < 3; col++) {
       const leftCol = reference.rightMirrorColumns[col];
       for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
@@ -181,6 +181,11 @@ for (const [id, reference] of Object.entries(manifest.characters)) {
 // [destination pixel index, reference pixel index]. Right frames derive only from these expectations.
 const referenceGeometry = JSON.parse(readFileSync(new URL('./fixtures/neighbor-side-geometry.json', import.meta.url), 'utf8'));
 function referenceRows(reference, geometry, view = 'left') {
+  if (view === 'left' && reference.rightMirrorColumns === null) {
+    assert.ok(Array.isArray(geometry?.rightStandRuns) && Array.isArray(geometry?.rightSteps),
+      `${reference.name}: rightMirrorColumns is null, so rightStandRuns and rightSteps are required. ${rule}`);
+    assert.equal(geometry.rightSteps.length, 2, `${reference.name}: rightSteps must describe columns 0 and 2. ${rule}`);
+  }
   const front = deriveStand(reference);
   const stand = geometry[`${view}StandRuns`].flatMap(([count, source]) => Array(count).fill(source));
   assert.equal(stand.length, size * size, `${view} recipe covers the whole frame`);
@@ -193,6 +198,8 @@ function referenceRows(reference, geometry, view = 'left') {
     });
   });
   if (view === 'back') return [[3, frames]];
+  if (view === 'right') return [[2, frames]];
+  if (reference.rightMirrorColumns === null) return [[1, frames], ...referenceRows(reference, geometry, 'right')];
   return [[1, frames], [2, reference.rightMirrorColumns.map(col => Array.from({ length: size * size }, (_, i) =>
     frames[col][Math.floor(i / size) * size + size - 1 - i % size]))]];
 }
@@ -205,12 +212,45 @@ function assertReferenceRows(sheet, reference, geometry, view = 'left') {
     }
   }
 }
+function assertFrontPatch(sheet, reference, patches, col) {
+  const front = deriveStand(reference);
+  const expected = { width: size, height: size, rgba: front.rgba.slice() };
+  const label = `${reference.name} reference-derived front frame ${col}`;
+  assert.ok(Array.isArray(patches), `${label}: patches must be a list. ${rule}`);
+  for (const patch of patches) {
+    assert.ok(Array.isArray(patch) && patch.length === 2,
+      `${label}: each patch must name a destination and front stand source pixel. ${rule}`);
+    const [destination, source] = patch;
+    assert.ok(Number.isInteger(destination) && destination >= 0 && destination < size * size,
+      `${label}: patch destination must be a valid frame pixel. ${rule}`);
+    assert.ok(Number.isInteger(source) && source >= 0 && source < size * size,
+      `${label}: patch source must be a front stand pixel. ${rule}`);
+    expected.rgba.set(pixel(front, source % size, Math.floor(source / size)), destination * 4);
+  }
+  for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    expectPixel(pixel(sheet, col * size + x, y), pixel(expected, x, y), label, x, y);
+  }
+}
 for (const [id, reference] of Object.entries(manifest.characters)) {
   test(`${reference.name}: every side stand, step and mirror matches independent reference pixel recipes`, () => {
     const sheet = readPNG(new URL(`../assets/figures/${id}.png`, import.meta.url));
     assertReferenceRows(sheet, reference, referenceGeometry[id]);
   });
   const geometry = referenceGeometry[id];
+  if (geometry && Object.hasOwn(geometry, 'frontSteps')) {
+    test(`${reference.name}: front steps match exact front stand pixel patches`, () => {
+      assert.ok(Array.isArray(geometry.frontSteps) && geometry.frontSteps.length === 2,
+        `${reference.name}: frontSteps must describe columns 0 and 2. ${rule}`);
+      const sheet = readPNG(new URL(`../assets/figures/${id}.png`, import.meta.url));
+      for (const col of [0, 2]) assertFrontPatch(sheet, reference, geometry.frontSteps[col / 2], col);
+    });
+  }
+  if (geometry && Object.hasOwn(geometry, 'joyPatch')) {
+    test(`${reference.name}: joy matches exact front stand pixel patches`, () => {
+      const sheet = readPNG(new URL(`../assets/figures/${id}.png`, import.meta.url));
+      assertFrontPatch(sheet, reference, geometry.joyPatch, 3);
+    });
+  }
   if (Object.hasOwn(reference, 'backStandSha256') && geometry?.backStandRuns && geometry.backSteps) {
     test(`${reference.name}: every back stand and step matches independent reference pixel recipes`, () => {
       const sheet = readPNG(new URL(`../assets/figures/${id}.png`, import.meta.url));

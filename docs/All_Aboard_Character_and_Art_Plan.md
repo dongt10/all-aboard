@@ -190,7 +190,7 @@ The backend supplies the chapter, grade, activity content, dialogue, available s
 
 The original design overrides all. Taro, Momo, Yuki and Fumi come from the team’s reference drawings in [docs/art/source/neighbors](art/source/neighbors): `ref-03.png`, `ref-08.png`, `ref-21.png` and `ref-22.png`, respectively. Their sheets are derived using [manifest.json](art/source/neighbors/manifest.json), never redrawn or recolored. The references are pinned by hash and never replaced; [tests/figures-references.test.js](../tests/figures-references.test.js) checks the drawings and derived pixels. To change the art, change the reference and the pinned hash on purpose.
 
-Yuki and Fumi also have back views derived the same way.
+Yuki and Fumi also have back views derived the same way. A character whose coat is not symmetric (Yuki's patches, Fumi's pocket tag) gets its own right-side recipe instead of a mirror.
 
 ### Sprite sheets in the game (current)
 
