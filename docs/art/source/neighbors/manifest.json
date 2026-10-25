@@ -223,16 +223,12 @@
           45
         ]
       ],
-      "rightMirrorColumns": [
-        0,
-        1,
-        2
-      ],
+      "rightMirrorColumns": null,
       "sideStandSha256": {
-        "left": "d05043f6fef57909acc82fc2d8e210f61b29e0f092991e2f5d6c166f244375d4",
-        "right": "bbcba8f49eea3eb00543377eb8102050bc938d982228a4c15cd215f81ac69396"
+        "left": "897c860dac2efd5221121b1c9b437152b27b24a6d5ea5a52824f8fef5009ffb1",
+        "right": "d431cf7c68bf3f661171fbbd78ef3128816dc40bc2075a337171409cb24fac7a"
       },
-      "backStandSha256": "27de819c922ac581ededd47cb8419f20f61c7e55f438676d16d8bd7d8f0a3871"
+      "backStandSha256": "2a92830f672f22dd1622fc837e5dcc17e41e01ad3d489d3b0868ae2ad822a017"
     }
   }
 }
