@@ -82,12 +82,26 @@ export function defaultBandFor(grade, preset = 'minecraft') {
 
 // Tolerates a saved track with missing fields: the finish gate must never throw.
 const trackKey = track => JSON.stringify({ id: track.id, enabled: track.enabled, pattern: track.pattern, notes: (track.notes ?? []).map(cleanNote), volume: track.volume });
-// Send band stays off until the child changed something: a track, volume, speed, or form.
+// Any saved edit counts for Kindergarten: a track, volume, speed, or form.
 export function isEdited(band, grade) {
   const base = defaultBandFor(grade, normalizePreset(band?.preset)), tracks = Array.isArray(band?.tracks) ? band.tracks : [];
   if ((band?.tempo ?? base.tempo) !== base.tempo || (band?.form ?? 'A') !== base.form) return true;
   if ((band?.masterVolume ?? base.masterVolume) !== base.masterVolume) return true;
   return base.tracks.some(track => trackKey(track) !== trackKey(tracks.find(t => t?.id === track.id) ?? track));
+}
+
+// Later grades finish their own lesson; listening and mix changes do not replace it.
+export function lessonDone(band, ui = {}, grade, preset = band?.preset) {
+  const g = gradeNumber(grade);
+  if (g <= 0) return Boolean(ui.played || isEdited(band, 0));
+  if (g === 2 && ui.echoed === true) return true;
+  const tracks = Array.isArray(band?.tracks) ? band.tracks : [];
+  const notes = tracks.find(track => track?.id === leadTrack(g))?.notes;
+  if (!Array.isArray(notes) || notes.length !== 8) return false;
+  if (g === 1) return !echoMatches(notes, defaultBandFor(1).tracks[3].notes.map(note => note !== null));
+  if (g === 2) return ECHO_PATTERNS.some(mask => echoMatches(notes, mask));
+  const base = defaultBandFor(g, normalizePreset(preset)).tracks[2].notes;
+  return base.some((note, i) => note !== cleanNote(notes[i]));
 }
 
 const sounds = notes => notes.filter(n => n !== null && n !== undefined);
@@ -147,19 +161,28 @@ const OPENING = {
   5: 'Make tune A, then tap Form for A B A. Which part comes back?',
 };
 const MENU_HELP = 'Play band starts your song. See beat lights lanterns. Sounds picks a tune, loud or soft.';
+export const LESSON_HINTS = {
+  0: 'Play the band once, then Send band.',
+  1: 'Change a lantern first, then Send band.',
+  2: 'Echo a rhythm first, then Send band.',
+  3: 'Change my tune first, then Send band.',
+  4: 'Change my tune above Cricket, then Send band.',
+  5: 'Change tune A first, then Send band.',
+};
 const HELP = {
-  0: ['Tap a friend to join or rest.', 'Tap Speed: Slow, Steady, or Fast.', MENU_HELP, 'Tap Send band when your band is ready.'],
-  1: ['Tap a lantern: sound or rest.', 'Tap a friend to join or rest.', MENU_HELP, 'Tap Send band when your rhythm is ready.'],
-  2: ['Press Echo. I play a rhythm for you.', 'Copy it on the lanterns: sound or rest.', MENU_HELP, 'Tap Send band when your rhythm is ready.'],
-  3: ['Tap a lantern to climb: Do, Re, Mi, Sol, La.', 'High notes hang high. Low notes hang low.', MENU_HELP, 'Tap Send band when your tune is ready.'],
-  4: ['Tap a lantern to change my tune.', 'Cricket keeps the steady part under it.', MENU_HELP, 'Tap Send band when your tune is ready.'],
-  5: ['Tap a lantern to make tune A.', 'Tap Form for A B or A B A. Listen for the part that comes back.', MENU_HELP, 'Tap Send band when your tune is ready.'],
+  0: ['Tap a friend to join or rest.', 'Tap Speed: Slow, Steady, or Fast.', MENU_HELP, 'Play the band once, then tap Send band.'],
+  1: ['Tap a lantern: sound or rest.', 'Tap a friend to join or rest.', MENU_HELP, 'Change a lantern first, then tap Send band.'],
+  2: ['Press Echo. I play a rhythm for you.', 'Copy it on the lanterns: sound or rest.', MENU_HELP, 'Echo a rhythm first, then tap Send band.'],
+  3: ['Tap a lantern to climb: Do, Re, Mi, Sol, La.', 'High notes hang high. Low notes hang low.', MENU_HELP, 'Change my tune first, then tap Send band.'],
+  4: ['Tap a lantern to change my tune.', 'Cricket keeps the steady part under it.', MENU_HELP, 'Change my tune above Cricket, then tap Send band.'],
+  5: ['Tap a lantern to make tune A.', 'Tap Form for A B or A B A. Listen for the part that comes back.', MENU_HELP, 'Change tune A first, then tap Send band.'],
 };
 const gradeKey = grade => Math.max(0, Math.min(5, gradeNumber(grade)));
 export const openingLine = (grade, preset = 'meadow') => gradeKey(grade) === 0 && normalizePreset(preset) === 'minecraft'
   ? 'Tap a friend to rest or join. Who plays low? Who plays high? Try Slow and Fast!'
   : OPENING[gradeKey(grade)];
 export const helpLines = grade => [...HELP[gradeKey(grade)]];
+export const lessonHint = grade => LESSON_HINTS[gradeKey(grade)];
 
 // The same four commands at every grade. Labels stay at 9 characters so the icon survives Bigger words.
 export function musicCommands({ playing = false, quiet = false, edited = false } = {}) {

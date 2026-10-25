@@ -43,9 +43,9 @@ Object.assign(globalThis, {
   cancelAnimationFrame: id => frames.delete(id),
 });
 
-const { createState, getCreations, getDraft, saveDraft, publishCreation, saveState, loadState } = await import('../src/progress.js');
+const { createState, getCreations, getDraft, saveDraft, saveState, loadState } = await import('../src/progress.js');
 const { createBandPreset, patternsFor, phraseLength, notesForBeat, renderBandPreview } = await import('../src/audio.js');
-const { defaultBandFor, pickEcho } = await import('../src/ui/band.js');
+const { defaultBandFor, pickEcho, lessonHint } = await import('../src/ui/band.js');
 const { withScope } = await import('../src/ui/save.js');
 const { createMusicScene, ECHO_LINES } = await import('../src/ui/screens/music.js');
 const { createParadeScene } = await import('../src/ui/screens/parade.js');
@@ -107,8 +107,10 @@ test('fresh grades audition editable Minecraft without completion credit or reco
       assert.equal(run.ctx.getState().settings.musicAutoplay, false);
       assert.equal(slot(run.ctx, 'save').disabled, true, 'stopping an audition is not playing a creation');
       slot(run.ctx, 'play').click(); await tick();
-      assert.equal(slot(run.ctx, 'save').disabled, false, 'explicit Play band keeps the existing completion behavior');
+      assert.equal(slot(run.ctx, 'save').disabled, grade !== 0, 'explicit Play band completes only the K lesson');
       assert.equal(run.ctx.getState().settings.musicAutoplay, true);
+      slot(run.ctx, 'play').click();
+      assert.equal(run.ctx.stage.querySelector('.dlg__text').textContent, `Band stopped. ${grade === 0 ? 'Your song is safe.' : lessonHint(grade)}`);
     } finally { run.cleanup(); }
   }
 });
@@ -128,6 +130,7 @@ test('saved legacy and edited Minecraft scores retain notes, zero volumes, form 
       assert.deepEqual(getDraft(run.ctx.getState(), 'music'), before);
       assert.equal(before.preset, preset);
       assert.deepEqual(before.tracks, band.tracks);
+      assert.equal(slot(run.ctx, 'save').disabled, false, 'the saved melody edit already completed the lesson');
       assert.equal(live().length, 0, 'saved zero volume prevents automatic playback');
       assert.equal(run.ctx.stage.querySelector('.music-preset__name').textContent.toLowerCase(), preset);
       run.ctx.stage.querySelector('button.music-lantern[data-beat="0"]').click();
@@ -140,10 +143,10 @@ test('saved legacy and edited Minecraft scores retain notes, zero volumes, form 
   }
 });
 
-test('preset selection is reversible and does not earn completion credit', async () => {
+test('preset selection clears an unpublished melody lesson, and Undo restores the edited score', async () => {
   const state = at(5); state.settings.musicAutoplay = false;
-  const completed = publishCreation(state, 'music', withScope(defaultBandFor(5), state));
-  const run = mount(completed);
+  const band = defaultBandFor(5); band.tracks[2].notes[0] = 4;
+  const run = mount(saveDraft(state, 'music', withScope(band, state)));
   try {
     const before = structuredClone(getDraft(run.ctx.getState(), 'music'));
     assert.equal(slot(run.ctx, 'save').disabled, false);
@@ -151,10 +154,10 @@ test('preset selection is reversible and does not earn completion credit', async
     assert.deepEqual(getDraft(run.ctx.getState(), 'music'), before, 'choosing the current template never resets edits');
     choosePreset(run.ctx, 'meadow'); await tick();
     assert.equal(getDraft(run.ctx.getState(), 'music').preset, 'meadow');
-    assert.equal(slot(run.ctx, 'save').disabled, true, 'loading or auditioning a template does not count as child playback');
+    assert.equal(slot(run.ctx, 'save').disabled, true, 'loading or auditioning a template does not change its melody');
     undoPreset(run.ctx);
     assert.deepEqual(getDraft(run.ctx.getState(), 'music'), before);
-    assert.equal(slot(run.ctx, 'save').disabled, false, 'Undo restores prior played/completed status');
+    assert.equal(slot(run.ctx, 'save').disabled, false, 'Undo restores the completed melody lesson');
     run.ctx.stage.querySelector('.music-preset').click();
     assert.equal(run.ctx.stage.querySelector('[data-undo-preset]').disabled, true, 'Undo is one step');
   } finally { run.cleanup(); }
@@ -170,9 +173,11 @@ test('preset switches preserve the chosen form and master volume, and Undo resto
     choosePreset(run.ctx, 'meadow'); await tick();
     const selected = getDraft(run.ctx.getState(), 'music');
     assert.equal(selected.preset, 'meadow'); assert.equal(selected.form, 'AB'); assert.equal(selected.masterVolume, 0);
+    assert.equal(slot(run.ctx, 'save').disabled, true, 'preserved mix and Form edits do not complete the new preset melody');
     assert.equal(live().length, 0, 'switching a silent score stays silent');
     undoPreset(run.ctx);
     assert.deepEqual(getDraft(run.ctx.getState(), 'music'), before);
+    assert.equal(slot(run.ctx, 'save').disabled, false);
   } finally { run.cleanup(); }
 });
 
@@ -263,8 +268,10 @@ test('grade 2 Echo with Read to me finishes eight beats and leaves Minecraft mel
     assert.equal(copied.preset, 'minecraft');
     assert.deepEqual(copied.tracks.find(track => track.id === 'melody').notes, patternsFor('minecraft').melody[0]);
     assert.ok(copied.tracks.find(track => track.id === 'percussion').notes.every(note => note === null));
+    assert.equal(slot(run.ctx, 'save').disabled, true, 'listening to Echo does not finish the lesson');
     for (const [beat, on] of pickEcho(0).entries()) if (on) run.ctx.stage.querySelector(`button.music-lantern[data-beat="${beat}"]`).click();
     assert.equal(run.ctx.stage.querySelector('.dlg__text').textContent, ECHO_LINES.matched);
+    assert.equal(slot(run.ctx, 'save').disabled, false);
     assert.equal(sounding(), false);
   } finally { run.cleanup(); }
 });

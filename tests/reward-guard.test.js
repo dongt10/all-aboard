@@ -268,16 +268,22 @@ const flows = [
   {
     name: 'encounter', subjectId: 'writing', commandId: 'finish', rootSelector: '.enc',
     create: ctx => createEncounterScene(ctx, { id: 'writing' }),
-    edit: stage => stage.querySelector('.sign-tile').click(),
+    edit: stage => {
+      const tiles = [...stage.querySelectorAll('.sign-tile')];
+      tiles[0].click();
+      const ending = tiles.find(tile => tile.textContent === 'festival!') ?? tiles.find(tile => tile.textContent === 'friend!');
+      ending.click();
+    },
   },
   {
     name: 'music', subjectId: 'music', commandId: 'save', rootSelector: '.music',
+    state: { ...createState(), chapter: 0 },
     create: ctx => createMusicScene(ctx),
     edit: stage => stage.querySelector('[data-sign="speed"]').click(),
   },
 ];
 
-function openReward(t, flow, state = grade2()) {
+function openReward(t, flow, state = flow.state ?? grade2()) {
   const ctx = fakeCtx(state), scene = flow.create(ctx);
   t.after(() => scene.destroy());
   scene.mount();
@@ -315,7 +321,7 @@ for (const flow of flows) {
 
   for (const change of [
     { name: 'grade', next: state => ({ ...state, grade: 3 }) },
-    { name: 'chapter', next: state => ({ ...state, chapter: 0 }) },
+    { name: 'chapter', next: state => ({ ...state, chapter: state.chapter === 0 ? 1 : 0 }) },
   ]) {
     test(`${flow.name}: changing ${change.name} while the reward is open prevents publication`, async t => {
       const { ctx, card } = openReward(t, flow);
@@ -345,7 +351,7 @@ for (const flow of flows) {
   });
 
   test(`${flow.name}: normal acceptance publishes once in its original scope, preserving other state changes`, async t => {
-    for (const state of [createState(), grade2()]) {
+    for (const state of flow.state ? [flow.state] : [createState(), grade2()]) {
       const { ctx, scene, card, finish } = openReward(t, flow, state);
       const creation = getDraft(ctx.getState(), flow.subjectId);
       ctx.commit({ ...ctx.getState(), settings: { ...ctx.getState().settings, largeText: true } });
