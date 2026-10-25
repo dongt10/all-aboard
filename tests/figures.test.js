@@ -28,6 +28,9 @@ test('the player figure follows the saved avatar', () => {
   assert.equal(playerFigureId(undefined), 'player-boy');
 });
 
+// Characters derived from the team's reference drawings keep their outline exactly as drawn;
+// tests/figures-references.test.js pins every pixel of those frames instead.
+const REFERENCE_BACKED = new Set(Object.keys(JSON.parse(readFileSync(new URL('../docs/art/source/neighbors/manifest.json', import.meta.url), 'utf8')).characters));
 const sheetOf = figure => readPNG(new URL(`../${figure.sheet}`, import.meta.url));
 const alpha = (png, x, y) => png.rgba[(y * png.width + x) * 4 + 3];
 const lum = (png, x, y) => { const i = (y * png.width + x) * 4; return (0.2126 * png.rgba[i] + 0.7152 * png.rgba[i + 1] + 0.0722 * png.rgba[i + 2]) / 255; };
@@ -68,7 +71,7 @@ test('every declared frame stands on row 56 with a dark outline', () => {
     for (const { row, col, label } of declaredFrames(figure)) {
       const stats = frameStats(png, row, col);
       assert.equal(stats.bottom, FEET_ROW, `${figure.id} ${label} feet`);
-      assert.ok(stats.darkShare >= 0.9, `${figure.id} ${label} outline ${stats.darkShare.toFixed(2)}`);
+      if (!REFERENCE_BACKED.has(figure.id)) assert.ok(stats.darkShare >= 0.9, `${figure.id} ${label} outline ${stats.darkShare.toFixed(2)}`);
     }
   }
 });

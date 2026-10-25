@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { NEIGHBORS } from '../src/ui/figures/neighbors.js';
 import { CHARACTERS } from '../src/data.js';
@@ -24,6 +25,12 @@ test('all seven neighbors have side walks and joy faces; only Yuki and Fumi also
     assert.deepEqual([figure.views, figure.walks, figure.joy], [views, true, true], figure.id);
   }
 });
-test('each neighbor wears their subject color', () => {
-  for (const figure of NEIGHBORS) assert.ok(frontColors(figure).has(SUBJECT_THEME[figure.id].color), `${figure.id} shows the garment`);
+// A neighbor derived from a team drawing without a colorSwap keeps the drawing's own colors.
+const REFERENCES = JSON.parse(readFileSync(new URL('../docs/art/source/neighbors/manifest.json', import.meta.url), 'utf8')).characters;
+test('each neighbor wears their subject color unless the team drawing says otherwise', () => {
+  for (const figure of NEIGHBORS) {
+    const reference = REFERENCES[figure.id];
+    if (reference && !reference.colorSwap) continue;
+    assert.ok(frontColors(figure).has(SUBJECT_THEME[figure.id].color), `${figure.id} shows the garment`);
+  }
 });
