@@ -9,7 +9,7 @@ import { onceAtATime } from '../scenes.js';
 import { creationMarkup, creationLabel, fitSignPreviews } from '../creations.js';
 import {
   VILLAGE_SPOTS, SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, talkPoint, nearestNeighbor,
-  clampWalk, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, villageMapSVG, stallSVG, easelRect,
+  clampWalk, stepPlayer, walkWaypoint, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, villageMapSVG, stallSVG, easelRect,
 } from '../village-map.js';
 
 const SIDE = {
@@ -50,11 +50,16 @@ export function aAction({ near = null, nearest = null, dialogueOpen = false, has
   return id ? { act: 'talk', id } : { act: 'hush' };
 }
 const STEP_CYCLE = [1, 0, 2, 0];
-const STEP_MS = 120;            // ms per walk frame at the base speed; faster walks step faster
+const STEP_MS = 80;             // ms per walk frame at the base speed; faster walks step faster
 const WANDER_STEP_MS = 300;     // a stroll: the neighbors amble
 const WANDER_SPEED = 24;        // px per second
 const PLAYER_SPEED = 240;       // px per second for key steps; tap walks speed up to finish within 600ms
 const TAP_WALK_MS = 600;
+export function frameFor(clock, speed = PLAYER_SPEED) {
+  if (speed <= 0) return 0;
+  const period = Math.min(120, STEP_MS * PLAYER_SPEED / speed);
+  return STEP_CYCLE[Math.floor(clock / period) % STEP_CYCLE.length];
+}
 const STOP_RADIUS = 96;
 const ARROW_GLYPH = { up: '↑', 'up-right': '↗', right: '→', 'down-right': '↘', down: '↓', 'down-left': '↙', left: '←', 'up-left': '↖' };
 const FACING_FOR = { up: 'back', down: 'front', left: 'left', right: 'right' };
@@ -275,20 +280,21 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const goal = player.visitOnArrive ? clampWalk(talkPoint(player.visitOnArrive, actors.get(player.visitOnArrive).pos)) : player.target;
     if (!goal) { player.step = 0; return; }
     player.target = goal;
-    const move = stepToward(player.pos, goal, player.speed * dt / 1000);
-    const dx = goal.x - player.pos.x, dy = goal.y - player.pos.y;
+    const waypoint = walkWaypoint(player.pos, goal);
+    const move = stepToward(player.pos, waypoint, player.speed * dt / 1000);
+    const dx = waypoint.x - player.pos.x, dy = waypoint.y - player.pos.y;
     player.pos = clampWalk(move.pos);
-    player.clock += dt * player.speed / PLAYER_SPEED;   // the legs keep up with a tap walk
+    player.clock += dt;
     if (Math.abs(dx) >= Math.abs(dy) && dx) player.facing = dx > 0 ? 'right' : 'left';
     else if (dy) player.facing = dy > 0 ? 'front' : 'back';
-    player.step = calm() ? 0 : STEP_CYCLE[Math.floor(player.clock / STEP_MS) % 4];
-    if (move.arrived) arrive();
+    player.step = calm() ? 0 : frameFor(player.clock, player.speed);
+    if (move.arrived && waypoint === goal) arrive();
   }
   function arrive() {
     player.target = null;
     player.tapWalk = false;
     player.step = 0;
-    player.clock = 0;
+    // Keep the stride phase between keyboard steps so both feet take turns.
     const id = player.visitOnArrive;
     player.visitOnArrive = null;
     if (id) { player.facing = 'back'; visit(id); }
@@ -378,6 +384,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       hush();
       player.visitOnArrive = null;
       player.speed = PLAYER_SPEED * 1.5;
+      player.clock = 0;
       player.target = clampWalk({ x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height });
       player.tapWalk = true;
       if (calm()) { player.pos = player.target; player.target = null; player.tapWalk = false; }
