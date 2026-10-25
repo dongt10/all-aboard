@@ -7,18 +7,29 @@
 /* Rails: radio groups of paint pots and stamp shapes. */
 .banner-rail { display: flex; flex-direction: column; gap: 4px; height: 100%; justify-content: center; }
 .banner-option {
-  display: flex; align-items: center; gap: 6px; min-height: 38px; padding: 2px 6px; margin: 0;
-  border: 2px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink);
+  display: flex; align-items: center; gap: 6px; min-height: 38px; padding: 3px 7px; margin: 0;
+  border: 1px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink);
   font: 700 var(--text-small)/1.1 var(--font-read); text-align: left; cursor: pointer;
-  box-shadow: 0 2px 0 var(--paper-shade); transition: transform 80ms ease, background-color 80ms ease;
+  box-shadow: inset 2px 2px 0 var(--white), inset -2px -3px 0 var(--paper-shade), 0 2px 0 var(--ink); transition: transform 80ms ease, background-color 80ms ease;
 }
 .banner-shapes .banner-option { min-height: 54px; }
 .banner-option:hover { background: var(--white); }
 .banner-option:active { transform: translateY(1px); }
-.banner-option[aria-checked="true"] { background: var(--lantern); box-shadow: inset 0 0 0 2px var(--ink); }
+.banner-option[aria-checked="true"] { background: var(--lantern); box-shadow: inset 2px 2px 0 #ffe59a, inset -2px -3px 0 #c28c32, 0 2px 0 var(--ink); }
 .banner-option:focus-visible { outline: 3px solid var(--vermilion); outline-offset: 1px; }
 .banner-option__name { white-space: nowrap; overflow: hidden; text-overflow: clip; }
-.banner-pot { flex: none; width: 22px; height: 22px; border: 2px solid var(--ink); box-sizing: border-box; }
+.banner-pot {
+  position: relative; flex: none; width: 22px; height: 22px; border: 1px solid var(--ink); box-sizing: border-box;
+  box-shadow: inset 3px 2px 0 var(--paint-light), inset -3px -4px 0 var(--paint-shade);
+}
+.banner-pot::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 2px; height: 4px; border: 1px solid var(--ink);
+  background: var(--paint-shade); box-shadow: inset 0 1px 0 var(--paint-light), 0 1px 0 var(--ink);
+}
+.banner-pot::after {
+  content: ''; position: absolute; left: 3px; top: 9px; width: 3px; height: 5px; background: var(--paint-light);
+  box-shadow: 6px 2px 0 -1px var(--paper);
+}
 .banner-shape-pic { flex: none; display: block; width: 32px; height: 32px; }
 .banner-shape-pic .banner-stamp { width: 32px; height: 32px; }
 /* The chosen stamp wears a small turn arrow on the picture's lower-right corner, turned the way the stamp is.
@@ -27,21 +38,39 @@
 .banner-shapes .banner-option { position: relative; }
 .banner-option__turn {
   position: absolute; left: 24px; bottom: 4px; display: grid; place-items: center; width: 16px; height: 16px;
-  box-sizing: border-box; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); pointer-events: none;
+  box-sizing: border-box; border: 1px solid var(--ink); background: var(--paper); color: var(--ink); pointer-events: none;
+  box-shadow: inset 1px 1px 0 var(--white), inset -1px -2px 0 var(--paper-shade);
 }
 .banner-option__turn .icon { display: block; }
 .banner-option__turn:empty { display: none; }
 .large-text .banner-option__turn { left: 22px; }
 
-/* Every stamp carries the ink outline the finished banner has, so a Cream star still shows on a Cream cloth. */
-.banner-stamp { stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+/* Ink is part of each pixel silhouette, including the turned versions. */
+.banner-stamp { shape-rendering: crispEdges; image-rendering: pixelated; }
 
 /* The cloth hangs from a wooden pole; stamps sit under a transparent 6×5 button grid. */
 .banner-middle { display: flex; flex-direction: column; align-items: center; }
-.banner-pole { width: 256px; height: 10px; background: var(--wood); border: 2px solid var(--ink); box-sizing: border-box; }
+.banner-pole {
+  position: relative; width: 256px; height: 10px; background: var(--wood); border: 1px solid var(--ink); box-sizing: border-box;
+  box-shadow: inset 0 2px 0 #dfa777, inset 0 -2px 0 #815035;
+}
+.banner-pole::before {
+  content: ''; position: absolute; left: 5px; top: 3px; width: 2px; height: 2px; background: var(--ink);
+  box-shadow: 242px 0 0 var(--ink), 24px -1px 0 #815035, 26px -1px 0 #815035, 28px -1px 0 #815035, 128px 1px 0 #815035, 130px 1px 0 #815035;
+}
 .banner-cloth {
   position: relative; width: 240px; height: 200px; box-sizing: border-box;
-  border: 3px solid var(--ink); border-top: 0; transition: background-color 150ms ease;
+  border: 3px solid var(--cloth-shade); border-top: 0; outline: 1px solid var(--ink); outline-offset: -1px;
+  box-shadow: inset 3px 0 0 var(--cloth-light), inset -3px -5px 0 var(--cloth-shade); transition: background-color 150ms ease;
+}
+.banner-cloth::before, .banner-cloth::after { content: ''; position: absolute; pointer-events: none; }
+.banner-cloth::before {
+  left: 0; right: 0; top: 0; height: 4px; background: var(--cloth-light); border-bottom: 1px solid var(--cloth-shade);
+  box-shadow: 0 187px 0 var(--cloth-shade);
+}
+.banner-cloth::after {
+  left: 6px; top: 6px; width: 2px; height: 10px; background: var(--cloth-shade);
+  box-shadow: 2px 10px 0 var(--cloth-shade), 212px 0 0 var(--cloth-shade), 210px 10px 0 var(--cloth-shade), 38px 0 0 var(--cloth-light), 172px 0 0 var(--cloth-light);
 }
 .banner-stamps { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
 .banner-stamp-spot { position: absolute; width: 32px; height: 32px; transform: translate(-50%, -50%); }
@@ -52,8 +81,9 @@
 .banner-cell:focus-visible { outline: none; box-shadow: inset 0 0 0 3px var(--vermilion); }
 
 /* Bigger words: tighten the rail so the longest name (Lavender) still fits. */
-.large-text .banner-option { gap: 4px; padding: 2px 4px; letter-spacing: -.3px; }
+.large-text .banner-option { gap: 4px; padding: 3px 5px; letter-spacing: -.3px; }
 .large-text .banner-pot { width: 18px; height: 18px; }
+.large-text .banner-pot::after { height: 3px; }
 
 /* Calm motion. */
 .calm .banner-option, .calm .banner-cloth { transition: none; }

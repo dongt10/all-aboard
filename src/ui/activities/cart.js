@@ -1,4 +1,39 @@
 import { normalizeEncounterSnapshot, encounterReady, cartBalance, encounterOpeningDialogue, startingCargo } from '../../encounters.js';
+import { INK, INK_SOFT, PAPER, PAPER_SHADE, WOOD } from '../palette.js';
+
+// Opaque, one-pixel ink silhouettes. Wood and iron each have a top-left light and a bottom shade.
+const WOOD_LIGHT = '#e7b57d', WOOD_SHADE = '#8d513c';
+const IRON_LIGHT = '#7b80a5', IRON_SHADE = '#34375f';
+const rect = (x, y, width, height, fill) => `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}"/>`;
+const art = (name, width, height, drawing) => `<svg class="cart__art cart__art--${name}" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${drawing}</svg>`;
+const nail = (x, y) => rect(x, y, 2, 2, INK) + rect(x, y, 1, 1, PAPER_SHADE);
+const bayArt = art('bay', 216, 120,
+  rect(0, 0, 216, 120, INK) + rect(1, 1, 214, 118, WOOD_SHADE)
+  + [8, 40, 72].map((y, i) => rect(10, y, 196, 31, WOOD)
+    + rect(10, y, 196, 3, WOOD_LIGHT) + rect(10, y + 28, 196, 3, WOOD_SHADE)
+    + rect(26 + i * 24, y + 10, 34, 1, WOOD_SHADE) + rect(34 + i * 24, y + 12, 18, 1, WOOD_LIGHT)
+    + rect(136 - i * 12, y + 20, 40, 1, WOOD_SHADE) + rect(150 - i * 12, y + 22, 16, 1, WOOD_LIGHT)).join('')
+  + [1, 205].map(x => rect(x, 1, 10, 118, WOOD) + rect(x, 1, 3, 118, WOOD_LIGHT)
+    + rect(x + 8, 1, 2, 118, WOOD_SHADE) + nail(x + 4, 12) + nail(x + 4, 92)).join('')
+  + rect(1, 1, 214, 6, WOOD) + rect(1, 1, 214, 2, WOOD_LIGHT)
+  + rect(1, 105, 214, 1, INK) + rect(1, 106, 214, 13, WOOD)
+  + rect(1, 106, 214, 3, WOOD_LIGHT) + rect(1, 115, 214, 4, WOOD_SHADE)
+  + rect(36, 111, 44, 1, WOOD_SHADE) + rect(138, 112, 26, 1, WOOD_SHADE)
+  + nail(5, 110) + nail(209, 110));
+const chassisArt = art('chassis', 416, 16,
+  rect(0, 0, 416, 16, INK) + rect(1, 1, 414, 14, WOOD) + rect(1, 1, 414, 3, WOOD_LIGHT)
+  + rect(1, 11, 414, 4, WOOD_SHADE) + rect(24, 7, 64, 1, WOOD_SHADE) + rect(288, 6, 76, 1, WOOD_SHADE)
+  + [8, 198, 208, 406].map(x => nail(x, 6)).join(''));
+const wheelArt = art('wheel', 40, 40,
+  `<path d="M12 0H28V4H36V12H40V28H36V36H28V40H12V36H4V28H0V12H4V4H12Z" fill="${INK}"/>`
+  + `<path d="M13 1H27V5H35V13H39V27H35V35H27V39H13V35H5V27H1V13H5V5H13Z" fill="${INK_SOFT}"/>`
+  + `<path d="M13 1H27V4H13V8H8V13H4V25H1V13H5V5H13Z" fill="${IRON_LIGHT}"/>`
+  + `<path d="M36 15H39V27H35V35H27V39H13V36H27V32H32V27H36Z" fill="${IRON_SHADE}"/>`
+  + rect(6, 17, 28, 6, WOOD) + rect(17, 6, 6, 28, WOOD)
+  + rect(6, 17, 28, 2, WOOD_LIGHT) + rect(17, 6, 2, 28, WOOD_LIGHT)
+  + rect(6, 21, 28, 2, WOOD_SHADE) + rect(21, 6, 2, 28, WOOD_SHADE)
+  + rect(14, 14, 12, 12, INK) + rect(15, 15, 10, 10, PAPER_SHADE)
+  + rect(15, 15, 10, 2, PAPER) + rect(15, 23, 10, 2, WOOD_SHADE) + rect(18, 18, 4, 4, INK));
 
 // Taro's cart (math): Taro pre-loads the left bay; the child loads the right until both sides weigh
 // the same, then rolls it. Crate sizes are picked on a small rail inside the field; a loaded crate is a
@@ -101,7 +136,7 @@ const cart = {
     const sizes = cartWeights(grade);
     const root = document.createElement('div');
     root.className = 'cart';
-    const bays = SIDES.map(side => `<div class="cart__bay" data-side="${side}">
+    const bays = SIDES.map(side => `<div class="cart__bay" data-side="${side}">${bayArt}
         <button type="button" class="cart__load" data-side="${side}"><span class="cart__hint">Tap to load</span></button>
         <div class="cart__crates">${Array.from({ length: MAX }, (_, i) => `<button type="button" class="cart__crate" data-side="${side}" data-index="${i}" hidden></button>`).join('')}</div>
       </div>`).join('');
@@ -110,7 +145,7 @@ const cart = {
     root.innerHTML = `<div class="cart__badges">${SIDES.map(side => `<span class="px-chip cart__total" data-side="${side}"><span class="cart__total-label">${side === 'left' ? 'Left' : 'Right'}</span><span class="cart__total-num">0</span></span>`).join('')}</div>
       ${rail}
       <div class="cart__ground" aria-hidden="true"></div>
-      <div class="cart__move"><div class="cart__body">${bays}<div class="cart__chassis" aria-hidden="true"></div><i class="cart__wheel cart__wheel--left" aria-hidden="true"></i><i class="cart__wheel cart__wheel--right" aria-hidden="true"></i></div></div>`;
+      <div class="cart__move"><div class="cart__body">${bays}<div class="cart__axle" aria-hidden="true"></div><div class="cart__chassis" aria-hidden="true">${chassisArt}</div><i class="cart__wheel cart__wheel--left" aria-hidden="true">${wheelArt}</i><i class="cart__wheel cart__wheel--right" aria-hidden="true">${wheelArt}</i></div></div>`;
     host.append(root);
     const move = root.querySelector('.cart__move');
     const body = root.querySelector('.cart__body');

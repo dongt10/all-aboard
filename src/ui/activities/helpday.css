@@ -1,51 +1,105 @@
 .helpday-field {
+  --help-wood-light: #dca372; --help-wood-shade: #885036;
   display: flex; gap: 10px; align-items: center; width: 520px; height: 268px;
   box-sizing: border-box; padding: 5px 0; font-family: var(--font-read); color: var(--ink);
 }
 .helpday-board {
+  position: relative; isolation: isolate;
   flex: none; width: 340px; height: 258px; box-sizing: border-box;
-  border: 4px solid var(--ink); background: var(--paper); padding: 0 3px;
+  border: 4px solid transparent; background: none; padding: 0 3px;
 }
-.helpday-header { height: 32px; display: flex; align-items: center; justify-content: center; }
+.helpday-board::before {
+  content: ''; position: absolute; inset: -4px; z-index: -1; pointer-events: none;
+  border: 1px solid var(--ink); background: var(--wood);
+  box-shadow: inset 2px 2px 0 var(--help-wood-light), inset -3px -4px 0 var(--help-wood-shade);
+}
+/* The metal clip sits above the count and never occupies the job grid. */
+.helpday-board::after {
+  content: ''; position: absolute; left: 142px; top: -8px; width: 48px; height: 10px; pointer-events: none;
+  border: 1px solid var(--ink); background: var(--ink-soft);
+  box-shadow: inset 1px 1px 0 var(--paper), inset -2px -2px 0 var(--ink);
+}
+.helpday-header { position: relative; height: 32px; display: flex; align-items: center; justify-content: center; }
+.helpday-header::before {
+  content: ''; position: absolute; left: -4px; top: 0; width: 1px; height: 1px; pointer-events: none;
+  background: var(--ink); box-shadow: 333px 0 0 var(--ink), 0 249px 0 var(--ink), 333px 249px 0 var(--ink);
+}
+.helpday-header::after {
+  content: ''; position: absolute; left: 2px; top: 14px; width: 8px; height: 1px; pointer-events: none;
+  background: var(--help-wood-shade); box-shadow: 4px 2px 0 var(--help-wood-light), 302px 5px 0 var(--help-wood-shade);
+}
 .helpday-count { font-size: var(--text-small); line-height: 1; }
+.helpday-count::before {
+  border: 1px solid var(--ink); background: var(--paper); clip-path: none;
+  box-shadow: inset 1px 1px 0 var(--white), inset -2px -2px 0 var(--paper-shade);
+}
 .helpday-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .helpday-job {
+  position: relative; isolation: isolate;
   height: 106px; min-width: 0; box-sizing: border-box; padding: 0 2px; margin: 0;
-  border: 3px solid var(--ink); background: var(--paper); color: var(--ink);
-  box-shadow: inset -2px -2px 0 var(--paper-shade); cursor: pointer; font-family: var(--font-read);
+  border: 3px solid transparent; background: none; color: var(--ink);
+  cursor: pointer; font-family: var(--font-read);
   display: flex; flex-direction: column; justify-content: space-between; text-align: left;
+}
+.helpday-job::before {
+  content: ''; position: absolute; inset: -3px; z-index: -1; pointer-events: none;
+  border: 1px solid var(--ink); background: var(--paper);
+  box-shadow: inset 2px 2px 0 var(--white), inset -2px -3px 0 var(--paper-shade), inset 0 -4px 0 #d5bd91;
+}
+.helpday-job::after {
+  content: ''; position: absolute; top: -2px; right: -2px; width: 8px; height: 8px; pointer-events: none;
+  background: var(--paper-shade); box-shadow: -1px 1px 0 #d5bd91;
+  clip-path: polygon(0 0, 8px 0, 8px 8px, 6px 8px, 6px 6px, 4px 6px, 4px 4px, 2px 4px, 2px 2px, 0 2px);
 }
 .helpday-job-heading { display: flex; gap: 2px; align-items: center; min-height: 40px; }
 .helpday-glyph { display: flex; flex: none; width: 20px; }
-.helpday-glyph svg { width: 20px; height: 20px; }
+.helpday-glyph svg { width: 20px; height: 20px; shape-rendering: crispEdges; }
 .helpday-job-name { font-size: var(--text-field); line-height: 1; overflow-wrap: normal; }
 .helpday-job-body { display: flex; align-items: center; justify-content: space-between; gap: 2px; min-height: 52px; }
-.helpday-need { background: var(--paper-shade); color: var(--ink); font-size: var(--text-small); line-height: 1; padding: 1px; }
+.helpday-need { background: var(--paper-shade); color: var(--ink); font-size: var(--text-small); line-height: 1; padding: 1px; box-shadow: 0 0 0 1px var(--ink), inset 1px 1px 0 var(--paper), inset -1px -1px 0 #d5bd91; }
 .helpday-slot {
   position: relative; width: 52px; height: 52px; flex: none; box-sizing: border-box;
-  display: grid; place-items: center; border: 2px dashed var(--ink);
+  display: grid; place-items: center; border: 2px dashed transparent; isolation: isolate;
+}
+.helpday-slot::before {
+  content: ''; position: absolute; inset: -2px; z-index: -1; pointer-events: none;
+  border: 1px solid var(--ink); background: var(--paper-shade);
+  box-shadow: inset 1px 1px 0 #d5bd91, inset -1px -1px 0 var(--white);
 }
 .helpday-job[data-filled="true"] .helpday-slot { border-style: solid; }
+.helpday-job[data-filled="true"] .helpday-slot::before { background: var(--paper); box-shadow: inset 1px 1px 0 var(--white), inset -2px -2px 0 var(--paper-shade); }
 .helpday-figure { display: flex; }
 .helpday-figure .figure { animation: helpday-hop 200ms ease-out; }
 .helpday-badge {
   position: absolute; top: -2px; right: -2px; width: 20px; height: 20px;
   display: grid; place-items: center; background: var(--paper); color: var(--vermilion);
   font-size: var(--text-field); line-height: 1; font-weight: 700;
+  box-shadow: 0 0 0 1px var(--ink), inset 1px 1px 0 var(--white), inset -1px -2px 0 var(--paper-shade);
 }
 .helpday-job[data-fit="yes"] .helpday-badge { color: var(--finish); }
 .helpday-bench { flex: none; width: 160px; height: 258px; display: flex; flex-direction: column; gap: 6px; }
 .helpday-helper {
+  --token-fill: var(--paper); --token-light: var(--white); --token-shade: var(--paper-shade);
+  position: relative; isolation: isolate;
   flex: 1 1 0; min-height: 0; width: 160px; padding: 0; box-sizing: border-box;
   display: flex; gap: 1px; align-items: center; text-align: left; cursor: pointer;
-  background: var(--paper); color: var(--ink); border: 3px solid var(--ink);
-  font-family: var(--font-read); box-shadow: inset -3px -3px 0 var(--paper-shade); transition: transform .1s;
+  background: none; color: var(--ink); border: 3px solid transparent;
+  font-family: var(--font-read); transition: transform .1s;
+}
+.helpday-helper::before {
+  content: ''; position: absolute; inset: -3px; z-index: -1; pointer-events: none;
+  border: 1px solid var(--ink); background: var(--token-fill);
+  box-shadow: inset 2px 2px 0 var(--token-light), inset -2px -3px 0 var(--token-shade);
+}
+.helpday-helper::after {
+  content: ''; position: absolute; right: 0; top: 0; width: 2px; height: 2px; pointer-events: none;
+  background: var(--token-light); box-shadow: -3px 0 0 var(--token-light), 0 3px 0 var(--token-shade);
 }
 .helpday-helper > .figure { flex: none; }
 .helpday-helper-words { min-width: 0; display: flex; flex-direction: column; font-size: var(--text-small); line-height: 1; }
 .helpday-helper-name { font-weight: 700; }
 .helpday-helper[data-assigned="true"] > .figure { opacity: .55; }
-.helpday-helper[aria-checked="true"] { background: var(--ink); color: var(--white); box-shadow: none; transform: translateX(-4px); }
+.helpday-helper[aria-checked="true"] { --token-fill: var(--ink); --token-light: var(--ink-soft); --token-shade: #141630; color: var(--white); transform: translateX(-4px); }
 .helpday-helper[aria-checked="true"] .helpday-helper-name::after { content: ' ✓'; }
 .helpday-job:focus-visible, .helpday-helper:focus-visible { outline: 3px solid var(--lantern); outline-offset: 1px; }
 .helpday-badge[hidden], .helpday-at[hidden], .helpday-strength[hidden] { display: none; }

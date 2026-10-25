@@ -3,6 +3,7 @@
 import { ENCOUNTER_COLORS, ENCOUNTER_COLOR_NAMES, normalizeEncounterSnapshot, encounterReady, encounterOpeningDialogue } from '../../encounters.js';
 import { keyIntent, gridMove } from '../input.js';
 import { icon } from '../icons.js';
+import { INK, PAPER } from '../palette.js';
 
 export const BANNER_SHAPES = ['star', 'flower', 'leaf', 'circle'];
 const COLUMNS = 6, ROWS = 5, CELLS = COLUMNS * ROWS, MAX_STAMPS = 30, HISTORY = 40;
@@ -30,15 +31,72 @@ export function stampAt(state, cell) {
 }
 const sameStamp = (a, b) => a.shape === b.shape && a.color === b.color && a.rotation === b.rotation;
 
-// Every shape is drawn with the ink outline (see banner.css .banner-stamp), so a Cream star on a Cream cloth still shows.
-const FORMS = {
-  star: '<path d="m20 2 5 12 13 1-10 9 3 13-11-7-11 7 3-13L2 15l13-1Z"/>',
-  flower: '<path d="M20 12C7-5-4 18 12 20-5 33 18 44 20 28c13 17 24-6 8-8C45 7 22-4 20 12Z"/><circle cx="20" cy="20" r="5" fill="#fff1cf"/>',
-  leaf: '<path d="M5 35C-1 10 17 0 35 5c5 19-6 36-30 30Z"/><path d="m8 32 20-20" stroke="#284b45" fill="none" stroke-width="2"/>',
-  circle: '<circle cx="20" cy="20" r="16"/><circle cx="15" cy="14" r="4" fill="#fff" opacity=".4" stroke="none"/>',
+// Hand-picked light/shadow steps of the festival's coral, lantern, mint, sea, lavender and paper paints.
+const PAINT_STEPS = {
+  '#e96163': ['#ffadb0', '#b53b42'], '#f4bf4f': ['#ffe59a', '#c28c32'],
+  '#6dbea0': ['#b3e3c4', '#3c856c'], '#559fc7': ['#9fdcff', '#367399'],
+  '#9d7fbd': ['#d6c4ff', '#70578f'], '#fff1cf': [PAPER, '#d5bc88'],
 };
-const stampSVG = (shape, color, rotation = 0) =>
-  `<svg class="banner-stamp" viewBox="0 0 40 40" aria-hidden="true" focusable="false" style="fill:${color};transform:rotate(${rotation}deg)">${FORMS[shape] || FORMS.circle}</svg>`;
+// Two-pixel steps at the actual 32px stamp size. The filled masks include their closed ink edge.
+const FORMS = {
+  star: [
+    '................', '.......xx.......', '.......xx.......', '......xxxx......',
+    '......xxxx......', '.....xxxxxx.....', '.xxxxxxxxxxxxxx.', '..xxxxxxxxxxxx..',
+    '...xxxxxxxxxx...', '....xxxxxxxx....', '....xxxxxxxx....', '...xxxxxxxxxx...',
+    '...xxxx..xxxx...', '...xx......xx...', '................', '................',
+  ],
+  flower: [
+    '................', '......xxxx......', '.....xxxxxx.....', '.....xxxxxx.....',
+    '..xxxxxxxxxxxx..', '.xxxxxxxxxxxxxx.', '.xxxxxxxxxxxxxx.', '..xxxxxxxxxxxx..',
+    '..xxxxxxxxxxxx..', '.xxxxxxxxxxxxxx.', '.xxxxxxxxxxxxxx.', '..xxxxxxxxxxxx..',
+    '.....xxxxxx.....', '.....xxxxxx.....', '......xxxx......', '................',
+  ],
+  leaf: [
+    '................', '................', '........xxxxxx..', '......xxxxxxxx..',
+    '.....xxxxxxxxx..', '....xxxxxxxxxx..', '...xxxxxxxxxxx..', '..xxxxxxxxxxxx..',
+    '..xxxxxxxxxxx...', '..xxxxxxxxxx....', '..xxxxxxxxx.....', '..xxxxxxxx......',
+    '..xxxxxx........', '..xxxx..........', '................', '................',
+  ],
+  circle: [
+    '................', '................', '.....xxxxxx.....', '...xxxxxxxxxx...',
+    '...xxxxxxxxxx...', '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..',
+    '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..', '...xxxxxxxxxx...',
+    '...xxxxxxxxxx...', '.....xxxxxx.....', '................', '................',
+  ],
+};
+const stampCache = new Map();
+function stampSVG(shape, color, rotation = 0) {
+  const key = `${shape}:${color}:${rotation}`;
+  if (stampCache.has(key)) return stampCache.get(key);
+  const form = FORMS[shape] || FORMS.circle, [light, shade] = PAINT_STEPS[color] || PAINT_STEPS['#fff1cf'];
+  const angle = rotation * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+  const source = (x, y) => [Math.floor((cos * (x - 15.5) + sin * (y - 15.5) + 16) / 2), Math.floor((-sin * (x - 15.5) + cos * (y - 15.5) + 16) / 2)];
+  const filled = (x, y) => { const [sx, sy] = source(x, y); return form[sy]?.[sx] === 'x'; };
+  let pixels = '';
+  for (let y = 0; y < 32; y++) {
+    let run = '', from = 0;
+    for (let x = 0; x <= 32; x++) {
+      let fill = '';
+      if (x < 32 && filled(x, y)) {
+        const [sx, sy] = source(x, y);
+        fill = !filled(x - 1, y) || !filled(x + 1, y) || !filled(x, y - 1) || !filled(x, y + 1) ? INK
+          : !filled(x + 3, y) || !filled(x, y + 3) ? shade
+          : !filled(x - 3, y) || !filled(x, y - 3) ? light : color;
+        if (fill !== INK && shape === 'flower' && sx >= 6 && sx <= 9 && sy >= 6 && sy <= 9) fill = sx === 6 || sy === 6 ? PAPER : '#f4bf4f';
+        if (fill !== INK && shape === 'leaf' && sx + sy === 15 && sx > 3 && sx < 12) fill = shade;
+      }
+      if (fill !== run) {
+        if (run) pixels += `<rect x="${from}" y="${y}" width="${x - from}" height="1" fill="${run}"/>`;
+        from = x; run = fill;
+      }
+    }
+  }
+  // Keep the original 40×40 viewBox; the nested grid maps one pixel to one pixel at its existing 32px size.
+  // Rotations are sampled into that grid, so Turn never rotates/antialiases a square pixel in CSS.
+  const svg = `<svg class="banner-stamp" viewBox="0 0 40 40" shape-rendering="crispEdges" aria-hidden="true" focusable="false" style="fill:${color}"><svg width="40" height="40" viewBox="0 0 32 32">${pixels}</svg></svg>`;
+  stampCache.set(key, svg);
+  return svg;
+}
 function shapeName(shape) { return shape[0].toUpperCase() + shape.slice(1); }
 
 function start(snapshot, { chapter = 0, grade = 1 } = {}) {
@@ -120,7 +178,7 @@ function mountField(host, { dispatch }) {
   const root = document.createElement('div');
   root.className = 'banner-field';
 
-  const paints = radioRail('banner-paints', 'Paint', ENCOUNTER_COLORS.map(c => ({ value: c, name: ENCOUNTER_COLOR_NAMES[c], html: `<i class="banner-pot" style="background:${c}" aria-hidden="true"></i>` })));
+  const paints = radioRail('banner-paints', 'Paint', ENCOUNTER_COLORS.map(c => ({ value: c, name: ENCOUNTER_COLOR_NAMES[c], html: `<i class="banner-pot" style="background:${c};--paint-light:${PAINT_STEPS[c][0]};--paint-shade:${PAINT_STEPS[c][1]}" aria-hidden="true"></i>` })));
   const stamps = radioRail('banner-shapes', 'Stamp', BANNER_SHAPES.map(s => ({ value: s, name: shapeName(s), html: `<span class="banner-shape-pic" aria-hidden="true"></span><span class="banner-option__turn" aria-hidden="true"></span>` })));
 
   const cloth = document.createElement('div');
@@ -199,7 +257,8 @@ function mountField(host, { dispatch }) {
 
   function update(state, ui) {
     if (state !== current.state) {
-      cloth.style.background = state.background;
+      const [light, shade] = PAINT_STEPS[state.background] || PAINT_STEPS['#fff1cf'];
+      cloth.setAttribute('style', `background:${state.background};--cloth-light:${light};--cloth-shade:${shade}`);
       layer.innerHTML = state.stamps.map(s => `<span class="banner-stamp-spot" style="left:${s.x}%;top:${s.y}%">${stampSVG(s.shape, s.color, s.rotation)}</span>`).join('');
       layer.setAttribute('aria-label', `Your banner, ${ENCOUNTER_COLOR_NAMES[state.background]} cloth, ${state.stamps.length} ${state.stamps.length === 1 ? 'stamp' : 'stamps'}`);
       cells.forEach((cell, i) => {

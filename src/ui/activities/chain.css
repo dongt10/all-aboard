@@ -2,57 +2,67 @@
 .chain-field {
   position: relative; box-sizing: border-box; width: 520px; height: 268px;
   padding: 6px 14px; overflow: hidden; background: var(--sky); color: var(--ink);
-  box-shadow: inset 0 -32px 0 var(--sea); font-family: var(--font-pixel);
+  box-shadow: inset 0 2px 0 #c9edff, inset 0 -2px 0 var(--ink), inset 0 -6px 0 #26789e, inset 0 -30px 0 var(--sea), inset 0 -32px 0 #c9edff; font-family: var(--font-pixel);
 }
 .chain-row { display: flex; align-items: center; height: 140px; }
 .chain-plate, .chain-sun-card {
   position: relative; box-sizing: border-box; width: 108px; height: 140px; flex: none;
-  background: var(--paper); border: 3px solid var(--ink);
-  display: flex; align-items: center; flex-direction: column; gap: 3px; padding: 8px 2px 4px;
+  background: var(--paper); border: 1px solid var(--ink);
+  box-shadow: inset 2px 2px 0 var(--white), inset -2px -4px 0 var(--paper-shade), inset 0 -5px 0 #d6c39d;
+  display: flex; align-items: center; flex-direction: column; gap: 3px; padding: 10px 4px 6px;
 }
+.chain-plate::after, .chain-sun-card::after { content: ''; position: absolute; right: 4px; top: 4px; width: 8px; height: 8px; background: var(--paper-shade); clip-path: polygon(0 0,8px 0,8px 8px,6px 8px,6px 6px,4px 6px,4px 4px,2px 4px,2px 2px,0 2px); pointer-events: none; }
 .chain-picture {
+  position: relative;
   width: 52px; height: 48px; flex: none; display: grid; place-items: center;
-  background: var(--wood); border: 2px solid var(--ink); box-sizing: border-box;
+  background: var(--wood); border: 1px solid var(--ink); box-sizing: border-box;
+  box-shadow: inset 2px 2px 0 #dda074, inset -2px -3px 0 #895236;
 }
-.chain-sun-card .chain-picture { background: transparent; border: 0; }
-.chain-creature { display: flex; color: var(--ink); }
-.chain-glyph { flex: none; }
-.chain-empty { border: 2px dotted var(--ink); width: 32px; height: 32px; text-align: center; font-size: 24px; }
+.chain-picture::before { content: ''; position: absolute; left: 4px; top: 5px; width: 1px; height: 1px; background: var(--ink); box-shadow: 1px -1px 0 var(--paper-shade), 40px 0 0 var(--ink), 41px -1px 0 var(--paper-shade), 0 34px 0 var(--ink), 40px 34px 0 var(--ink); }
+.chain-picture::after { content: ''; position: absolute; left: 8px; bottom: 4px; width: 12px; height: 1px; background: #895236; box-shadow: 2px -1px 0 #dda074, 21px -1px 0 #895236; pointer-events: none; }
+.chain-sun-card .chain-picture { background: transparent; border: 0; box-shadow: none; }
+.chain-sun-card .chain-picture::before, .chain-sun-card .chain-picture::after { display: none; }
+.chain-creature { position: relative; display: flex; color: var(--ink); }
+.chain-glyph { flex: none; display: block; image-rendering: pixelated; }
+.chain-empty { border: 1px solid var(--ink); box-shadow: inset 1px 1px 0 var(--white), inset -2px -2px 0 var(--paper-shade); background: var(--paper); width: 32px; height: 32px; text-align: center; font-size: 24px; line-height: 30px; }
 .chain-word { white-space: nowrap; font-size: var(--text-field); line-height: 1.2; }
 .chain-energy { font-family: var(--font-pixel); font-size: var(--text-field); line-height: 1.1; padding: 2px 5px; }
+.chain-energy::before { border: 1px solid var(--ink); background: var(--paper); clip-path: none; box-shadow: inset 2px 2px 0 var(--white), inset -2px -3px 0 var(--paper-shade); }
 .chain-bar { position: absolute; right: 1px; bottom: 7px; width: 12px; display: flex; flex-direction: column-reverse; gap: 2px; }
-.chain-block { display: block; box-sizing: border-box; width: 10px; height: 10px; border: 2px dotted var(--paper-shade); }
-.chain-block--lit { background: var(--lantern); border: 2px solid var(--ink); }
+.chain-block { display: block; box-sizing: border-box; width: 10px; height: 10px; border: 1px solid var(--ink); background: var(--paper-shade); box-shadow: inset 1px 1px 0 var(--paper), inset -2px -2px 0 #d6c39d; }
+.chain-block--lit { background: var(--lantern); border: 1px solid var(--ink); box-shadow: inset 1px 1px 0 #ffe6a0, inset -2px -2px 0 #d9a532; }
 .chain-arrow { width: 20px; flex: none; display: flex; color: var(--sea); }
+.chain-arrow svg { display: block; image-rendering: pixelated; }
 .chain-cards, .chain-tiles { display: flex; justify-content: center; gap: 6px; }
 .chain-cards { margin-top: 8px; height: 52px; }
 .chain-tiles { margin-top: 8px; height: 38px; }
 .chain-card, .chain-tile {
-  box-sizing: border-box; border: 3px solid var(--ink); border-radius: 0; background: var(--paper);
+  box-sizing: border-box; border: 1px solid var(--ink); border-radius: 0; background: var(--paper);
+  box-shadow: inset 2px 2px 0 var(--white), inset -2px -3px 0 var(--paper-shade);
   color: var(--ink); font-family: var(--font-pixel); font-size: var(--text-field); line-height: 1;
-  padding: 2px; cursor: pointer; white-space: nowrap;
+  padding: 4px; cursor: pointer; white-space: nowrap;
 }
 .chain-card { position: relative; width: 118px; height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; }
 .chain-card-pic { display: flex; flex: none; }
 .chain-card-word { white-space: nowrap; }
-.chain-card-check { position: absolute; top: 0; right: 0; background: var(--paper); display: flex; }
-.chain-card--placed { background: var(--paper-shade); cursor: default; }
-.chain-tile { width: 72px; height: 38px; }
+.chain-card-check { position: absolute; top: 2px; right: 2px; border: 1px solid var(--ink); background: var(--paper); display: flex; box-shadow: inset 1px 1px 0 var(--white), inset -1px -1px 0 var(--paper-shade); }
+.chain-card--placed { background: var(--paper-shade); box-shadow: inset 2px 2px 0 var(--paper), inset -2px -3px 0 #d6c39d; cursor: default; }
+.chain-tile { position: relative; width: 72px; height: 38px; }
+.chain-tile::after { content: ''; position: absolute; bottom: 4px; left: 5px; width: 6px; height: 1px; background: var(--paper-shade); box-shadow: 54px -26px 0 var(--white); pointer-events: none; }
 .chain-card:hover:enabled, .chain-tile:hover { background: var(--white); }
 .chain-card:focus-visible, .chain-tile:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 /* Stack the small glyph above the compact name at both field text sizes. */
 .chain-card-pic .chain-glyph { width: 16px; height: 16px; }
 .chain-sun { position: relative; width: 40px; height: 40px; pointer-events: none; }
-.chain-sun::before, .chain-sun::after { content: ''; position: absolute; background: var(--lantern); }
-.chain-sun::before { left: 17px; top: 0; width: 6px; height: 40px; }
-.chain-sun::after { top: 17px; left: 0; width: 40px; height: 6px; }
-.chain-sun-core { position: absolute; z-index: 1; inset: 8px; background: var(--lantern); border: 3px solid var(--ink); box-shadow: inset -4px -4px 0 #e0a92f; }
-.chain-sun-core::before { content: ''; position: absolute; inset: -11px; border: 3px dotted var(--lantern); }
+.chain-sun > svg { display: block; image-rendering: pixelated; }
+.chain-sun-core { position: absolute; z-index: 1; inset: 8px; background: var(--ink); clip-path: polygon(4px 0,20px 0,20px 2px,22px 2px,22px 4px,24px 4px,24px 20px,22px 20px,22px 22px,20px 22px,20px 24px,4px 24px,4px 22px,2px 22px,2px 20px,0 20px,0 4px,2px 4px,2px 2px,4px 2px); }
+.chain-sun-core::before { content: ''; position: absolute; inset: 1px; background: var(--lantern); box-shadow: inset 3px 3px 0 #ffe6a0, inset -3px -3px 0 #d9a532; clip-path: polygon(4px 0,18px 0,18px 2px,20px 2px,20px 4px,22px 4px,22px 18px,20px 18px,20px 20px,18px 20px,18px 22px,4px 22px,4px 20px,2px 20px,2px 18px,0 18px,0 4px,2px 4px,2px 2px,4px 2px); }
+.chain-sun-core::after { content: ''; position: absolute; left: 5px; top: 5px; width: 6px; height: 2px; background: var(--paper); box-shadow: -2px 2px 0 #ffe6a0; }
 .chain-field--shine .chain-block--lit { animation: chain-light 300ms steps(3, end) both; }
 .chain-field--shine .chain-plate[data-plate="0"] .chain-block { animation-delay: 200ms; }
 .chain-field--shine .chain-plate[data-plate="1"] .chain-block { animation-delay: 400ms; }
 .chain-field--shine .chain-plate[data-plate="2"] .chain-block { animation-delay: 600ms; }
-@keyframes chain-light { from { background: transparent; border-style: dotted; border-color: var(--paper-shade); } to { background: var(--lantern); border-style: solid; border-color: var(--ink); } }
+@keyframes chain-light { from { background: var(--paper-shade); box-shadow: inset 1px 1px 0 var(--paper), inset -2px -2px 0 #d6c39d; } to { background: var(--lantern); box-shadow: inset 1px 1px 0 #ffe6a0, inset -2px -2px 0 #d9a532; } }
 .calm .chain-field--shine .chain-block { animation: none; }
 @media (prefers-reduced-motion: reduce) { .chain-field--shine .chain-block { animation: none; } }
 .chain-field [hidden] { display: none; }

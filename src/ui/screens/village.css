@@ -8,9 +8,17 @@
 /* Stalls and the creations on display beside them */
 .village-stall { position: absolute; width: 128px; height: 80px; pointer-events: none; }
 .village-stall > svg { display: block; width: 128px; height: 80px; }
-.village-easel { position: absolute; width: 80px; height: 56px; display: grid; place-items: center; padding: 4px; box-sizing: border-box; background: var(--paper); border: 4px solid var(--ink); pointer-events: none; }
-.village-easel::before, .village-easel::after { content: ''; position: absolute; top: 100%; width: 4px; height: 12px; background: var(--wood); }
-.village-easel::before { left: 12px; } .village-easel::after { right: 12px; }
+.village-easel {
+  position: absolute; width: 80px; height: 56px; display: grid; place-items: center; padding: 7px; box-sizing: border-box;
+  background: var(--paper); border: 1px solid var(--ink); pointer-events: none;
+  box-shadow: inset 1px 1px 0 #dca372, inset -1px -2px 0 #885036, inset 0 0 0 5px var(--wood), inset 0 0 0 6px var(--ink), inset 0 -8px 0 var(--paper-shade);
+}
+/* Border + padding still totals 8px; the art stays in its original 64×40 opening. */
+.village-easel::before, .village-easel::after {
+  content: ''; position: absolute; top: calc(100% - 3px); width: 4px; height: 12px; box-sizing: border-box;
+  border: 1px solid var(--ink); background: var(--wood); box-shadow: inset 1px 1px 0 #dca372, inset 0 -2px 0 #885036;
+}
+.village-easel::before { left: 15px; } .village-easel::after { right: 15px; }
 .village-easel--empty { display: none; }
 .village-easel > svg { display: block; width: 100%; max-height: 40px; }
 
@@ -76,13 +84,23 @@
   position: absolute; left: 8px; top: 452px; width: 428px; height: 84px; box-sizing: border-box; padding: 4px 10px; z-index: 1000;
   display: grid; grid-template-columns: 1fr auto; grid-template-rows: auto auto; align-items: center; column-gap: 10px; row-gap: 4px;
 }
+.village-board::before {
+  border: 1px solid var(--ink); background: var(--paper);
+  box-shadow: inset 2px 2px 0 #dca372, inset -2px -3px 0 #885036, inset 0 0 0 6px var(--wood), inset 0 0 0 7px var(--ink), inset 0 -9px 0 var(--paper-shade);
+  clip-path: none;
+}
+.village-board::after {
+  content: ''; position: absolute; left: 1px; top: 1px; width: 1px; height: 1px; pointer-events: none;
+  background: var(--ink);
+  box-shadow: 416px 0 0 var(--ink), 0 72px 0 var(--ink), 416px 72px 0 var(--ink), 12px -2px 0 #885036, 13px -2px 0 #885036, 14px -2px 0 #885036, 400px 74px 0 #dca372, 401px 74px 0 #dca372;
+}
 .village-board__title { grid-column: 1 / -1; display: flex; align-items: center; gap: 6px; color: var(--vermilion); white-space: nowrap; }
 .village-board__title > .icon { flex: none; }
 .village-board__label { font-family: var(--font-read); font-size: var(--text-small); font-weight: 700; line-height: 1.1; color: var(--ink); }
 .village-board__pips { display: flex; gap: 3px; }
-.village-pip { position: relative; width: 28px; height: 28px; box-sizing: border-box; display: grid; place-items: center; border: 2px dashed var(--ink-soft); color: var(--ink-soft); background: var(--paper); }
+.village-pip { position: relative; width: 28px; height: 28px; box-sizing: border-box; display: grid; place-items: center; border: 1px solid var(--ink); color: var(--ink-soft); background: var(--paper); box-shadow: inset 1px 1px 0 var(--white), inset -2px -2px 0 var(--paper-shade); }
 .village-pip > .icon { width: 20px; height: 20px; opacity: .45; }
-.village-pip--filled { border: 2px solid var(--ink); background: var(--subject); color: var(--ink); }
+.village-pip--filled { border: 1px solid var(--ink); background: var(--subject); color: var(--ink); box-shadow: inset 1px 1px 0 var(--paper), inset -2px -2px 0 var(--ink-soft); }
 .village-pip--filled > .icon { opacity: 1; }
 .village-parade { cursor: pointer; min-height: 40px; padding: 4px 10px; white-space: nowrap; }   /* 22 + 4 + 40 fits the board's 68px inside */
 .village-parade[hidden], .village-talk[hidden], .village-find[hidden], .village-pointer[hidden], .village-dialogue[hidden] { display: none; }

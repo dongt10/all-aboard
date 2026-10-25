@@ -1,6 +1,29 @@
 // Momo's ice stand (science): two trays of equal ice, one in the shade, a clock. Kid words at every grade.
 import { iceRemaining, iceWords, shadeScienceTray, scienceNextStep, predictionLine, encounterReady, encounterOpeningDialogue, normalizeEncounterSnapshot, gradeBand } from '../../encounters.js';
 import { icon } from '../icons.js';
+import { INK, LANTERN, PAPER, PAPER_SHADE, SUBJECT_THEME } from '../palette.js';
+
+const rect = (x, y, width, height, fill) => `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}"/>`;
+const art = (name, width, height, drawing) => `<svg class="ice-art ice-art--${name}" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${drawing}</svg>`;
+const sunArt = art('sun', 40, 40,
+  rect(17, 0, 6, 40, INK) + rect(18, 1, 4, 38, LANTERN) + rect(18, 1, 1, 38, '#ffe08f')
+  + rect(21, 1, 1, 38, '#d99a30') + rect(0, 17, 40, 6, INK) + rect(1, 18, 38, 4, LANTERN)
+  + rect(1, 18, 38, 1, '#ffe08f') + rect(1, 21, 38, 1, '#d99a30')
+  + `<path d="M12 8H28V12H32V28H28V32H12V28H8V12H12Z" fill="${INK}"/>`
+  + `<path d="M13 9H27V13H31V27H27V31H13V27H9V13H13Z" fill="${LANTERN}"/>`
+  + rect(13, 9, 14, 3, '#ffe08f') + rect(9, 13, 3, 14, '#ffe08f')
+  + rect(28, 13, 3, 14, '#d99a30') + rect(13, 28, 14, 3, '#d99a30') + rect(14, 14, 4, 4, PAPER)
+  + [[4, 4], [34, 4], [4, 34], [34, 34]].map(([x, y]) => rect(x, y, 3, 3, INK) + rect(x + 1, y + 1, 1, 1, LANTERN)).join(''));
+// 227px is the tray's 219px content width plus the existing 4px overhang on each side.
+const canopyArt = art('canopy', 227, 26,
+  rect(0, 0, 227, 20, INK)
+  + Array.from({ length: 9 }, (_, i) => {
+    const x = 1 + i * 25;
+    const [light, base, shade] = i % 2 ? [PAPER, PAPER_SHADE, '#d8c499'] : ['#9be7dd', SUBJECT_THEME.science.color, '#279c96'];
+    return rect(x, 1, 25, 18, base) + rect(x, 1, 25, 3, light) + rect(x, 4, 3, 12, light)
+      + rect(x + 21, 4, 4, 12, shade) + rect(x, 16, 25, 1, INK) + rect(x, 17, 25, 2, shade)
+      + rect(x + 2, 19, 21, 7, INK) + rect(x + 3, 19, 19, 6, shade) + rect(x + 3, 19, 19, 2, base);
+  }).join(''));
 
 const TRAYS = ['left', 'right'];
 const TRAY_NAME = { left: 'Tray A', right: 'Tray B' };
@@ -56,9 +79,9 @@ function mountField(host, { grade = 1, dispatch = () => {} } = {}) {
   const doc = host.ownerDocument;
   const root = doc.createElement('div');
   root.className = 'ice-field';
-  root.innerHTML = `<div class="ice-top"><span class="ice-sun" aria-hidden="true"><i></i></span><span class="ice-clock">${icon('clock', { size: 20 })}<b></b></span></div>
+  root.innerHTML = `<div class="ice-top"><span class="ice-sun" aria-hidden="true"><i>${sunArt}</i></span><span class="ice-clock">${icon('clock', { size: 20 })}<b></b></span></div>
 <div class="ice-trays">${TRAYS.map(side => `<button type="button" class="ice-tray" data-tray="${side}" aria-pressed="false">
-<span class="ice-canopy" aria-hidden="true"></span><span class="ice-box" aria-hidden="true"><span class="ice-water"></span><span class="ice-cube"></span></span>
+<span class="ice-canopy" aria-hidden="true">${canopyArt}</span><span class="ice-box" aria-hidden="true"><span class="ice-water"></span><span class="ice-cube"></span></span>
 <span class="ice-name">${TRAY_NAME[side]}</span><span class="ice-left"></span></button>`).join('')}</div>`;
   const click = event => {
     const tray = event.target.closest?.('.ice-tray');

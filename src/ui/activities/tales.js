@@ -131,7 +131,7 @@ function mountField(host, { dispatch = () => {} } = {}) {
   let cursor = 0;
   const root = document.createElement('div');
   root.className = 'tales-field';
-  root.innerHTML = '<section class="tales-card"><p class="tales-head"></p>'
+  root.innerHTML = '<span class="tales-card-cover" aria-hidden="true"></span><section class="tales-card"><p class="tales-head"></p>'
     + '<div class="tales-named"><span class="tales-named__pic"></span><span class="tales-named__name"></span></div>'
     + '<div class="tales-lines" role="group" aria-label="Tale lines">'
     + [1, 2, 3].map(n => `<button type="button" class="tales-line"><span class="tales-line__tag" aria-hidden="true">${n}</span><span class="tales-line__who" aria-hidden="true"></span><span class="tales-line__text"></span></button>`).join('')

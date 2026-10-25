@@ -214,7 +214,7 @@ test('a full cloth from a stacked save refuses a 31st stamp and says why', () =>
 });
 test('field stamps wear the ink outline and the turn chip holds no number', () => {
   const css = readFileSync(new URL('../src/ui/activities/banner.css', import.meta.url), 'utf8');
-  assert.match(css, /\.banner-stamp\s*\{[^}]*stroke:\s*var\(--ink\)/);
+  assert.match(css, /\.banner-stamp\s*\{[^}]*shape-rendering:\s*crispEdges/);
   assert.match(css, /\.banner-option__turn\s*\{/);
   assert.match(css, /\.banner-option__turn:empty\s*\{\s*display:\s*none/);
   assert.doesNotMatch(css, /\.banner-option__turn\s*\{[^}]*font/, 'the chip is a picture, not text');
@@ -302,12 +302,15 @@ test('the field draws outlined stamps, marks the turned preview without a number
     const mounted = banner.mountField(host, { dispatch: a => dispatched.push(a) });
     const root = host.children[0];
     let s = banner.start(null, { chapter: 1, grade: 1 });
+    mounted.update(s.state, s.ui);
+    const unturned = root.querySelector('.banner-shape-pic').innerHTML;
     s = cmd(s, 'turn'); s = field(s, { cell: 7 }, 1);
     mounted.update(s.state, s.ui);
 
     const layer = root.querySelector('.banner-stamps');
     assert.match(layer.innerHTML, /class="banner-stamp"/, 'field stamps carry the outlined class');
-    assert.match(layer.innerHTML, /rotate\(45deg\)/);
+    assert.match(layer.innerHTML, /shape-rendering="crispEdges"/);
+    assert.match(layer.innerHTML, /fill="#1f2147"/, 'the closed pixel outline is ink');
     assert.equal(layer.getAttribute('aria-label'), 'Your banner, Cream cloth, 1 stamp');
 
     const options = root.querySelector('.banner-shapes').children;
@@ -320,12 +323,16 @@ test('the field draws outlined stamps, marks the turned preview without a number
     assert.doesNotMatch(chip.innerHTML.replace(/<[^>]*>/g, ''), /\d|°/, 'no number on the chip');
     assert.equal(chip.style.transform, 'rotate(45deg)');
     assert.equal(flower.querySelector('.banner-option__turn').innerHTML, '');
-    assert.match(star.querySelector('.banner-shape-pic').innerHTML, /rotate\(45deg\)/, 'the preview turns too');
+    const turned = star.querySelector('.banner-shape-pic').innerHTML;
+    assert.notEqual(turned, unturned, 'Turn changes the pixels of the preview');
+    assert.ok(layer.innerHTML.includes(turned), 'the cloth stamp has the same turn as its preview');
+    assert.doesNotMatch(turned, /transform:|<circle|<path/, 'turned pixels stay on the grid instead of rotating in CSS');
 
     // Back at 0° the chip empties again.
     let back = s; for (let i = 0; i < 7; i++) back = cmd(back, 'turn');
     mounted.update(back.state, back.ui);
     assert.equal(chip.innerHTML, ''); assert.equal(chip.style.transform, ''); assert.equal(star.getAttribute('aria-label'), 'Star');
+    assert.equal(star.querySelector('.banner-shape-pic').innerHTML, unturned, 'eight turns restore the original pixels');
 
     // Tapping a cell dispatches it and moves the roving focus there.
     const cells = root.querySelector('.banner-grid').children;

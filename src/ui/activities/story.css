@@ -1,6 +1,21 @@
 /* Sora’s story bag: a storybook page beside a three-slot bag, inside the 520×268 field. */
 .story-field { display: grid; grid-template-columns: 1fr 140px; gap: 8px; width: 100%; height: 100%; box-sizing: border-box; font-family: var(--font-read); color: var(--ink); }
-.story-page { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px 14px; box-sizing: border-box; background: var(--paper); border: 3px solid var(--ink); border-left: 10px solid var(--reading); box-shadow: 4px 4px 0 var(--ink); overflow: hidden; transition: background-color 200ms; }
+.story-page {
+  position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 12px 14px 12px 23px; box-sizing: border-box;
+  background: var(--paper); border: 3px solid var(--paper-shade); border-left: 1px solid var(--ink);
+  outline: 1px solid var(--ink); outline-offset: -1px;
+  box-shadow: inset 2px 2px 0 var(--white), inset -3px -6px 0 var(--paper-shade), 4px 4px 0 var(--ink);
+  overflow: hidden; transition: background-color 200ms;
+}
+/* Binding and page edges stay in the old border/padding, clear of every story line. */
+.story-page::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 9px; border-right: 1px solid var(--ink);
+  background: var(--reading); box-shadow: inset 2px 2px 0 var(--sky), inset -2px -4px 0 #367399; pointer-events: none;
+}
+.story-page::after {
+  content: ''; position: absolute; left: 11px; right: 4px; bottom: 2px; height: 1px; background: #d5bc88;
+  box-shadow: 0 -3px 0 #d5bc88, 0 -6px 0 var(--paper-shade); pointer-events: none;
+}
 .story-part { margin: 0; font-family: var(--font-pixel); font-size: var(--text-small); color: var(--ink-soft); }
 .story-passage { margin: 0; font-size: var(--text-body); line-height: 1.25; }
 .story-passage--word { flex: 1; display: grid; place-items: center; font-size: calc(var(--text-body) * 1.8); font-weight: 700; letter-spacing: 0.04em; line-height: 1; overflow-wrap: anywhere; }
@@ -9,13 +24,35 @@
 .story-page--ready .story-passage { font-family: var(--font-pixel); font-size: calc(var(--text-body) * 1.25); text-align: center; }
 .story-page--ready .story-part { text-align: center; }
 
-.story-bag { display: flex; flex-direction: column; gap: 4px; padding: 6px; box-sizing: border-box; background: var(--wood); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
-.story-bag__title { margin: 0; font-family: var(--font-pixel); font-size: var(--text-small); color: var(--white); text-align: center; }
-.story-slot { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: var(--paper-shade); border: 2px dashed var(--ink-soft); transition: background-color 200ms; }
+.story-bag {
+  position: relative; display: flex; flex-direction: column; gap: 4px; padding: 6px; box-sizing: border-box;
+  background: var(--wood); border: 3px solid #815035; outline: 1px solid var(--ink); outline-offset: -1px;
+  box-shadow: inset 2px 2px 0 #dfa777, inset -2px -4px 0 #815035, 4px 4px 0 var(--ink);
+}
+/* Two stitched straps and square brass buckles sit on the bag's side seams. */
+.story-bag::before, .story-bag::after {
+  content: ''; position: absolute; top: 8px; bottom: 8px; width: 3px; background: #815035;
+  border-top: 4px solid var(--lantern); border-bottom: 2px solid #dfa777; pointer-events: none;
+}
+.story-bag::before { left: 1px; box-shadow: 1px 0 0 var(--ink); }
+.story-bag::after { right: 1px; box-shadow: -1px 0 0 var(--ink); }
+.story-bag__title { margin: 0; font-family: var(--font-pixel); font-size: var(--text-small); color: var(--paper); background: var(--ink); text-align: center; }
+.story-slot {
+  position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: var(--paper-shade); border: 2px solid #d5bc88; outline: 1px solid var(--ink); outline-offset: -1px;
+  box-shadow: inset 2px 2px 0 var(--paper), inset -2px -3px 0 #d5bc88; transition: background-color 200ms;
+}
+.story-slot::before {
+  content: ''; position: absolute; left: 4px; right: 4px; top: 3px; height: 2px; border-left: 2px solid #d5bc88;
+  border-right: 2px solid #d5bc88; pointer-events: none;
+}
+.story-slot::after {
+  content: ''; position: absolute; left: 4px; right: 4px; bottom: 3px; height: 1px; background: #d5bc88; pointer-events: none;
+}
 .story-slot__pic { display: block; width: 40px; height: 40px; }
 .story-slot__pic svg { display: block; width: 100%; height: 100%; }
 .story-slot__label { font-size: var(--text-small); line-height: 1.1; color: var(--ink-soft); }
-.story-slot--packed { background: var(--paper); border-style: solid; border-color: var(--ink); }
+.story-slot--packed { background: var(--paper); border-style: solid; border-color: var(--paper-shade); box-shadow: inset 2px 2px 0 var(--white), inset -2px -3px 0 var(--paper-shade); }
 .story-slot--packed .story-slot__label { color: var(--ink); font-weight: 700; }
 .story-slot:not(.story-slot--packed) .story-slot__pic { display: none; }
 
