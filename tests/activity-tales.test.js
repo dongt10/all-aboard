@@ -11,11 +11,15 @@ import { CHARACTERS } from '../src/data.js';
 import { ICON_NAMES } from '../src/ui/icons.js';
 import { arrangeCommands } from '../src/ui/menu.js';
 import { routeIntent } from '../src/ui/input.js';
+import { Doc, Event, pressKey } from './helpers/dom.js';
+import { readFileSync } from 'node:fs';
+import { declarations, resolveVars } from './helpers/css.js';
 
 const cmd = id => ({ type: 'command', id });
 const field = line => ({ type: 'field', line });
+const review = id => ({ type: 'field', review: id });
 const snapshot = (deck = 0, solved = []) => ({ kind: KIND, activity: ACTIVITY, chapter: 1, grade: 3, deck, solved });
-const sentences = text => text.split(/(?<=[.!?])\s+/).filter(Boolean);
+const sentences = text => text.split(/(?<=[.!?…]["'”’)\]]*)\s+/).filter(Boolean);
 function fits(text) {
   assert.equal(typeof text, 'string');
   for (const sentence of sentences(text)) assert.ok(sentence.length <= 56, `${sentence.length}: ${sentence}`);
@@ -30,7 +34,7 @@ function contract(state, ui) {
   for (const c of commands) {
     assert.ok(c.label.length <= 12);
     assert.ok(c.art || ICON_NAMES.includes(c.icon));
-    if (c.id.startsWith('pick-')) assert.match(c.art, /^<span class="figure /);
+    if (c.id.startsWith('pick-')) assert.equal(c.icon, 'people');
     if (c.id.startsWith('line-')) assert.match(c.art, /viewBox="0 0 24 24".*currentColor/);
   }
   fits(tales.opening(state, ui));
@@ -198,8 +202,30 @@ for (const grade of GRADES_TALES) for (let deck = 0; deck < DECK_COUNT; deck++) 
     assert.equal(talesReady(state), true);
     assert.equal(currentTale(state), null);
     assert.equal(phaseOf(state, ui), 'ready');
-    for (let i = 0; i < 3; i++) fits(tales.act(state, ui, field(i)).line);
-    const again = tales.act(state, ui, cmd('again'));
+    Object.freeze(state.solved); Object.freeze(state); Object.freeze(ui);
+    for (const [i, tale] of TALE_DECKS[deck].entries()) {
+      const opened = tales.act(state, ui, field(i));
+      assert.deepEqual(opened, tales.act(state, ui, review(tale.id)), 'label and book slot open the same tale');
+      assert.equal(opened.state, state);
+      assert.deepEqual(opened.ui, { phase: 'review', pick: null, review: tale.id });
+      assert.equal(opened.line, `${TALE_CAST[tale.who].name}’s tale. Tap a line to hear it.`);
+      assert.equal(phaseOf(state, opened.ui), 'review'); fits(opened.line);
+      assert.deepEqual(contract(state, opened.ui).map(c => c.label), ['All tales', 'Start over', 'Share tales']);
+      const view = fieldView(state, opened.ui);
+      assert.deepEqual(view.lines.map(l => l.text), tale.lines);
+      assert.deepEqual(view.lines.map(l => l.proof), tale.lines.map((_, line) => line === tale.proof));
+      Object.freeze(opened.ui);
+      for (let line = 0; line < 3; line++) {
+        const read = tales.act(state, opened.ui, field(line));
+        assert.equal(read.state, state); assert.equal(read.ui, opened.ui);
+        assert.equal(read.line, `Line ${line + 1}: ${tale.lines[line]}`); fits(read.line);
+      }
+      const all = tales.act(state, opened.ui, cmd('next'));
+      assert.equal(all.state, state); assert.equal(phaseOf(all.state, all.ui), 'ready'); fits(all.line);
+      assert.deepEqual(tales.act(state, opened.ui, review(tale.id)).ui, opened.ui);
+    }
+    const reviewUi = tales.act(state, ui, field(2)).ui;
+    const again = tales.act(state, reviewUi, cmd('again'));
     assert.equal(again.state.deck, (deck + 1) % DECK_COUNT);
     assert.deepEqual(again.state.solved, []); fits(again.line);
     contract(again.state, again.ui);
@@ -208,13 +234,22 @@ for (const grade of GRADES_TALES) for (let deck = 0; deck < DECK_COUNT; deck++) 
 
 test('stale UI and malformed actions cannot skip proof or change a saved object', () => {
   const { state, ui } = tales.start();
-  for (const action of [null, {}, cmd('finish'), cmd('next'), cmd('again'), cmd('pick-__proto__'), cmd('line-'), cmd('line-0'), field(-1), field(3), field(0.5), field('0'), field(NaN)]) {
+  for (const action of [null, {}, cmd('finish'), cmd('next'), cmd('again'), cmd('pick-__proto__'), cmd('line-'), cmd('line-0'), field(-1), field(3), field(0.5), field('0'), field(NaN), ...[null, 0, {}, 'foreign', 'momo-kitchen'].map(review)]) {
     assert.deepEqual(tales.act(state, ui, action), { state, ui });
   }
   assert.equal(phaseOf(state, { phase: 'prove', pick: 'math' }), 'read');
   assert.equal(phaseOf(state, { phase: 'done', review: 'momo-kitchen' }), 'read');
+  assert.equal(phaseOf(state, { phase: 'review', review: 'momo-kitchen' }), 'read');
   assert.equal(solveTale(state, 'foreign'), state);
   const solved = solveTale(state, 'momo-kitchen');
+  for (const id of [null, {}, 'taro-pier', 'hana-path']) {
+    const stale = { phase: 'review', review: id };
+    assert.equal(phaseOf(solved, stale), 'read');
+    assert.deepEqual(tales.act(solved, stale, review(id)), { state: solved, ui: stale });
+  }
+  const ready = normalizeTales(snapshot(0, TALE_DECKS[0].map(t => t.id)));
+  assert.equal(phaseOf(ready, { phase: 'review', review: 'foreign' }), 'ready');
+  assert.equal(phaseOf(ready, { phase: 'review', review: 'momo-kitchen' }), 'review');
   assert.equal(solveTale(solved, 'momo-kitchen'), solved);
   assert.equal(deckOf(state), TALE_DECKS[0]);
   assert.equal(findTale(state, 'momo-kitchen'), TALE_DECKS[0][0]);
@@ -233,6 +268,16 @@ test('an out-of-order saved subset opens and advances to the first unnamed tale'
   let { state, ui } = tales.start(snapshot(0, ['kiko-stage']));
   assert.equal(tales.opening(state), 'Tale 1 of 3. Who is it about?');
   assert.equal(fieldView(state, ui).head, 'Tale 1 of 3');
+  const saved = state;
+  const opened = tales.act(state, ui, review('kiko-stage'));
+  assert.equal(opened.state, saved);
+  assert.equal(phaseOf(state, opened.ui), 'review');
+  assert.equal(fieldView(state, opened.ui).head, 'Tale 3 of 3 · ✓ Named');
+  assert.deepEqual(contract(state, opened.ui).map(c => c.label), ['Next tale', 'Share tales']);
+  assert.deepEqual(tales.act(state, opened.ui, cmd('again')), { state, ui: opened.ui });
+  ({ state, ui } = tales.act(state, opened.ui, cmd('next')));
+  assert.equal(state, saved);
+  assert.equal(phaseOf(state, ui), 'read');
   ({ state, ui } = tales.act(state, ui, cmd('pick-science')));
   ({ state, ui } = tales.act(state, ui, field(1)));
   const next = tales.act(state, ui, cmd('next'));
@@ -248,8 +293,9 @@ test('help, field text, static and generated lines all fit a dialogue page per s
   for (const line of [...HELP, STAMP_TALES, ...Object.values(LINES).filter(v => typeof v === 'string')]) fits(line);
   for (let deck = 0; deck < 3; deck++) for (let count = 0; count <= 3; count++) {
     const state = normalizeTales(snapshot(deck, TALE_DECKS[deck].slice(0, count).map(t => t.id)));
-    for (const ui of [{ phase: 'read' }, { phase: 'done', review: state.solved.at(-1) }, { phase: 'prove', pick: currentTale(state)?.who }]) {
+    for (const ui of [{ phase: 'read' }, { phase: 'done', review: state.solved.at(-1) }, { phase: 'prove', pick: currentTale(state)?.who }, ...state.solved.map(review => ({ phase: 'review', review }))]) {
       const view = fieldView(state, ui);
+      contract(state, ui);
       for (const line of [view.head, view.label, view.book.title, ...(view.named ? [view.named.name] : []), ...view.lines.flatMap(l => [l.text, l.label])]) fits(line);
     }
   }
@@ -282,77 +328,42 @@ test('creation SVG filters junk, draws deck-order stamps, and escapes text and a
   }
 });
 
-// Minimal fake DOM, based on activity-story.test.js, with event/focus support for the roving line buttons.
-function fakeDocument() {
-  const doc = { activeElement: null };
-  const all = el => [el, ...el.children.flatMap(all)];
-  const make = tag => {
-    const el = {
-      tagName: tag.toUpperCase(), children: [], parentElement: null, attrs: {}, classes: new Set(), listeners: new Map(), _text: '', _html: '', hidden: false,
-      get className() { return [...el.classes].join(' '); }, set className(v) { el.classes = new Set(v.split(/\s+/).filter(Boolean)); },
-      classList: { toggle: (c, on) => { on ? el.classes.add(c) : el.classes.delete(c); } },
-      get textContent() { return el._text; }, set textContent(v) { el._text = String(v); el.children = []; },
-      get innerHTML() { return el._html; }, set innerHTML(v) { el._html = String(v); el.children = parse(String(v)); el.children.forEach(c => { c.parentElement = el; }); },
-      setAttribute: (k, v) => { el.attrs[k] = String(v); }, getAttribute: k => el.attrs[k] ?? null,
-      append: (...kids) => { kids.forEach(k => { k.parentElement = el; }); el.children.push(...kids); },
-      remove() { if (el.parentElement) el.parentElement.children = el.parentElement.children.filter(c => c !== el); },
-      querySelector: sel => el.querySelectorAll(sel)[0] ?? null,
-      querySelectorAll: sel => all(el).filter(n => n !== el && n.classes.has(sel.slice(1))),
-      closest: sel => el.classes.has(sel.slice(1)) ? el : el.parentElement?.closest(sel),
-      addEventListener: (name, fn) => el.listeners.set(name, fn),
-      removeEventListener: (name, fn) => { if (el.listeners.get(name) === fn) el.listeners.delete(name); },
-      focus: () => { doc.activeElement = el; },
-    };
-    return el;
-  };
-  function parse(html) {
-    const stack = [{ children: [] }];
-    for (const m of html.matchAll(/<(\/?)([a-z]+)([^>]*)>([^<]*)/g)) {
-      const [, close, tag, attrs, text] = m;
-      if (close) { if (stack.length > 1) stack.pop(); continue; }
-      const el = make(tag), cls = /class="([^"]*)"/.exec(attrs);
-      if (cls) el.className = cls[1];
-      el._text = text; el.parentElement = stack.at(-1);
-      stack.at(-1).children.push(el); stack.push(el);
-    }
-    return stack[0].children;
-  }
-  return Object.assign(doc, { createElement: make });
-}
-
-test('mounted field updates in place; all lines remain reachable and arrows yield to the menu', () => {
+test('mounted field updates in place; all lines and filled slots are reachable and arrows yield to the menu', () => {
   const before = globalThis.document;
-  globalThis.document = fakeDocument();
+  globalThis.document = new Doc();
   try {
     const host = document.createElement('div'), actions = [];
+    document.body.append(host);
     const mounted = tales.mountField(host, { dispatch: a => actions.push(a) });
     const root = host.children[0];
-    const lines = root.querySelectorAll('.tales-line');
+    const lines = root.querySelectorAll('.tales-line'), slots = root.querySelectorAll('.tales-slot');
     const text = cls => root.querySelector(cls).textContent;
     let { state, ui } = tales.start();
     mounted.update(state, ui);
     assert.equal(text('.tales-head'), 'Tale 1 of 3');
     assert.equal(text('.tales-book__title'), 'Tales 0/3');
     assert.deepEqual(lines.map(l => l.tabIndex), [0, -1, -1]);
-    const key = (i, key) => {
-      const event = { target: lines[i], key, prevented: false, preventDefault() { this.prevented = true; } };
-      root.listeners.get('keydown')(event); return event;
+    assert.ok(slots.every(s => s.tagName === 'BUTTON' && s.disabled && s.tabIndex === -1));
+    slots[0].click(); assert.equal(actions.length, 0);
+    const key = (el, key) => {
+      const event = new Event('keydown', { key });
+      el.dispatchEvent(event); return event;
     };
     lines[0].focus();
-    assert.equal(key(0, 'ArrowDown').prevented, true); assert.equal(document.activeElement, lines[1]);
-    assert.equal(key(1, 'ArrowDown').prevented, true); assert.equal(document.activeElement, lines[2]);
-    assert.equal(key(2, 'ArrowDown').prevented, false);
-    assert.equal(key(2, 'ArrowUp').prevented, true); assert.equal(document.activeElement, lines[1]);
+    assert.equal(key(lines[0], 'ArrowDown').defaultPrevented, true); assert.equal(document.activeElement, lines[1]);
+    assert.equal(key(lines[1], 'ArrowDown').defaultPrevented, true); assert.equal(document.activeElement, lines[2]);
+    assert.equal(key(lines[2], 'ArrowDown').defaultPrevented, false);
+    assert.equal(key(lines[2], 'ArrowUp').defaultPrevented, true); assert.equal(document.activeElement, lines[1]);
     for (const k of ['Enter', ' ']) {
-      assert.equal(key(1, k).prevented, false);
+      assert.equal(key(lines[1], k).defaultPrevented, false);
       assert.equal(routeIntent({ target: lines[1], key: k }), 'native');
     }
-    assert.equal(key(1, 'Tab').prevented, false);
-    root.listeners.get('click')({ target: lines[1].querySelector('.tales-line__text') });
+    assert.equal(key(lines[1], 'Tab').defaultPrevented, false);
+    lines[1].querySelector('.tales-line__text').click();
     assert.deepEqual(actions, [field(1)]);
     ({ state, ui } = tales.act(state, ui, cmd('pick-science')));
     mounted.update(state, ui);
-    assert.ok(root.querySelector('.tales-card').classes.has('tales-card--prove'));
+    assert.ok(root.querySelector('.tales-card').classList.contains('tales-card--prove'));
     ({ state, ui } = tales.act(state, ui, field(1)));
     mounted.update(state, ui);
     assert.equal(text('.tales-head'), 'Tale 1 of 3 · ✓ Named');
@@ -363,15 +374,78 @@ test('mounted field updates in place; all lines remain reachable and arrows yiel
     assert.ok(lines.every(l => !l.hidden));
     assert.equal(document.activeElement, lines[1]);
     assert.deepEqual(lines.map(l => l.tabIndex), [-1, 0, -1]);
+    assert.deepEqual(slots.map(s => s.disabled), [false, true, true]);
+    assert.deepEqual(slots.map(s => s.tabIndex), [0, -1, -1]);
     assert.match(root.querySelector('.tales-named__pic').innerHTML, /figure--science/);
-    assert.deepEqual(root.querySelectorAll('.tales-line'), lines);
+    key(lines[1], 'ArrowRight');
+    assert.equal(document.activeElement, slots[0]);
+    pressKey(slots[0], 'keydown', 'Enter');
+    assert.deepEqual(actions.at(-1), review('momo-kitchen'));
+    ({ state, ui } = tales.act(state, ui, actions.at(-1)));
+    mounted.update(state, ui);
+    assert.equal(document.activeElement, slots[0]);
+    assert.equal(slots[0].getAttribute('aria-pressed'), 'true');
+    assert.equal(key(slots[0], 'ArrowDown').defaultPrevented, false, 'skip empty slots and yield to the menu');
+    assert.equal(key(slots[0], 'Tab').defaultPrevented, false);
+    key(slots[0], 'ArrowLeft'); assert.equal(document.activeElement, lines[0]);
     const ready = tales.start(snapshot(0, TALE_DECKS[0].map(t => t.id)));
-    mounted.update(ready.state, ready.ui);
+    ({ state, ui } = ready);
+    mounted.update(state, ui);
     assert.equal(text('.tales-head'), 'Three tales, three names!');
     assert.equal(text('.tales-book__title'), 'Tales 3/3');
-    assert.equal(root.querySelectorAll('.tales-slot--filled').length, 3);
+    assert.ok(slots.every(s => !s.disabled));
+    lines[2].querySelector('.tales-line__text').click();
+    assert.deepEqual(actions.at(-1), field(2));
+    ({ state, ui } = tales.act(state, ui, actions.at(-1)));
+    mounted.update(state, ui);
+    assert.equal(text('.tales-named__name'), 'Kiko’s tale');
+    assert.deepEqual(lines.map(l => l.querySelector('.tales-line__text').textContent), TALE_DECKS[0][2].lines);
+    assert.ok(lines[1].classList.contains('tales-line--proof'));
+    key(lines[2], 'ArrowRight'); assert.equal(document.activeElement, slots[2]);
+    key(slots[2], 'ArrowUp'); assert.equal(document.activeElement, slots[1]);
+    assert.deepEqual(slots.map(s => s.tabIndex), [-1, 0, -1]);
+    pressKey(slots[1], 'keydown', ' '); pressKey(slots[1], 'keyup', ' ');
+    assert.deepEqual(actions.at(-1), review('taro-pier'));
+    ({ state, ui } = tales.act(state, ui, actions.at(-1)));
+    mounted.update(state, ui);
+    assert.equal(text('.tales-named__name'), 'Taro’s tale');
+    assert.ok(lines[2].classList.contains('tales-line--proof'));
+    assert.equal(document.activeElement, slots[1]);
+    for (const el of [...slots, ...lines]) fits(el.getAttribute('aria-label'));
+    const again = tales.act(state, ui, cmd('again'));
+    mounted.update(again.state, again.ui);
+    assert.equal(document.activeElement, lines[2], 'a disabled book slot returns focus to the card');
+    assert.ok(slots.every(s => s.disabled && s.tabIndex === -1));
     assert.deepEqual(root.querySelectorAll('.tales-line'), lines);
+    assert.deepEqual(root.querySelectorAll('.tales-slot'), slots);
     mounted.destroy();
-    assert.equal(host.children.length, 0); assert.equal(root.listeners.size, 0);
+    assert.equal(host.children.length, 0);
+    assert.ok(Object.values(root.listeners).every(list => list.length === 0));
   } finally { if (before === undefined) delete globalThis.document; else globalThis.document = before; }
+});
+
+test('review leaves room for three two-row lines at both text sizes, without shrinking the text', () => {
+  const css = readFileSync(new URL('../src/ui/activities/tales.css', import.meta.url), 'utf8');
+  const tokens = readFileSync(new URL('../src/ui/tokens.css', import.meta.url), 'utf8');
+  assert.equal(declarations(css, '.tales-line')['font-size'], 'var(--text-field)');
+  assert.equal(declarations(css, '.tales-named__name')['font-size'], 'var(--text-body)');
+  assert.equal(declarations(css, '.tales-slot__name')['font-size'], 'var(--text-small)');
+  assert.equal(declarations(css, '.tales-slot').padding, '0');
+  assert.equal(declarations(css, '.tales-slot:focus-visible').outline, '3px solid var(--ink)');
+  const paddingY = style => {
+    const values = style.padding.split(/\s+/).map(parseFloat);
+    return parseFloat(style['padding-top'] ?? values[0]) + parseFloat(style['padding-bottom'] ?? values[2] ?? values[0]);
+  };
+  for (const large of [false, true]) {
+    const variables = { ...declarations(tokens, ':root'), ...(large ? declarations(tokens, '.large-text') : {}) };
+    const style = selector => ({ ...declarations(css, selector), ...(large ? declarations(css, `.large-text ${selector}`) : {}) });
+    const card = style('.tales-card'), lines = style('.tales-lines'), line = style('.tales-line');
+    const head = declarations(css, '.tales-head'), name = declarations(css, '.tales-named__name');
+    const font = rule => parseFloat(resolveVars(rule['font-size'], variables));
+    const height = paddingY(card) + 2 * parseFloat(card.border) + 2 * parseFloat(card.gap)
+      + font(head) * Number(head['line-height'])
+      + Math.max(parseFloat(declarations(css, '.tales-named__pic').height), font(name) * Number(name['line-height']))
+      + 2 * parseFloat(lines.gap) + 3 * (2 * font(line) * Number(line['line-height']) + paddingY(line) + 2 * parseFloat(line.border));
+    assert.ok(height <= 268, `review's two-row line budget is ${height}px (large=${large})`);
+  }
 });

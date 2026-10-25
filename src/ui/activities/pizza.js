@@ -7,6 +7,12 @@ import { gridMove, keyIntent } from '../input.js';
 import { INK, PAPER, PAPER_SHADE, PATH, WOOD, LANTERN, VERMILION, SUBJECT_THEME } from '../palette.js';
 
 export const LINES = PIZZA_LINES;
+export const helpFor = grade => [
+  'New pizza picks the slices. Tap a friend to give one.',
+  grade >= 5 ? 'Cut a half when slices are left. Hand out every piece.' : 'Hand out every slice. Tap one to take it back.',
+  'Choose Dig in! to check the shares.',
+  'When all four match, choose Serve pizza.',
+];
 export const PIZZA_GLYPH = '<svg class="icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M8 2h3v9H2V8h2V5h4zM13 2h3v2h3v3h3v4h-9zM2 13h9v9H8v-2H5v-3H2zM13 13h9v3h-2v3h-3v3h-4z"/></svg>';
 const validPlate = i => Number.isInteger(i) && i >= 0 && i < 4;
 
@@ -273,12 +279,7 @@ function mountField(host, { dispatch = () => {} } = {}) {
 
 export default {
   kind: 'math', title: 'Taro’s pizza party', rewardLabel: 'Pizza party',
-  help: [
-    'New pizza picks the slices. Tap a friend to give one.',
-    'Tap a slice on a plate to take it back.',
-    'Choose Dig in! to check the shares.',
-    'When all four match, choose Serve pizza.',
-  ],
+  help: helpFor(3), helpFor,
   notReadyLine: LINES.changed,
   start(snapshot, { grade = 3, chapter = 1 } = {}) {
     const saved = snapshot?.kind === 'math' && snapshot.activity === 'pizza' ? snapshot : null;

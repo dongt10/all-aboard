@@ -1,5 +1,6 @@
 import { normalizeEncounterSnapshot, encounterReady, cartBalance, encounterOpeningDialogue, startingCargo } from '../../encounters.js';
 import { INK, INK_SOFT, PAPER, PAPER_SHADE, WOOD } from '../palette.js';
+import { gridMove, keyIntent } from '../input.js';
 
 // Opaque, one-pixel ink silhouettes. Wood and iron each have a top-left light and a bottom shade.
 const WOOD_LIGHT = '#e7b57d', WOOD_SHADE = '#8d513c';
@@ -37,12 +38,13 @@ const wheelArt = art('wheel', 40, 40,
 
 // Taro's cart (math): Taro pre-loads the left bay; the child loads the right until both sides weigh
 // the same, then rolls it. Crate sizes are picked on a small rail inside the field; a loaded crate is a
-// button that takes itself off. One verb everywhere: roll.
+// button that takes itself off unless it belongs to Taro's starting load. One verb everywhere: roll.
 const MAX = 8;
 const SIDES = ['left', 'right'];
 export const LINES = {
   load: 'Make the two loads equal, then roll it.',
   unload: 'One crate off. Make the two loads equal.',
+  fixed: 'Those are Taro’s crates. Load the right side to match.',
   equal: 'Equal! Choose Roll it!',
   changed: 'The load changed. Roll it again.',
   full: 'That side is full. Take a crate off.',
@@ -57,6 +59,12 @@ const sum = list => list.reduce((a, b) => a + b, 0);
 export function cartWeights(grade) {
   if (grade >= 3) return [1, 2, 3, 5];
   return grade >= 1 ? [1, 2] : [1];
+}
+
+// Protect the starting load only while it is still the complete left prefix. Older drafts stay intact.
+export function fixedCount(state, grade = state?.grade) {
+  const fixed = startingCargo(grade).left;
+  return Array.isArray(state?.left) && fixed.every((weight, i) => state.left[i] === weight) ? fixed.length : 0;
 }
 
 // What to say after the cargo changed: the equal line once the sides match (and stops repeating),
@@ -76,8 +84,9 @@ function load(state, ui, side) {
   if (state[side].length >= MAX) return { state, ui, line: LINES.full };
   return changeCargo(state, ui, side, [...state[side], ui.weight], LINES.load);
 }
-function remove(state, ui, side, index) {
+function remove(state, ui, side, index, grade) {
   if (!SIDES.includes(side) || !Number.isInteger(index) || index < 0 || index >= state[side].length) return { state, ui };
+  if (side === 'left' && index < fixedCount(state, grade)) return { state, ui, line: LINES.fixed };
   return changeCargo(state, ui, side, state[side].filter((_, i) => i !== index), LINES.unload);
 }
 // Every tap on the rail answers with the weight, even a repeat (at K the rail is a single crate).
@@ -100,7 +109,7 @@ const isSaved = snapshot => Boolean(snapshot) && typeof snapshot === 'object' &&
 const cart = {
   kind: 'math',
   title: 'Taro’s cart',
-  help: ['Tap a crate size, then tap a side to load it.', 'Tap a loaded crate to take it off.', 'Make both sides weigh the same.', 'Choose Roll it!, then Send cart.'],
+  help: ['Tap a crate size, then tap a side to load it.', 'Tap a crate you loaded to take it off.', 'Make both sides weigh the same.', 'Choose Roll it!, then Send cart.'],
   notReadyLine: LINES.changed,
   // A new cart starts with Taro's crates on the left (per grade band). A saved draft is never re-seeded.
   start(snapshot, { chapter = 0, grade = 1 } = {}) {
@@ -117,9 +126,9 @@ const cart = {
       { id: 'finish', label: 'Send cart', icon: 'check', finish: true, disabled: !encounterReady(state) },
     ];
   },
-  act(state, ui, action, grade) {
+  act(state, ui, action, grade = state.grade) {
     if (action?.type === 'field') {
-      if (action.remove) return remove(state, ui, action.remove.side, action.remove.index);
+      if (action.remove) return remove(state, ui, action.remove.side, action.remove.index, grade);
       if (action.load) return load(state, ui, action.load);
       if (action.weight !== undefined) return pickSize(state, ui, action.weight, grade);
       return { state, ui };
@@ -156,35 +165,43 @@ const cart = {
       crates: [...root.querySelectorAll(`.cart__crate[data-side="${side}"]`)],
       total: root.querySelector(`.cart__total[data-side="${side}"] .cart__total-num`),
     }]));
-    root.addEventListener('click', event => {
+    const onClick = event => {
       const size = event.target.closest('.cart__size');
       if (size) return dispatch({ type: 'field', weight: Number(size.dataset.weight) });
       const crate = event.target.closest('.cart__crate');
-      if (crate) return dispatch({ type: 'field', remove: { side: crate.dataset.side, index: Number(crate.dataset.index) } });
+      if (crate) {
+        if (crate.disabled || crate.hidden) return;
+        return dispatch({ type: 'field', remove: { side: crate.dataset.side, index: Number(crate.dataset.index) } });
+      }
       const bay = event.target.closest('.cart__load');
       if (bay) dispatch({ type: 'field', load: bay.dataset.side });
-    });
+    };
     // Left/right arrows walk the size rail like a radio group; the pick happens at once.
-    root.addEventListener('keydown', event => {
+    const onKey = event => {
       const size = event.target.closest?.('.cart__size');
-      if (!size || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+      const intent = keyIntent(event);
+      if (!size || !['left', 'right'].includes(intent)) return;
       event.preventDefault();
       event.stopPropagation();
-      const at = sizeButtons.indexOf(size), step = event.key === 'ArrowRight' ? 1 : -1;
-      const next = sizeButtons[(at + step + sizeButtons.length) % sizeButtons.length];
+      const at = sizeButtons.indexOf(size), moved = gridMove(at, intent, sizeButtons.length, sizeButtons.length);
+      const next = sizeButtons[moved === at ? (intent === 'right' ? 0 : sizeButtons.length - 1) : moved];
       next.focus();
       dispatch({ type: 'field', weight: Number(next.dataset.weight) });
-    });
+    };
+    root.addEventListener('click', onClick);
+    root.addEventListener('keydown', onKey);
     const replay = name => {
       move.classList.remove('cart--roll', 'cart--wobble');
       void move.offsetWidth;   // restart the animation
       move.classList.add(name);
     };
-    move.addEventListener('animationend', () => move.classList.remove('cart--roll', 'cart--wobble'));
+    const onAnimationEnd = () => move.classList.remove('cart--roll', 'cart--wobble');
+    move.addEventListener('animationend', onAnimationEnd);
     let rolls = null;
 
     return {
       update(state, ui) {
+        const fixed = fixedCount(state, grade);
         for (const button of sizeButtons) {
           const picked = Number(button.dataset.weight) === ui.weight;
           button.setAttribute('aria-checked', String(picked));
@@ -198,15 +215,18 @@ const cart = {
           total.textContent = String(sum(list));
           crates.forEach((button, i) => {
             const weight = list[i];
+            const tied = side === 'left' && i < fixed;
+            if (tied && document.activeElement === button) bay.focus();
+            button.disabled = tied;
+            button.className = `cart__crate${weight === undefined ? '' : ` cart__crate--w${weight}`}${tied ? ' cart__crate--fixed' : ''}`;
             if (weight === undefined) {
               if (document.activeElement === button) bay.focus();
               button.hidden = true;
               return;
             }
             button.hidden = false;
-            button.className = `cart__crate cart__crate--w${weight}`;
             button.textContent = String(weight);
-            button.setAttribute('aria-label', `Take off the ${weight} crate on the ${side}`);
+            button.setAttribute('aria-label', tied ? `Taro’s ${weight} crate. Load the right side to match.` : `Take off the ${weight} crate on the ${side}`);
           });
         }
         const { left, right } = cartBalance(state);
@@ -214,7 +234,12 @@ const cart = {
         if (rolls !== null && ui.rolls !== rolls && ui.lastRoll) replay(ui.lastRoll === 'smooth' ? 'cart--roll' : 'cart--wobble');
         rolls = ui.rolls;
       },
-      destroy() { root.remove(); },
+      destroy() {
+        root.removeEventListener('click', onClick);
+        root.removeEventListener('keydown', onKey);
+        move.removeEventListener('animationend', onAnimationEnd);
+        root.remove();
+      },
     };
   },
 };

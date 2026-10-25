@@ -84,7 +84,13 @@
   box-shadow: calc(var(--crate-width) - 10px) 0 var(--ink), 0 calc(var(--crate-height) - 10px) var(--ink),
     calc(var(--crate-width) - 10px) calc(var(--crate-height) - 10px) var(--ink);
 }
-.cart__size:hover::before, .cart__crate:hover::before { background: var(--crate-light); }
+.cart__size:hover::before, .cart__crate:hover:not(:disabled)::before { background: var(--crate-light); }
+.cart__crate--fixed { cursor: default; opacity: 1; }
+/* A pale tie along the edge marks Taro's crates without covering the weight. */
+.cart__crate--fixed::after {
+  left: 1px; top: -4px; width: 4px; height: var(--crate-height); background: var(--paper-shade);
+  box-shadow: -1px 0 0 var(--ink), 1px 0 0 var(--ink);
+}
 .cart__crate--w1 { --crate: var(--lantern); --crate-light: #ffe08f; --crate-shade: #d99a30; }
 .cart__crate--w2 { --crate: var(--science); --crate-light: #9be7dd; --crate-shade: #279c96; }
 .cart__crate--w3 { --crate: var(--reading); --crate-light: #b7deff; --crate-shade: #4284c7; }

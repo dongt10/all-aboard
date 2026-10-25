@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createVillageScene, frameFor } from '../src/ui/screens/village.js';
+import { createVillageScene, dialogueBox, frameFor, WELCOME_LINE } from '../src/ui/screens/village.js';
 import { createParadeScene } from '../src/ui/screens/parade.js';
 import { createEncounterScene } from '../src/ui/screens/encounter.js';
 import { createState, publishCreation, loadState, STORAGE_KEY } from '../src/progress.js';
@@ -356,6 +356,17 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
 
 const A_KEY_CASES = [['Enter', 'Enter'], [' ', 'Space'], ['z', 'Z'], ['Z', 'Shift+Z']];
 const WALK_HINT = 'Walk up to a neighbor, then press Enter.';
+test('dialogueBox keeps the welcome on top and uses strict feet boundaries for other lines', () => {
+  for (const feet of [null, undefined, { x: 0, y: 0 }, PLAYER_START]) {
+    assert.equal(dialogueBox(feet, WELCOME_LINE), 'top');
+  }
+  for (const feet of [null, undefined, { x: 440, y: 500 }, { x: 800, y: 330 }, { x: 400, y: 300 }]) {
+    assert.equal(dialogueBox(feet, WALK_HINT), 'bottom');
+  }
+  for (const feet of [PLAYER_START, { x: 441, y: 331 }, { x: 850, y: 470 }]) {
+    assert.equal(dialogueBox(feet, WALK_HINT), 'top');
+  }
+});
 const readAloudState = () => {
   const state = createState();
   return { ...state, settings: { ...state.settings, autoRead: true } };
@@ -455,14 +466,13 @@ test('a child-started neighbor conversation cancels the opening timeout and stay
   assert.equal(f.root.querySelector('.village-actor[data-id="pip"]').classList.contains('village-actor--near'), true);
 });
 
-for (const input of ['Escape', 'step', 'last-page A', 'destroy', 'pause', 'guide', 'help', 'window']) {
+for (const input of ['Escape', 'step', 'destroy', 'pause', 'guide', 'help', 'window']) {
   test(`${input} cancels the opening timer before it can fire`, t => {
     const clock = openingClock(t), f = villageFixture(t, { calm: true });
     const box = f.root.querySelector('.village-dialogue');
     clock.advance(1000);
     if (input === 'Escape') f.scene.handleIntent('b'); // app maps Escape to B
     if (input === 'step') f.scene.handleIntent('left');
-    if (input === 'last-page A') f.scene.handleIntent('a');
     if (input === 'destroy') f.scene.destroy();
     if (input === 'pause') f.scene.pause();
     if (input === 'guide' || input === 'help') f.root.querySelector(`[data-act="${input}"]`).click();
@@ -472,11 +482,75 @@ for (const input of ['Escape', 'step', 'last-page A', 'destroy', 'pause', 'guide
       f.stage.append(backdrop); f.tick();
     }
     if (input === 'Escape' || input === 'step') assert.equal(box.hidden, true, 'closes immediately');
-    if (input === 'last-page A') assert.equal(f.root.querySelector('.dlg__text').textContent, WALK_HINT);
     clock.advance(60000);
     assert.ok(clock.callbacks.every(callback => callback.mock.callCount() === 0), 'cancelled callback never runs');
   });
 }
+
+test('last-page A cancels the opening timer and starts a fresh three-second hint timer', t => {
+  const clock = openingClock(t), f = villageFixture(t, { calm: true });
+  clock.advance(2000);
+  const welcomeTimer = clock.callbacks.at(-1);
+  f.scene.handleIntent('a');
+  assert.equal(f.root.querySelector('.dlg__text').textContent, WALK_HINT);
+  clock.advance(2999);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  assert.equal(welcomeTimer.mock.callCount(), 0);
+  clock.advance(1);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+  assert.equal(clock.callbacks.at(-1).mock.callCount(), 1);
+});
+
+for (const large of [false, true]) test(`the Enter hint closes by itself after 3 s and sits on top at the pier, at the bottom elsewhere (large=${large})`, t => {
+  const clock = openingClock(t), f = villageFixture(t, { calm: true, large });
+  const box = f.root.querySelector('.village-dialogue');
+  for (const [feet, top] of [[PLAYER_START, true], [{ x: 480, y: 320 }, false], [{ x: 850, y: 470 }, true]]) {
+    f.tap(feet.x, feet.y); f.tick();
+    assert.deepEqual(f.pos(), feet);
+    assert.equal(f.root.querySelector('.village-talk').hidden, true);
+    pressKey(f.root, 'keydown', 'Enter');
+    assert.equal(f.root.querySelector('.dlg__text').textContent, WALK_HINT);
+    assert.equal(box.classList.contains('village-dialogue--top'), top);
+    assert.equal(box.hidden, false);
+    clock.advance(2999);
+    assert.equal(box.hidden, false);
+    clock.advance(1);
+    assert.equal(box.hidden, true);
+    assert.equal(f.doc.activeElement, f.root);
+  }
+});
+
+for (const input of ['step', 'B']) test(`a ${input} cancels the hint timer`, t => {
+  const clock = openingClock(t), f = villageFixture(t, { calm: true });
+  f.scene.handleIntent('a');
+  clock.advance(1000);
+  f.scene.handleIntent(input === 'step' ? 'up' : 'b');
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+  clock.advance(60000);
+  assert.ok(clock.callbacks.every(callback => callback.mock.callCount() === 0));
+});
+
+test('the hint waits three seconds after speech; B cancels late speech and its timer', t => {
+  const clock = openingClock(t), utterances = speechFixture(t);
+  const f = villageFixture(t, { large: true, state: readAloudState(), voice: speak });
+  f.scene.handleIntent('b');
+  f.scene.handleIntent('a');
+  clock.advance(3000);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false, 'still being read');
+  utterances.at(-1).fire(new Event('end'));
+  clock.advance(2999);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  clock.advance(1);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+  f.scene.handleIntent('a');
+  const hintTimer = clock.callbacks.at(-1);
+  f.scene.handleIntent('b');
+  const scheduled = clock.callbacks.length;
+  utterances.at(-1).fire(new Event('end'));
+  assert.equal(clock.callbacks.length, scheduled);
+  clock.advance(60000);
+  assert.equal(hintTimer.mock.callCount(), 0);
+});
 
 for (const large of [false, true]) test(`Read to me waits for the final page's speech end, then ${large ? 6 : 4}s`, t => {
   const clock = openingClock(t), utterances = speechFixture(t);

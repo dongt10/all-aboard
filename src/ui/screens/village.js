@@ -28,6 +28,11 @@ export const CELEBRATE_LINE = 'That’s going straight into the festival!';
 const A_KEYS = new Set(['Enter', ' ', 'z', 'Z']);
 const WALK_HINT = 'Walk up to a neighbor, then press Enter.';
 
+// Keep the welcome above the square and move other words clear of the speaker's feet.
+export function dialogueBox(feet, words) {
+  return words === WELCOME_LINE || (feet?.x > 440 && feet?.y > 330) ? 'top' : 'bottom';
+}
+
 // A belongs to the village when its root, an actor button or the Talk chip has focus, even with nobody near.
 // `near` is kept in the call signature but never gates key ownership; aAction decides what the press does.
 // `button` means an actor or Talk button only. HUD, Parade and dialogue controls keep their own keys.
@@ -94,7 +99,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   const actors = new Map();          // id → { id, el, fig, pos, target, facing, step, clock, waitUntil, render }
   const player = { pos: { ...PLAYER_START }, target: null, tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
   let near = null;
-  let opening = false, closeTimer = null, unwatchSpeech = null;
+  let timing = null, closeTimer = null, unwatchSpeech = null;
 
   const state = () => ctx.getState();
   const largeText = () => Boolean(ctx.stage?.classList.contains('large-text'));
@@ -119,13 +124,13 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     unwatchSpeech = null;
   }
   function cancelOpening() {
-    opening = false;
+    timing = null;
     clearCloseTimer();
   }
   function onPage({ text, hasMore, speech }) {
     clearCloseTimer();
-    if (!opening || hasMore || !text || paused || !alive) return;
-    const delay = largeText() ? 6000 : 4000;
+    if (!timing || hasMore || !text || paused || !alive) return;
+    const delay = timing.closeAfter ?? (largeText() ? 6000 : 4000);
     const close = () => {
       // Windows can open between frames, before pause() reaches this scene.
       if (ctx.stage?.querySelector('.win-backdrop')) { cancelOpening(); return; }
@@ -147,14 +152,13 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       };
     }
   }
-  // The box sits bottom right; when the speaker stands there (Kiko), it moves to the top.
-  function say(id, words, isOpening = false) {
+  // Hints use the player's feet; neighbor lines use the speaker's feet.
+  function say(id, words, { opening = false, closeAfter = null } = {}) {
     cancelOpening();
     if (!dialogue) return;
-    opening = isOpening;
-    const host = root.querySelector('.village-dialogue'), feet = actors.get(id)?.pos;
-    // Pip's welcome also goes to the top, so the first thing a new player reads never hides Kiko's stall.
-    host.classList.toggle('village-dialogue--top', Boolean(feet && feet.x > 440 && feet.y > 330) || words === WELCOME_LINE);
+    if (opening || closeAfter !== null) timing = { closeAfter };
+    const host = root.querySelector('.village-dialogue'), feet = id ? actors.get(id)?.pos : player.pos;
+    host.classList.toggle('village-dialogue--top', dialogueBox(feet, words) === 'top');
     host.hidden = false;
     dialogue.say(nameOf(id), words);
   }
@@ -393,7 +397,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const next = aAction({ near, dialogueOpen: !box.hidden, hasMore: dialogue.hasMore() });
     if (next.act === 'next') dialogue.next();
     else if (next.act === 'talk') { player.facing = 'back'; visit(next.id); }
-    else say(null, WALK_HINT);
+    else say(null, WALK_HINT, { closeAfter: 3000 });
   }
   // Keys reach the document after the village, so claiming A here stops the browser (and app.js) from clicking
   // whichever button happens to hold focus. Space clicks on keyup, so that keyup is swallowed too.
@@ -455,7 +459,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       drawTalk();
       drawFind();
       const opening = openingLine({ creations: getCreations(state()), celebrate });
-      if (opening) { if (opening.id !== 'pip') sparkle(opening.id); say(opening.id, opening.words, true); }   // nothing made yet: Pip says what to do
+      if (opening) { if (opening.id !== 'pip') sparkle(opening.id); say(opening.id, opening.words, { opening: true }); }   // nothing made yet: Pip says what to do
       if (findTarget) ctx.announce?.(`Find ${nameOf(findTarget)}. Follow the arrow.`);
       const button = focus && root.querySelector(`.village-actor[data-id="${focus}"]`);
       (button || root).focus({ preventScroll: true });   // the welcome never takes focus from the player controls

@@ -94,6 +94,7 @@ export const LINES = {
   nextTale: n => `Tale ${n}. Who is this one about?`,
   startOver: 'New tales! Read the first one. Who is it about?',
   readLine: (n, text) => `Line ${n}: ${text}`,
+  review: name => `${name}’s tale. Tap a line to hear it.`,
   clue: (name, text) => `${name}’s clue: ${text}`,
   notReady: 'The tales need names again. Read the tale.',
   allNamed: 'Three tales, three names!',
