@@ -1,6 +1,7 @@
 import { figureMarkup } from '../figures/index.js';
 import { icon } from '../icons.js';
 import { gridMove, keyIntent } from '../input.js';
+import { INK, PAPER, PAPER_SHADE, WOOD, VERMILION, LANTERN } from '../palette.js';
 import {
   HELP_JOBS, HELP_HELPERS, JOB_IDS, HELPER_IDS, JOB_SHORT, HELPDAY_LINES,
   normalizeHelpday, helpdayReady, helpdayOpening, helpDayFitCount, helpDayNextJob,
@@ -14,12 +15,40 @@ export const HELP = [
   'When all four jobs fit, choose Start day.',
 ];
 export const GLYPHS = {
-  lantern: 'M9 2h6v2H9zM6 4h12v2H6zM4 6h16v12H4zM6 18h12v2H6zM11 20h2v3h-2z',
-  gate: 'M2 3h20v3H2zM5 6h3v16H5zm11 0h3v16h-3zM3 9h18v3H3z',
-  envelope: 'M2 4h20v2H2zM2 18h20v2H2zM2 6h2v12H2zm18 0h2v12h-2zM4 6h3v2H4zm3 2h3v2H7zm3 2h4v2h-4zm4-2h3v2h-3zm3-2h3v2h-3z',
+  lantern: 'M9 2h6v2h3v2h2v12h-2v2h-5v3h-2v-3H6v-2H4V6h2V4h3z',
+  gate: 'M2 2h3v1h14V2h3v5h-3v15h-4V12H9v10H5V7H2z',
+  envelope: 'M2 4h20v16H2z',
 };
-const glyph = name => name === 'drum' ? icon('crate')
-  : `<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="${GLYPHS[name]}"/></svg>`;
+// Filled pixel silhouettes keep the one-pixel edge intact when the 24px art is shown at 20px.
+const pixel = (x, y, w, h, fill) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"/>`;
+function glyph(name) {
+  const art = {
+    lantern: `<path d="${GLYPHS.lantern}" fill="${INK}"/>`
+      + pixel(7, 5, 10, 14, VERMILION) + pixel(5, 7, 14, 10, VERMILION)
+      + pixel(7, 6, 3, 10, '#ff8a61') + pixel(10, 6, 5, 2, '#ff8a61')
+      + pixel(16, 8, 3, 9, '#a72f35') + pixel(8, 17, 9, 2, '#a72f35')
+      + pixel(11, 7, 1, 10, LANTERN) + pixel(7, 11, 10, 1, '#a72f35')
+      + pixel(10, 3, 4, 1, LANTERN) + pixel(11, 20, 1, 2, LANTERN),
+    gate: `<path d="${GLYPHS.gate}" fill="${INK}"/>`
+      + pixel(3, 4, 18, 2, VERMILION) + pixel(4, 4, 16, 1, '#ff8a61')
+      + pixel(6, 7, 2, 14, VERMILION) + pixel(16, 7, 2, 14, VERMILION)
+      + pixel(6, 7, 1, 12, '#ff8a61') + pixel(17, 7, 1, 14, '#a72f35')
+      + pixel(6, 9, 12, 2, VERMILION) + pixel(9, 9, 6, 1, '#ff8a61')
+      + pixel(6, 19, 2, 2, '#a72f35') + pixel(5, 21, 4, 1, INK) + pixel(15, 21, 4, 1, INK),
+    envelope: `<path d="${GLYPHS.envelope}" fill="${INK}"/>`
+      + pixel(3, 5, 18, 14, PAPER) + pixel(3, 5, 18, 1, '#ffffff')
+      + pixel(3, 6, 1, 12, '#ffffff') + pixel(19, 7, 2, 12, PAPER_SHADE) + pixel(4, 17, 17, 2, PAPER_SHADE)
+      + `<path d="M3 6h3v2h3v2h6V8h3V6h3v1h-2v2h-3v2H8V9H5V7H3z" fill="${INK}"/>`
+      + pixel(10, 11, 4, 4, INK) + pixel(11, 12, 2, 2, VERMILION) + pixel(11, 12, 1, 1, '#ff8a61'),
+    drum: pixel(3, 5, 18, 15, INK) + pixel(5, 3, 14, 19, INK)
+      + pixel(4, 7, 16, 12, WOOD) + pixel(6, 4, 12, 2, PAPER) + pixel(4, 6, 16, 2, PAPER_SHADE)
+      + pixel(4, 8, 3, 10, '#dca372') + pixel(17, 8, 3, 11, '#885036')
+      + pixel(6, 19, 12, 2, '#885036') + pixel(5, 8, 14, 1, INK) + pixel(5, 18, 14, 1, INK)
+      + pixel(7, 9, 1, 9, PAPER) + pixel(12, 9, 1, 9, PAPER) + pixel(17, 9, 1, 9, PAPER_SHADE)
+      + pixel(7, 4, 8, 1, '#ffffff'),
+  };
+  return `<svg${name === 'drum' ? ' class="icon"' : ''} viewBox="0 0 24 24" width="24" height="24" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${art[name]}</svg>`;
+}
 const selected = ui => helperById(ui?.helper) ?? HELP_HELPERS[0];
 
 // This label is shared by the field and the grade-5 accessibility test.

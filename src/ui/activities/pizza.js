@@ -1,14 +1,107 @@
 import {
   FRIENDS, PIZZA_CUTS, PIZZA_LINES, normalizePizza, pizzaReady, pizzaOpening,
-  pieceUnits, remainingUnits, pizzaReport, shareText, sectorPath, tryLine, giveLine, takeLine, newLine, cutLine,
+  pieceUnits, remainingUnits, pizzaReport, shareText, tryLine, giveLine, takeLine, newLine, cutLine,
 } from '../../pizza.js';
 import { figureMarkup } from '../figures/index.js';
 import { gridMove, keyIntent } from '../input.js';
-import { INK, PAPER_SHADE, LANTERN, VERMILION } from '../palette.js';
+import { INK, PAPER, PAPER_SHADE, PATH, WOOD, LANTERN, VERMILION, SUBJECT_THEME } from '../palette.js';
 
 export const LINES = PIZZA_LINES;
-export const PIZZA_GLYPH = '<svg class="icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M11 2a10 10 0 0 0-9 9h9zM13 2v9h9a10 10 0 0 0-9-9zM2 13a10 10 0 0 0 20 0z"/></svg>';
+export const PIZZA_GLYPH = '<svg class="icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><path d="M8 2h3v9H2V8h2V5h4zM13 2h3v2h3v3h3v4h-9zM2 13h9v9H8v-2H5v-3H2zM13 13h9v3h-2v3h-3v3h-4z"/></svg>';
 const validPlate = i => Number.isInteger(i) && i >= 0 && i < 4;
+
+// Filled pixel runs avoid half-pixel strokes and rotated edges. The silhouette uses
+// a 2px grid; its inside edge is one ink pixel. Light stays at the upper left as
+// pieces leave the tray. Splitting a slice also splits its existing pepperoni.
+const PIZZA_TONES = {
+  crust: INK, 'crust-base': SUBJECT_THEME.math.color, 'crust-light': PATH, 'crust-shade': WOOD,
+  cheese: LANTERN, 'cheese-light': '#ffe6a0', 'cheese-shade': '#d9a532',
+  pepper: VERMILION, 'pepper-light': '#f77b58', 'pepper-shade': '#a92e32',
+};
+const pizzaArtCache = new Map();
+function pizzaArt(slices, halves) {
+  const key = `${slices}/${halves}`;
+  if (pizzaArtCache.has(key)) return pizzaArtCache.get(key);
+  const count = slices * (halves ? 2 : 1), turn = Math.PI * 2;
+  const art = Array.from({ length: count }, () => Object.fromEntries(Object.keys(PIZZA_TONES).map(tone => [tone, ''])));
+  const owner = (x, y) => {
+    const dx = Math.floor(x / 2) * 2 + 1 - 80, dy = Math.floor(y / 2) * 2 + 1 - 80;
+    if (dx * dx + dy * dy > 76 * 76) return -1;
+    return Math.floor(((Math.atan2(dx, -dy) + turn) % turn) / turn * count);
+  };
+  const peppers = Array.from({ length: slices }, (_, j) => {
+    const angle = (j + 0.5) * turn / slices;
+    return [80 + 2 * Math.round(47 * Math.sin(angle) / 2), 80 - 2 * Math.round(47 * Math.cos(angle) / 2)];
+  });
+  const paint = (x, y) => {
+    const j = owner(x, y);
+    if (j < 0) return null;
+    let tone = 'crust';
+    if ([owner(x - 1, y), owner(x + 1, y), owner(x, y - 1), owner(x, y + 1)].every(n => n === j)) {
+      const dx = Math.floor(x / 2) * 2 + 1 - 80, dy = Math.floor(y / 2) * 2 + 1 - 80;
+      const radius = dx * dx + dy * dy;
+      if (radius > 66 * 66) {
+        tone = dx + dy < -24 ? 'crust-light' : dx + dy > 46 || y > 144 ? 'crust-shade' : 'crust-base';
+      } else {
+        tone = dx + dy < -44 ? 'cheese-light' : dx + dy > 62 ? 'cheese-shade' : 'cheese';
+        // A few baked cheese freckles, kept clear of the slice-counting cuts.
+        if ([[62, 56], [96, 66], [58, 108], [100, 104]].some(([a, b]) => x >= a && x < a + 2 && y >= b && y < b + 2)) tone = 'cheese-shade';
+        const [px, py] = peppers[Math.floor(j / (halves ? 2 : 1))];
+        const a = x - px, b = y - py;
+        if (a >= -5 && a < 5 && b >= -5 && b < 5 && Math.abs(a + 0.5) + Math.abs(b + 0.5) <= 7) {
+          const edge = a === -5 || a === 4 || b === -5 || b === 4 || Math.abs(a + 0.5) + Math.abs(b + 0.5) === 7;
+          tone = edge ? 'crust' : b >= 2 || a >= 3 ? 'pepper-shade' : a < 0 && b < -1 ? 'pepper-light' : 'pepper';
+        }
+      }
+    }
+    return `${j}:${tone}`;
+  };
+  for (let y = 0; y < 160; y++) {
+    let start = 0, last = null;
+    for (let x = 0; x <= 160; x++) {
+      const next = x < 160 ? paint(x, y) : null;
+      if (next === last) continue;
+      if (last !== null) {
+        const [j, tone] = last.split(':'), width = x - start;
+        art[j][tone] += `M${start} ${y}h${width}v1h-${width}z`;
+      }
+      start = x; last = next;
+    }
+  }
+  pizzaArtCache.set(key, art);
+  return art;
+}
+
+const PLATE_ART = `<svg viewBox="0 0 56 18" width="56" height="18" shape-rendering="crispEdges" aria-hidden="true">
+  <path d="M10 0h36v2h6v2h4v10h-4v2h-6v2H10v-2H4v-2H0V4h4V2h6z" fill="${INK}"/>
+  <path d="M10 1h36v2h6v2h3v8h-4v2h-6v2H11v-2H5v-2H1V5h4V3h5z" fill="${PAPER_SHADE}"/>
+  <path class="pizza-plate-face" d="M10 1h36v2h6v2h3v4H1V5h4V3h5z" fill="${PAPER}"/>
+  <path d="M8 6h40v2h4v3h-4v2H8v-2H4V8h4z" fill="#d6c39d"/>
+  <path d="M8 7h40v2h3v2h-4v1H9v-1H5V9h3z" fill="${PAPER_SHADE}"/>
+  <path d="M10 3h20v1H10zM6 5h4v1H6z" fill="${PAPER}"/>
+</svg>`;
+
+const PIECE_ART = `<svg viewBox="0 0 20 20" shape-rendering="crispEdges" aria-hidden="true">
+  <g class="pizza-piece-whole">
+    <path d="M5 1h10v1h3v4h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v1H9v-1H8v-2H7v-2H6v-2H5v-2H4V8H3V6H2V2h3z" fill="${INK}"/>
+    <path d="M5 2h10v1h2v3H3V3h2z" fill="${SUBJECT_THEME.math.color}"/>
+    <path d="M5 2h10v1H5zM3 3h2v1H3z" fill="${PATH}"/>
+    <path d="M3 5h14v1H3z" fill="${WOOD}"/>
+    <path d="M4 6h12v2h-1v2h-1v2h-1v2h-1v2h-1v2H9v-2H8v-2H7v-2H6v-2H5V8H4z" fill="${LANTERN}"/>
+    <path d="M4 6h6v1H5v1H4zM6 8h2v2H6z" fill="#ffe6a0"/>
+    <path d="M14 8h1v2h-1v2h-1v2h-1v2h-1v1h-1v-3h1v-2h1v-2h2z" fill="#d9a532"/>
+  </g>
+  <g class="pizza-piece-half">
+    <path d="M9 1h6v1h3v4h-1v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1v1H9z" fill="${INK}"/>
+    <path d="M10 2h5v1h2v3h-7z" fill="${SUBJECT_THEME.math.color}"/>
+    <path d="M10 2h5v1h-5z" fill="${PATH}"/><path d="M10 5h7v1h-7z" fill="${WOOD}"/>
+    <path d="M10 6h6v2h-1v2h-1v2h-1v2h-1v2h-1v2h-1z" fill="${LANTERN}"/>
+    <path d="M10 6h3v1h-2v8h-1z" fill="#ffe6a0"/>
+    <path d="M14 8h1v2h-1v2h-1v2h-1v2h-1v1h-1v-3h1v-2h1v-2h2z" fill="#d9a532"/>
+  </g>
+  <path d="M11 7h3v1h1v2h-1v1h-3V10h-1V8h1z" fill="${INK}"/>
+  <path d="M11 8h3v2h-3z" fill="${VERMILION}"/><path d="M11 8h1v1h-1z" fill="#f77b58"/>
+</svg>`;
 
 function changePlate(state, ui, i, giving, piece = pieceUnits(state)) {
   if (!validPlate(i)) return { state, ui };
@@ -60,9 +153,13 @@ function mountField(host, { dispatch = () => {} } = {}) {
   // Fixed pools: no focused button is replaced when a piece moves.
   root.innerHTML = `
     <div class="pizza-badges"><span class="px-chip pizza-total"></span><span class="px-chip pizza-equation"></span></div>
-    <button type="button" class="pizza-board"><svg viewBox="0 0 160 160" aria-hidden="true">
-      <circle cx="80" cy="80" r="78" fill="${PAPER_SHADE}" stroke="${INK}" stroke-width="2"/>
-      ${Array.from({ length: 24 }, () => `<g class="pizza-wedge"><path class="pizza-crust" fill="${LANTERN}" stroke="${INK}"/><path class="pizza-cheese" fill="#f4bf4f"/><circle class="pizza-pepper" r="4" fill="${VERMILION}"/></g>`).join('')}
+    <button type="button" class="pizza-board"><svg viewBox="0 0 160 160" shape-rendering="crispEdges" aria-hidden="true">
+      <path d="M48 0h64v4h16v8h12v12h12v16h4v16h4v48h-4v16h-4v16h-12v12h-12v8h-16v4H48v-4H32v-8H20v-12H8v-16H4v-16H0V56h4V40h4V24h12V12h12V4h16z" fill="${INK}"/>
+      <path d="M48 1h64v4h16v8h12v12h11v16h4v16h4v46h-4v16h-4v16h-11v12h-12v8h-16v4H48v-4H32v-8H20v-12H9v-16H5v-16H1V57h4V41h4V25h11V13h12V5h16z" fill="${PAPER_SHADE}"/>
+      <path d="M48 1h64v4h16v8h12v12h-4V17h-12V9h-16V5H52v4H36v8H24v12H13v16H9v16H5v42H1V57h4V41h4V25h11V13h12V5h16z" fill="${PAPER}"/>
+      <path d="M155 91h4v12h-4v16h-4v16h-11v12h-12v8h-16v4H48v-4H32v-4h16v4h64v-4h12v-8h12v-12h11v-16h4V99h4z" fill="#d6c39d"/>
+      <path d="M52 48h56v1H52zM44 72h72v1H44zM48 96h64v1H48zM60 120h36v1H60z" fill="#d6c39d"/>
+      ${Array.from({ length: 24 }, () => `<g class="pizza-wedge">${Object.entries(PIZZA_TONES).map(([tone, fill]) => `<path class="pizza-${tone}" fill="${fill}"/>`).join('')}</g>`).join('')}
     </svg></button>
     <div class="pizza-plank" aria-hidden="true"></div><i class="pizza-wheel pizza-wheel--left" aria-hidden="true"></i><i class="pizza-wheel pizza-wheel--right" aria-hidden="true"></i>
     <div class="pizza-ground" aria-hidden="true"></div>
@@ -72,13 +169,13 @@ function mountField(host, { dispatch = () => {} } = {}) {
   const total = root.querySelector('.pizza-total');
   const equation = root.querySelector('.pizza-equation');
   const wedges = [...root.querySelectorAll('.pizza-wedge')].map(node => ({ node,
-    crust: node.querySelector('.pizza-crust'), cheese: node.querySelector('.pizza-cheese'), pepper: node.querySelector('.pizza-pepper'),
+    layers: Object.keys(PIZZA_TONES).map(tone => [tone, node.querySelector(`.pizza-${tone}`)]),
   }));
   const gives = FRIENDS.map((friend, i) => {
     const button = doc.createElement('button');
     button.type = 'button'; button.className = 'pizza-give'; button.dataset.give = String(i);
     button.tabIndex = i === 0 ? 0 : -1;
-    button.innerHTML = `<span class="pizza-name">${friend.name}</span><span class="pizza-idle">${figureMarkup(friend.id, { scale: 1 })}</span><span class="pizza-joy" hidden>${figureMarkup(friend.id, { pose: 'joy', scale: 1 })}</span><span class="pizza-plate"><span class="pizza-count"></span></span><span class="pizza-worry" aria-hidden="true" hidden>!</span>`;
+    button.innerHTML = `<span class="pizza-name">${friend.name}</span><span class="pizza-idle">${figureMarkup(friend.id, { scale: 1 })}</span><span class="pizza-joy" hidden>${figureMarkup(friend.id, { pose: 'joy', scale: 1 })}</span><span class="pizza-plate">${PLATE_ART}<span class="pizza-count"></span></span><span class="pizza-worry" aria-hidden="true" hidden>!</span>`;
     friends.append(button);
     return { button, count: button.querySelector('.pizza-count'), idle: button.querySelector('.pizza-idle'), joy: button.querySelector('.pizza-joy'), worry: button.querySelector('.pizza-worry') };
   });
@@ -90,11 +187,11 @@ function mountField(host, { dispatch = () => {} } = {}) {
     return Array.from({ length: 12 }, () => {
       const button = doc.createElement('button');
       button.type = 'button'; button.className = 'pizza-piece'; button.dataset.take = String(i); button.hidden = true;
-      button.innerHTML = `<svg viewBox="0 0 20 20" aria-hidden="true"><path class="pizza-piece-whole" d="M10 18 2 3Q10-1 18 3Z"/><path class="pizza-piece-half" d="M10 18 10 1Q14 1 18 3Z"/><circle cx="12" cy="7" r="1.8" fill="${VERMILION}" stroke="none"/></svg>`;
+      button.innerHTML = PIECE_ART;
       group.append(button); return button;
     });
   });
-  let cursor = 0, previous = null;
+  let cursor = 0, previous = null, previousArt = null;
   function focusGive(i, focus = true) {
     cursor = i;
     gives.forEach(({ button }, at) => { button.tabIndex = at === cursor ? 0 : -1; });
@@ -132,18 +229,13 @@ function mountField(host, { dispatch = () => {} } = {}) {
       equation.classList.toggle('pizza-equation--ready', ready);
       const left = state.halves ? `${r.remaining} of ${state.slices * 2} halves` : `${r.remainingWhole} of ${state.slices} slices`;
       board.setAttribute('aria-label', `Pizza, ${left} left${state.grade >= 5 && !state.halves && r.remaining > 0 ? '. Tap to cut the leftovers in half' : ''}`);
-      const count = (state.slices * 2) / piece, used = (state.slices * 2 - r.remaining) / piece, angle = 360 / count;
-      wedges.forEach(({ node, crust, cheese, pepper }, j) => {
+      const count = (state.slices * 2) / piece, used = (state.slices * 2 - r.remaining) / piece;
+      const art = pizzaArt(state.slices, state.halves);
+      wedges.forEach(({ node, layers }, j) => {
         node.setAttribute('visibility', j >= used && j < count ? 'visible' : 'hidden');
-        node.setAttribute('transform', `rotate(${j * angle} 80 80)`);
-        crust.setAttribute('d', sectorPath(80, 80, 76, angle));
-        crust.setAttribute('stroke-width', state.halves ? '1' : '2');
-        cheese.setAttribute('d', sectorPath(80, 80, 67, angle));
-        cheese.setAttribute('stroke', INK);
-        cheese.setAttribute('stroke-width', state.halves ? '1' : '2');
-        pepper.setAttribute('cx', String(80 + 47 * Math.sin(angle * Math.PI / 360)));
-        pepper.setAttribute('cy', String(80 - 47 * Math.cos(angle * Math.PI / 360)));
+        if (art !== previousArt) layers.forEach(([tone, path]) => path.setAttribute('d', art[j]?.[tone] ?? ''));
       });
+      previousArt = art;
       gives.forEach(({ button, count: chip, idle, joy, worry }, i) => {
         const units = state.plates[i], friend = FRIENDS[i];
         chip.textContent = shareText(units);

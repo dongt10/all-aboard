@@ -58,40 +58,78 @@ export function paradeStatus(phase, reason, band) {
     .replace(' Try a new sound!', '');
 }
 
-// The sunset street behind the marchers (960×388): sky, warm glow with a low pixel sun, a row of lit
-// houses on the indigo band, the road, and triangle bunting on the lantern string. Flat and static.
+// The sunset street behind the marchers (960×388). All silhouettes use filled, integer-aligned
+// pixels: a one-pixel ink edge, a top-left highlight and a darker lower edge.
 const HOUSES = [   // [left, width, wall height, roof color]
   [8, 88, 48, 'vermilion'], [112, 72, 56, 'wood'], [196, 104, 44, 'ink'], [316, 80, 60, 'vermilion'],
   [412, 96, 48, 'wood'], [524, 72, 40, 'ink'], [612, 88, 52, 'vermilion'], [752, 96, 44, 'wood'], [864, 88, 56, 'ink'],
 ];
 const FLAG_COLORS = ['math', 'science', 'art', 'reading', 'writing', 'community', 'music'];
+const FLAG_SHADES = ['#c96d2c', '#26998d', '#c75c90', '#367394', '#8166bc', 'var(--grass-dark)', '#ca9231'];
 const rect = (x, y, w, h, attrs = '') => `<rect ${attrs}${attrs && ' '}x="${x}" y="${y}" width="${w}" height="${h}"/>`;
 
-// A pixel disc built from 4px rows, so it stays crisp at any stage scale.
+// A disc with 4px steps in its silhouette and a 1px ink boundary, including at each step.
 function sunRows(cx, cy, r) {
   const rows = [];
-  for (let y = -r; y < r; y += 4) {
-    const half = Math.floor(Math.sqrt(r * r - (y + 2) ** 2) / 4) * 4;
-    if (half > 0) rows.push(rect(cx - half, cy + y, half * 2, 4));
+  const halfAt = y => Math.abs(y) >= r ? 0 : Math.floor(Math.sqrt(r * r - (Math.floor(y / 4) * 4 + 2) ** 2) / 4) * 4;
+  for (let y = -r; y < r; y++) {
+    const half = halfAt(y);
+    if (!half) continue;
+    rows.push(rect(cx - half, cy + y, half * 2, 1, 'fill="var(--ink)"'));
+    const inner = Math.min(half - 1, halfAt(y - 1), halfAt(y + 1));
+    if (inner > 0) {
+      const tone = y < -24 ? '--paper' : y < 0 ? '--lantern' : '--math';
+      rows.push(rect(cx - inner, cy + y, inner * 2, 1, `fill="var(${tone})"`));
+      if (y >= -24 && y < 0) rows.push(rect(cx - inner, cy + y, Math.min(4, inner * 2), 1, 'fill="var(--paper)"'));
+    }
   }
   return rows.join('');
 }
 
 function houseMarkup([x, w, h, roof], i) {
   const base = 120, top = base - h;
-  const parts = [rect(x, top, w, h, `style="fill:var(${i % 2 ? '--letterbox' : '--ink-soft'})"`)];
-  parts.push(rect(x - 6, top - 8, w + 12, 8, `style="fill:var(--${roof})"`));   // eave
-  for (let inset = 8, y = top - 14; w - inset * 2 >= 16; inset += 8, y -= 6) parts.push(rect(x + inset, y, w - inset * 2, 6, `style="fill:var(--${roof})"`));
+  const wall = i % 2 ? '--letterbox' : '--ink-soft';
+  const roofTones = {
+    vermilion: ['var(--vermilion)', '#f77752', '#9f382f'],
+    wood: ['var(--wood)', '#dda475', '#855034'],
+    ink: ['var(--ink-soft)', '#7278a3', 'var(--letterbox)'],
+  };
+  const [roofBase, roofLight, roofShade] = roofTones[roof];
+  const parts = [rect(x, top, w, h, 'fill="var(--ink)"'), rect(x + 1, top + 1, w - 2, h - 2, `fill="var(${wall})"`),
+    rect(x + 1, top + 1, 3, h - 2, 'fill="#7278a3"'), rect(x + 4, base - 5, w - 5, 4, 'fill="var(--letterbox)"')];
+  const tileRow = (left, y, width, height) => {
+    parts.push(rect(left, y, width, height, 'fill="var(--ink)"'), rect(left + 1, y + 1, width - 2, height - 2, `fill="${roofBase}"`),
+      rect(left + 1, y + 1, width - 2, 1, `fill="${roofLight}"`), rect(left + 1, y + height - 3, width - 2, 2, `fill="${roofShade}"`));
+    for (let seam = left + 12; seam < left + width - 4; seam += 16) parts.push(rect(seam, y + 2, 1, height - 3, `fill="${roofShade}"`));
+  };
+  tileRow(x - 6, top - 8, w + 12, 8);
+  for (let inset = 8, y = top - 14; w - inset * 2 >= 16; inset += 8, y -= 6) tileRow(x + inset, y, w - inset * 2, 6);
   const door = x + Math.floor(w / 2 / 4) * 4 - 8;
-  parts.push(rect(door, base - 24, 16, 24, 'style="fill:var(--ink)"'));
-  for (const wx of [x + 10, x + w - 26]) parts.push(rect(wx, top + 10, 16, 14, 'class="parade-window"'));
+  parts.push(rect(door, base - 24, 16, 24, 'fill="var(--ink)"'), rect(door + 1, base - 23, 14, 22, 'fill="var(--wood)"'),
+    rect(door + 1, base - 23, 2, 22, 'fill="#dda475"'), rect(door + 12, base - 21, 3, 20, 'fill="#855034"'),
+    rect(door + 7, base - 21, 1, 20, 'fill="#855034"'), rect(door + 10, base - 13, 2, 2, 'fill="var(--lantern)"'));
+  for (const wx of [x + 10, x + w - 26]) {
+    parts.push(rect(wx, top + 10, 16, 14, 'class="parade-window"'), rect(wx + 1, top + 11, 14, 12, 'fill="var(--lantern)"'),
+      rect(wx + 1, top + 11, 14, 2, 'fill="var(--paper)"'), rect(wx + 1, top + 13, 2, 8, 'fill="var(--paper)"'),
+      rect(wx + 3, top + 21, 12, 2, 'fill="#ca9231"'), rect(wx + 7, top + 11, 1, 12, 'fill="var(--ink)"'),
+      rect(wx + 1, top + 17, 14, 1, 'fill="var(--ink)"'), rect(wx - 1, top + 24, 18, 2, 'fill="var(--ink)"'));
+  }
+  for (const by of [base - 9, base - 5]) parts.push(rect(x + 8, by, 12, 1, 'fill="#7278a3"'), rect(x + w - 20, by, 8, 1, 'fill="var(--ink)"'));
   return `<g class="parade-house">${parts.join('')}</g>`;
 }
 
 export function paradeBackdropMarkup() {
   const flags = Array.from({ length: 18 }, (_, i) => {
     const x = 52 + i * 52;
-    return `<polygon class="parade-flag parade-flag--${i}" points="${x},0 ${x + 16},0 ${x + 8},14" style="fill:var(--${FLAG_COLORS[i % FLAG_COLORS.length]})"/>`;
+    const fill = `var(--${FLAG_COLORS[i % FLAG_COLORS.length]})`;
+    const rows = Array.from({ length: 7 }, (_, step) => {
+      const inset = step, y = step * 2, width = 16 - step * 2;
+      return rect(inset, y, width, 2, 'fill="var(--ink)"')
+        + rect(inset + 1, y + (step === 0 ? 1 : 0), width - 2, step === 0 || step === 6 ? 1 : 2, `fill="${fill}"`)
+        + rect(inset + width - 2, y + (step === 0 ? 1 : 0), 1, step === 0 || step === 6 ? 1 : 2, `fill="${FLAG_SHADES[i % FLAG_SHADES.length]}"`)
+        + (step < 5 ? rect(inset + 1, y + 1, 1, 1, 'fill="var(--paper)"') : '');
+    }).join('');
+    return `<g class="parade-flag parade-flag--${i}" transform="translate(${x} 0)">${rows}</g>`;
   }).join('');
   return `<div class="parade-sky"></div><div class="parade-glow"></div>
     <svg class="parade-sun" viewBox="0 0 960 300" width="960" height="300" shape-rendering="crispEdges" aria-hidden="true">${sunRows(720, 214, 52)}</svg>

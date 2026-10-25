@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createVillageScene } from '../src/ui/screens/village.js';
+import { createVillageScene, frameFor } from '../src/ui/screens/village.js';
 import { createParadeScene } from '../src/ui/screens/parade.js';
 import { createEncounterScene } from '../src/ui/screens/encounter.js';
 import { createState, publishCreation, loadState, STORAGE_KEY } from '../src/progress.js';
 import { paradeStatus } from '../src/ui/parade-lineup.js';
 import { createDefaultBand } from '../src/audio.js';
-import { HUD_ZONES, VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, clampWalk, hotspotRect, roamRect, talkPoint, nearestNeighbor, stepPlayer, stallState, overlaps, wanderTarget, stepToward, guideArrow } from '../src/ui/village-map.js';
+import { HUD_ZONES, WATER_ZONES, WALK_SHAPE, VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, clampWalk, hotspotRect, roamRect, talkPoint, nearestNeighbor, stepPlayer, stallState, overlaps, wanderTarget, stepToward, guideArrow } from '../src/ui/village-map.js';
 import { creationMarkup, fitSignPreviews } from '../src/ui/creations.js';
 import { STAGE } from '../src/ui/stage.js';
 import { CHARACTERS } from '../src/data.js';
@@ -16,7 +16,7 @@ import { CHARACTERS } from '../src/data.js';
 const seeded = (seed = 7) => () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
 const CAST = [...CHARACTERS.map(c => c.id), 'pip', 'nori'];
 
-test('every neighbor and side character has a roomy patch clear of the HUD and each other', () => {
+test('every neighbor and side character has a roomy patch clear of the HUD, water and each other', () => {
   assert.deepEqual(Object.keys(VILLAGE_SPOTS).sort(), CHARACTERS.map(c => c.id).sort());
   assert.deepEqual(Object.keys(SIDE_SPOTS).sort(), ['nori', 'pip']);
   const rects = CAST.map(id => [id, roamRect(id)]);
@@ -25,6 +25,7 @@ test('every neighbor and side character has a roomy patch clear of the HUD and e
     assert.ok(VILLAGE_SPOTS[id] ? hot.w >= 96 && hot.h >= 96 : hot.w >= 64 && hot.h >= 64, `${id} big enough`);
     assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.w <= STAGE.width && r.y + r.h <= STAGE.height, `${id} inside the stage`);
     for (const zone of HUD_ZONES) assert.equal(overlaps(r, zone), false, `${id} clear of the HUD`);
+    for (const zone of WATER_ZONES) assert.equal(overlaps(r, zone), false, `${id} clear of the water`);
     for (const [other, o] of rects) if (other !== id) assert.equal(overlaps(r, o), false, `${id} vs ${other}`);
   }
 });
@@ -83,9 +84,47 @@ test('the player can talk only when standing near a neighbor', () => {
 test('walking moves 24px and stops at the edges', () => {
   assert.deepEqual(stepPlayer({ x: 480, y: 500 }, 'up'), { x: 480, y: 476 });
   assert.deepEqual(stepPlayer({ x: 40, y: 300 }, 'left'), { x: 40, y: 300 });
-  assert.deepEqual(stepPlayer({ x: 880, y: 510 }, 'right'), { x: 890, y: 510 });
-  assert.deepEqual(stepPlayer({ x: 880, y: 510 }, 'down'), { x: 880, y: 510 });
-  assert.deepEqual(stepPlayer({ x: 900, y: 510 }, 'a'), { x: 900, y: 510 });
+  assert.deepEqual(stepPlayer({ x: 880, y: 300 }, 'right'), { x: 890, y: 300 });
+  assert.deepEqual(stepPlayer({ x: 480, y: 510 }, 'down'), { x: 480, y: 510 });
+  assert.deepEqual(stepPlayer({ x: 880, y: 300 }, 'a'), { x: 880, y: 300 });
+});
+
+test('player cadence alternates feet at 80ms, scales with speed and never exceeds 120ms', () => {
+  for (const [speed, period] of [[240, 80], [360, 80 / 1.5], [480, 40], [120, 120], [1, 120]]) {
+    assert.deepEqual(Array.from({ length: 8 }, (_, i) => frameFor((i + 0.5) * period, speed)), [1, 0, 2, 0, 1, 0, 2, 0]);
+    assert.equal(frameFor(period - 0.001, speed), 1);
+    assert.equal(frameFor(period + 0.001, speed), 0);
+  }
+  assert.equal(frameFor(79), 1);
+  assert.equal(frameFor(80), 0);
+  assert.equal(frameFor(100, 0), 0, 'standing when stopped');
+});
+
+test('water spans the sea except the pier, and stops downward steps at the shore', () => {
+  assert.deepEqual(WATER_ZONES, [
+    { x: 0, y: 486, w: 408, h: 54 },
+    { x: 552, y: 486, w: 408, h: 54 },
+  ]);
+  const shore = { x: 700, y: 479 };
+  assert.deepEqual(stepPlayer(shore, 'down'), shore, 'a step into water is refused');
+  assert.deepEqual(stepPlayer({ x: 700, y: 470 }, 'down'), shore, 'approaching feet stop 7px above the sea');
+  assert.deepEqual(clampWalk({ x: 700, y: 520 }), shore, 'a water tap projects onto the shore');
+  assert.deepEqual(clampWalk({ x: 490, y: 500 }), { x: 482, y: 500 }, 'near the pier its edge is closer');
+  assert.deepEqual(clampWalk(PLAYER_START), PLAYER_START);
+  assertVisiblePlayer(PLAYER_START);
+  const topOfPier = stepPlayer(PLAYER_START, 'up');
+  assert.deepEqual(topOfPier, { x: 480, y: 476 });
+  assert.deepEqual(stepPlayer(topOfPier, 'right'), { x: 504, y: 476 }, 'step sideways off the dry pier onto sand');
+  assert.deepEqual(stepPlayer({ x: 482, y: 500 }, 'right'), { x: 482, y: 500 }, 'cannot step sideways into sea');
+});
+
+test('projections stay clear where water meets the board and pier', () => {
+  for (let x = 0; x <= 960; x += 8) for (let y = 440; y <= 540; y += 5) {
+    const p = clampWalk({ x, y });
+    assertVisiblePlayer(p);
+    assert.deepEqual(clampWalk(p), p, 'projection is stable');
+    for (const intent of ['up', 'down', 'left', 'right']) assertVisiblePlayer(stepPlayer(p, intent));
+  }
 });
 
 test('stalls tell made, visited in an older save, and new apart', () => {
@@ -310,6 +349,44 @@ const cssBlock = (css, selector) => {
   assert.ok(start > 0, `${selector} exists`);
   return css.slice(start, css.indexOf('}', start));
 };
+
+const playerColumn = f => {
+  const html = f.root.querySelector('.village-player').firstElementChild.innerHTML;
+  return Math.abs(Number(html.match(/background-position:([\d-]+)px/)[1])) / 64;
+};
+
+test('keyboard strides alternate both feet across completed steps', t => {
+  const f = villageFixture(t, { calm: true });
+  f.tap(480, 320); f.tick(); f.stage.classList.remove('calm');
+  const columns = new Set();
+  for (let step = 0; step < 4; step++) {
+    f.scene.handleIntent('right');
+    for (let i = 0; i < 7; i++) { f.tick(16); columns.add(playerColumn(f)); }
+    assert.equal(playerColumn(f), 1, 'stands at the end of a key step');
+  }
+  assert.deepEqual([...columns].sort(), [0, 1, 2], 'step A, standing and step B are all drawn');
+});
+
+test('ground tap strides use the faster 360px/s cadence', t => {
+  const f = villageFixture(t, { calm: true });
+  f.tap(480, 320); f.tick(); f.stage.classList.remove('calm');
+  f.tap(800, 320);
+  f.tick(50);
+  assert.equal(playerColumn(f), 0, 'step A before the 53.33ms boundary');
+  f.tick(10);
+  assert.equal(playerColumn(f), 1, 'standing after the faster boundary');
+  f.tick(50);
+  assert.equal(playerColumn(f), 2, 'the other foot after two frame periods');
+});
+
+test('Calm motion keeps standing frames for keyboard and tap walks', t => {
+  const f = villageFixture(t, { calm: true });
+  f.scene.handleIntent('up');
+  assert.equal(playerColumn(f), 1);
+  f.tap(800, 320); f.tick();
+  assert.equal(playerColumn(f), 1);
+  assert.deepEqual(f.pos(), { x: 800, y: 320 });
+});
 const cssPx = (block, property) => {
   const match = block.match(new RegExp(`(?:[;{]\\s*)${property}:\\s*(-?[\\d.]+)px`));
   assert.ok(match, `${property} has a pixel value in ${block}`);
@@ -384,6 +461,8 @@ const playerRects = p => [
   { x: p.x + 26, y: p.y - 52, w: 44, h: 36 },
 ];
 function assertVisiblePlayer(p) {
+  const shape = { x: p.x - WALK_SHAPE.left, y: p.y - WALK_SHAPE.top, w: WALK_SHAPE.left + WALK_SHAPE.right, h: WALK_SHAPE.top + WALK_SHAPE.bottom };
+  for (const water of WATER_ZONES) assert.equal(overlaps(shape, water), false, `full walk shape clears water at ${JSON.stringify(p)}`);
   for (const rect of playerRects(p)) {
     assert.ok(rect.x >= 0 && rect.y >= 0 && rect.x + rect.w <= STAGE.width && rect.y + rect.h <= STAGE.height, `player and Find pointer fit at ${JSON.stringify(p)}`);
     for (const hud of HUD_ZONES) assert.equal(overlaps(rect, hud), false, `player and Find pointer clear the HUD at ${JSON.stringify(p)}`);
@@ -401,13 +480,22 @@ test('keyboard movement keeps the full player and Find pointer clear of every HU
   assert.deepEqual(stepPlayer({ x: 472, y: 450 }, 'left'), { x: 472, y: 450 }, 'Left stops beside the board without a vertical shift');
 });
 
-for (const calm of [false, true]) test(`ground walks avoid the HUD throughout the route (calm=${calm})`, t => {
+for (const calm of [false, true]) test(`ground walks avoid the HUD and water throughout the route (calm=${calm})`, t => {
   const f = villageFixture(t, { calm, large: true, guide: 'art' });
   for (const goal of [[100, 510], [100, 96], [920, 96], [920, 510], [100, 160], [800, 510]]) {
     f.tap(...goal);
     for (let i = 0; i < 50; i++) { f.tick(100); assertVisiblePlayer(f.pos()); }
     assert.equal(f.root.querySelector('.village-pointer').hidden, false);
     assert.deepEqual(f.pos(), clampWalk({ x: goal[0], y: goal[1] }), 'the walk reaches its clear destination');
+  }
+});
+
+for (const calm of [false, true]) test(`taps leave and return to the pier without crossing water or getting stuck (calm=${calm})`, t => {
+  const f = villageFixture(t, { calm, guide: 'art' });
+  for (const goal of [[800, 520], [480, 500], [100, 510], [480, 500]]) {
+    f.tap(...goal);
+    for (let i = 0; i < 200; i++) { f.tick(16); assertVisiblePlayer(f.pos()); }
+    assert.deepEqual(f.pos(), clampWalk({ x: goal[0], y: goal[1] }));
   }
 });
 

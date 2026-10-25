@@ -9,20 +9,48 @@ import {
 } from '../../encounters.js';
 import { icon } from '../icons.js';
 import { gridMove, keyIntent } from '../input.js';
+import { INK, PAPER, WOOD, GRASS, GRASS_DARK, FINISH, LANTERN, VERMILION } from '../palette.js';
 
 const KIND = 'community';
 const SIZE = 5;
 const CELLS = SIZE * SIZE;
 
-// Small pixel glyphs drawn in currentColor on a 24×24 grid, like icons.js.
+// Rectangles form the silhouettes as well as the grain, nails, leaves and petals. No stroked curves.
+const rect = (x, y, width, height, fill) => `<rect x="${x}" y="${y}" width="${width}" height="${height}" fill="${fill}"/>`;
+const WOOD_LIGHT = '#dfa777', WOOD_SHADE = '#815035', LEAF_LIGHT = '#b3e38a';
 const GLYPHS = {
-  bench: 'M4 5h16v2H4zM5 7h2v3H5zm12 0h2v3h-2zM3 10h18v3H3zM5 13h2v6H5zm12 0h2v6h-2z',
-  sign: 'M3 4h15v8H3zm15 2h2v4h-2zm2 1h2v2h-2zM11 12h2v10h-2z',
-  quiet: 'M9 3h6v2H9zM7 5h10v2H7zM5 7h14v4H5zM7 11h10v2H7zM11 13h2v9h-2zM7 16h4v2H7zm6 2h4v2h-4z',
-  tree: 'M10 2h4v2h-4zM8 4h8v3H8zM6 7h12v4H6zM8 11h8v2H8zM11 13h2v7h-2z',
+  bench: [
+    [4, 4, 16, 7, INK], [5, 5, 14, 5, WOOD], [5, 5, 14, 1, WOOD_LIGHT], [5, 9, 14, 1, WOOD_SHADE],
+    [6, 6, 1, 1, INK], [17, 6, 1, 1, INK], [9, 7, 5, 1, WOOD_SHADE],
+    [5, 11, 3, 10, INK], [16, 11, 3, 10, INK], [6, 12, 1, 8, WOOD], [17, 12, 1, 8, WOOD],
+    [2, 11, 20, 5, INK], [3, 12, 18, 3, WOOD], [3, 12, 18, 1, WOOD_LIGHT], [3, 14, 18, 1, WOOD_SHADE],
+  ],
+  sign: [
+    [10, 12, 4, 10, INK], [11, 13, 2, 8, WOOD_SHADE], [11, 13, 1, 7, WOOD_LIGHT],
+    [2, 3, 16, 11, INK], [18, 5, 2, 7, INK], [20, 7, 2, 3, INK],
+    [3, 4, 14, 9, WOOD], [17, 6, 2, 5, WOOD], [19, 8, 2, 1, WOOD],
+    [3, 4, 14, 1, WOOD_LIGHT], [3, 12, 14, 1, WOOD_SHADE], [17, 10, 2, 1, WOOD_SHADE],
+    [4, 6, 1, 1, INK], [4, 10, 1, 1, INK], [7, 8, 6, 1, PAPER], [11, 6, 2, 5, PAPER], [13, 7, 2, 3, PAPER],
+  ],
+  quiet: [
+    [7, 9, 2, 9, INK], [15, 6, 2, 12, INK], [4, 11, 4, 4, INK], [16, 9, 4, 4, INK],
+    [5, 12, 2, 2, FINISH], [17, 10, 2, 2, GRASS_DARK], [5, 12, 1, 1, GRASS], [17, 10, 1, 1, GRASS],
+    [5, 3, 6, 9, INK], [3, 5, 10, 5, INK], [6, 4, 4, 7, VERMILION], [4, 6, 8, 3, VERMILION],
+    [6, 4, 3, 2, '#ff9c7c'], [5, 6, 2, 2, '#ff9c7c'], [6, 10, 4, 1, '#a52e2b'], [7, 7, 2, 2, LANTERN],
+    [14, 2, 4, 7, INK], [12, 4, 8, 3, INK], [15, 3, 2, 5, LANTERN], [13, 5, 6, 1, LANTERN], [15, 4, 1, 1, PAPER], [15, 7, 2, 1, '#c28c32'],
+    [2, 16, 20, 6, INK], [3, 17, 18, 4, WOOD], [3, 17, 18, 1, WOOD_LIGHT], [3, 20, 18, 1, WOOD_SHADE],
+    [5, 18, 1, 1, INK], [18, 18, 1, 1, INK], [9, 19, 5, 1, WOOD_SHADE],
+  ],
+  tree: [
+    [10, 12, 4, 10, INK], [11, 13, 2, 8, WOOD_SHADE], [11, 13, 1, 7, WOOD_LIGHT],
+    [8, 2, 8, 2, INK], [6, 4, 12, 2, INK], [4, 6, 16, 7, INK], [6, 13, 12, 2, INK],
+    [9, 3, 6, 2, GRASS], [7, 5, 10, 8, GRASS], [5, 7, 14, 5, GRASS], [7, 13, 10, 1, GRASS_DARK],
+    [9, 3, 5, 2, LEAF_LIGHT], [7, 5, 3, 2, LEAF_LIGHT], [5, 7, 2, 3, LEAF_LIGHT],
+    [16, 7, 3, 5, GRASS_DARK], [13, 11, 5, 2, GRASS_DARK], [7, 12, 8, 1, GRASS_DARK], [10, 8, 2, 2, LEAF_LIGHT],
+  ],
 };
 const glyph = (name, size = 24) =>
-  `<svg class="icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor" aria-hidden="true"><path d="${GLYPHS[name]}"/></svg>`;
+  `<svg class="icon" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true">${GLYPHS[name].map(parts => rect(...parts)).join('')}</svg>`;
 
 const TOOLS = [
   { id: 'bench', word: 'Bench', picture: () => glyph('bench', 28) },

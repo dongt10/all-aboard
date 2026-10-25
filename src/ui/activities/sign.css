@@ -7,29 +7,48 @@
 
 /* The wooden sign: a plank frame with a light face so ink text keeps its contrast. */
 .sign-board {
-  box-sizing: border-box; flex: 0 0 auto; width: 100%; padding: 8px;
-  background: var(--wood); border: 4px solid var(--ink);
-  box-shadow: inset 0 3px 0 rgba(255, 255, 255, .35), inset 0 -4px 0 rgba(31, 33, 71, .3);
+  --board-light: #dfa777; --board-shade: #815035;
+  position: relative; box-sizing: border-box; flex: 0 0 auto; width: 100%; padding: 8px;
+  background: var(--wood); border: 4px solid var(--board-shade); outline: 1px solid var(--ink); outline-offset: -1px;
+  box-shadow: inset 2px 3px 0 var(--board-light), inset -2px -4px 0 var(--board-shade);
   transition: background-color .2s;
 }
-.sign-board--ready { background: var(--writing); }
+.sign-board::before, .sign-board::after {
+  content: ''; position: absolute; left: 2px; right: 2px; height: 3px; border-left: 3px solid var(--ink); border-right: 3px solid var(--ink);
+  background: var(--board-shade); box-shadow: 0 -1px 0 var(--board-light); pointer-events: none;
+}
+.sign-board::before { top: 2px; }
+.sign-board::after { bottom: 2px; }
+.sign-board--ready { background: var(--writing); --board-light: #d6c4ff; --board-shade: #70578f; }
 .sign-face {
   box-sizing: border-box; display: block; width: 100%; min-height: calc(var(--text-field) * 1.3 * 2 + 16px); margin: 0;
-  padding: 6px 10px; background: var(--path); border: 3px solid var(--ink); border-radius: 0;
+  padding: 6px 10px; background: var(--path); border: 3px solid #c9a776; border-radius: 0;
+  outline: 1px solid var(--ink); outline-offset: -1px;
+  box-shadow: inset 2px 2px 0 #ffecc5, inset -2px -2px 0 #c9a776;
   font: 700 var(--text-field)/1.3 var(--font-read); color: var(--ink); text-align: center;
   overflow-wrap: anywhere; white-space: pre-wrap;
 }
 .sign-input { height: calc(var(--text-field) * 1.3 * 3 + 18px); resize: none; overflow-y: auto; }
 .sign-input::placeholder, .sign-placeholder { color: var(--ink-soft); font-weight: 400; opacity: 1; }
-.sign-input:focus-visible { background: var(--paper); }
-.sign-post { flex: 0 0 auto; width: 16px; height: 10px; background: var(--wood); border: solid var(--ink); border-width: 0 4px; }
+.sign-input:focus-visible { background: var(--paper); outline: 4px solid var(--ink); outline-offset: 3px; box-shadow: 0 0 0 3px var(--paper); }
+.sign-post {
+  position: relative; flex: 0 0 auto; width: 16px; height: 10px; background: var(--wood); border: solid #815035; border-width: 0 4px;
+  outline: 1px solid var(--ink); outline-offset: -1px; box-shadow: inset 2px 0 0 #dfa777, inset 0 -2px 0 #815035;
+}
+.sign-post::after { content: ''; position: absolute; left: 3px; top: 2px; width: 1px; height: 4px; background: #815035; }
 
 /* Word tiles sit below the sign and wrap; they never shrink below a tappable size. */
 .sign-tiles { flex: 0 0 auto; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 10px; width: 100%; padding: 4px; box-sizing: border-box; }
 .sign-tile { position: relative; flex: 0 0 auto; min-height: 44px; padding: 2px 12px; font-size: var(--text-field); }
+/* Keep the kit button's exact border box, but draw a one-pixel ink edge and solid stepped bevels. */
+.sign-tile::before {
+  border: 1px solid var(--ink); background: var(--fill);
+  box-shadow: inset 2px 2px 0 var(--light), inset -2px -3px 0 var(--shade);
+  clip-path: none;
+}
 /* A tile already on the sign looks pressed in (corner ink mark + darker paper), so Remove word has a visible target.
    The mark sits in the corner and takes no inline width, so long phrases do not wrap because of it. */
-.sign-tile--used { --fill: var(--paper-shade); --light: var(--paper-shade); }
+.sign-tile--used { --fill: var(--paper-shade); --light: var(--paper); --shade: #d5bc88; }
 .sign-tile--used::after { content: '✓'; position: absolute; top: 2px; right: 4px; margin: 0; font-size: var(--text-small); line-height: 1; }
 
 .calm .sign-board { transition: none; }

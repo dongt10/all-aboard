@@ -5,6 +5,7 @@ import {
 } from '../../chain.js';
 import { icon } from '../icons.js';
 import { keyIntent, gridMove } from '../input.js';
+import { INK, PAPER, PAPER_SHADE, SKY, SEA, GRASS, GRASS_DARK, WOOD, LANTERN } from '../palette.js';
 
 export { LINES, nextNeedLine, tenthWord, cardLine, energyLine };
 export const CARDS = CHAIN_CARDS.map(id => ({ id, ...CARD_WORDS[id], glyph: CARD_GLYPHS[id] }));
@@ -14,7 +15,79 @@ export const HELP = [
   'Fill every plate, then choose Shine!',
   'Choose Pin chart.',
 ];
-const glyph = (id, size = 24) => `<svg class="chain-glyph" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor" aria-hidden="true"><path d="${CARD_GLYPHS[id]}"/></svg>`;
+// Small field-card illustrations, independent of the cast's sprite sheets.
+// The nested viewport keeps the existing 24px SVG contract while painting on the
+// actual 16px rail / 36px plate grid, including a one-pixel exterior ink outline.
+const CARD_PIXELS = {
+  plant: [
+    '................', '.......h........', '......hbs.......', '......hbs.......',
+    '..hb..hbs.......', '..hbs.hbs..hb...', '...hbsbbs..hbs..', '...hbbbbshhbs...',
+    '....hbbbsbbs....', '..hb.hbbshbs....', '..hbsbbbbbs.....', '...hbbbbbs......',
+    '.....hbbbs......', '....hbbbbss.....', '................', '................',
+  ],
+  fish: [
+    '................', '................', '.......hh.......', '......hbb.......',
+    '.....hbbbbbb....', '.hb..hbbbbhbb...', '.hbbhbbbbbpnbb..', '..hbbbbbbbbbbb..',
+    '..hbbbbbbbbbs...', '.hbbhbbbbbbss...', '.bs..hbbsss.....', '......bss.......',
+    '.......s........', '................', '................', '................',
+  ],
+  otter: [
+    '................', '....hh...hb.....', '....hbbhhbb.....', '....hbbbbbb.....',
+    '....hnbbbnb.....', '.....ppnppb.....', '.....pqqqbs.....', '....hbbbbbs.....',
+    '...hbbpqqbss....', '...bbbpqqbbs....', '....bbqqrbs..bs.', '....hbqqrbs.bbs.',
+    '....hbbbbbsbbs..', '....bss.bsssss..', '................', '................',
+  ],
+  gull: [
+    '................', '................', '.........hh.....', '........hbnb....',
+    '........hbbttt..', '...hh...hbbb....', '..hbbh.hbbbb....', '.hbbbbhbbbbbs...',
+    '...hbsbbbbbs....', '....bbsssss.....', '.....bbsss......', '......t..t......',
+    '.....tt.tt......', '................', '................', '................',
+  ],
+};
+const CARD_TONES = {
+  plant: { h: '#b1e895', b: GRASS, s: GRASS_DARK },
+  fish: { h: SKY, b: SEA, s: '#26789e' },
+  otter: { h: '#dda074', b: WOOD, s: '#895236' },
+  gull: { h: '#ffffff', b: PAPER, s: PAPER_SHADE },
+};
+const glyphCache = new Map();
+function glyph(id, size = 24) {
+  const key = `${id}/${size}`;
+  if (glyphCache.has(key)) return glyphCache.get(key);
+  const pixels = size === 36 ? 36 : 16;
+  const colors = { n: INK, p: PAPER, q: PAPER_SHADE, r: '#d6c39d', t: LANTERN, ...CARD_TONES[id] };
+  const sample = (x, y) => {
+    if (x < 0 || y < 0 || x >= pixels || y >= pixels) return null;
+    const mark = CARD_PIXELS[id][Math.floor(y * 16 / pixels)]?.[Math.floor(x * 16 / pixels)];
+    return colors[mark] ?? null;
+  };
+  const paths = {};
+  for (let y = 0; y < pixels; y++) {
+    let start = 0, previous = null;
+    for (let x = 0; x <= pixels; x++) {
+      const fill = x === pixels ? null : sample(x, y) ??
+        ([sample(x - 1, y), sample(x + 1, y), sample(x, y - 1), sample(x, y + 1)].some(Boolean) ? INK : null);
+      if (fill === previous) continue;
+      if (previous) paths[previous] = (paths[previous] ?? '') + `M${start} ${y}h${x - start}v1H${start}z`;
+      start = x; previous = fill;
+    }
+  }
+  const art = `<svg class="chain-glyph" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true"><svg viewBox="0 0 ${pixels} ${pixels}" width="24" height="24">${Object.entries(paths).map(([fill, d]) => `<path fill="${fill}" d="${d}"/>`).join('')}</svg></svg>`;
+  glyphCache.set(key, art);
+  return art;
+}
+const ARROW_ART = `<svg class="icon" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true" focusable="false"><svg viewBox="0 0 20 20" width="24" height="24">
+  <path d="M10 3h2v2h2v2h2v2h2v2h-2v2h-2v2h-2v2h-2v-4H2V7h8z" fill="${INK}"/>
+  <path d="M11 4h1v2h2v2h2v2h1v1h-2v2h-2v2h-2v1h-1v-4H3V8h8z" fill="${SEA}"/>
+  <path d="M3 8h8V4h1v5H3z" fill="${SKY}"/>
+  <path d="M3 11h8v3h1v-2h2v-2h2v1h-1v2h-2v2h-2v1h-1v-4H3z" fill="#26789e"/>
+</svg></svg>`;
+const SUN_ART = `<svg viewBox="0 0 40 40" width="40" height="40" shape-rendering="crispEdges" aria-hidden="true">
+  <path d="M17 0h6v6h-6zM17 34h6v6h-6zM0 17h6v6H0zM34 17h6v6h-6zM4 4h6v6H4zM30 4h6v6h-6zM4 30h6v6H4zM30 30h6v6h-6z" fill="${INK}"/>
+  <path d="M18 1h4v4h-4zM18 35h4v4h-4zM1 18h4v4H1zM35 18h4v4h-4zM5 5h4v4H5zM31 5h4v4h-4zM5 31h4v4H5zM31 31h4v4h-4z" fill="${LANTERN}"/>
+  <path d="M18 1h4v1h-4zM1 18h4v1H1zM5 5h4v1H5zM31 5h4v1h-4z" fill="#ffe6a0"/>
+  <path d="M18 38h4v1h-4zM35 21h4v1h-4zM5 34h4v1H5zM31 34h4v1h-4z" fill="#d9a532"/>
+</svg>`;
 const fieldWord = id => ({ plant: 'Plant', fish: 'Fish' }[id] ?? CARD_WORDS[id]?.word ?? '?');
 
 function act(state, ui, action) {
@@ -58,7 +131,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
   const plates = Array.from({ length: 4 }, (_, i) => {
     if (i) {
       const arrow = node('span', 'chain-arrow', row);
-      arrow.innerHTML = icon('next', { size: 20 });
+      arrow.innerHTML = ARROW_ART;
       arrow.setAttribute('aria-hidden', 'true');
     }
     const plate = node('div', i ? 'chain-plate chain-plate--empty' : 'chain-sun-card', row);
@@ -69,6 +142,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
     let empty;
     if (!i) {
       const sun = node('span', 'chain-sun', picture);
+      sun.innerHTML = SUN_ART;
       node('i', 'chain-sun-core', sun);
       sun.setAttribute('aria-hidden', 'true');
     } else {
