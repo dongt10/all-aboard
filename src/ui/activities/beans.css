@@ -1,0 +1,92 @@
+.beans-field {
+  position: relative; isolation: isolate; width: 520px; height: 268px;
+  font-family: var(--font-read); color: var(--ink);
+}
+.beans-clock, .beans-cup-name, .beans-bed-title { border: 1px solid transparent; }
+.beans-clock::before, .beans-cup-name::before, .beans-bed-title::before {
+  inset: -1px; border: 1px solid var(--ink); background: var(--paper); clip-path: none;
+  box-shadow: inset 1px 1px 0 var(--white), inset -1px -1px 0 var(--paper-shade);
+}
+.beans-sun { position: absolute; top: 3px; left: 10px; width: 40px; height: 40px; }
+.beans-clock {
+  position: absolute; top: 8px; left: 60px; height: 30px; padding: 0 6px;
+  display: flex; align-items: center; gap: 6px; box-sizing: border-box;
+  font-size: var(--text-small); line-height: 1; white-space: nowrap;
+}
+.beans-clock .icon { flex: none; width: 24px; height: 24px; }
+.beans-sill {
+  position: absolute; top: 177px; left: 6px; width: 204px; height: 8px;
+  background: var(--wood); border: 1px solid var(--ink); box-sizing: border-box;
+  box-shadow: inset 0 2px 0 #dca372, inset 0 -2px 0 #885036;
+}
+.beans-cup {
+  position: absolute; top: 48px; width: 96px; height: 134px; box-sizing: border-box;
+  background: var(--paper); border: 1px solid var(--ink);
+  box-shadow: inset 1px 1px 0 var(--white), inset -2px -2px 0 var(--paper-shade);
+}
+.beans-cup--a { left: 10px; }
+.beans-cup--b { left: 112px; }
+.beans-cup-name {
+  position: absolute; top: 4px; left: 8px; width: 78px; height: 24px; box-sizing: border-box;
+  padding: 0; display: grid; place-items: center; font-size: var(--text-small); line-height: 1;
+}
+.beans-plant { position: absolute; top: 31px; left: 15px; width: 64px; height: 64px; }
+.beans-needs {
+  position: absolute; top: 102px; left: 18px; display: flex; gap: 10px;
+  width: 58px; height: 24px; align-items: center;
+}
+.beans-needs svg { display: block; width: 24px; height: 24px; }
+.beans-changes { position: absolute; top: 48px; left: 214px; width: 136px; display: grid; gap: 7px; }
+.beans-change {
+  position: relative; width: 136px; height: 40px; box-sizing: border-box; margin: 0; padding: 0 4px;
+  display: flex; align-items: center; gap: 4px; cursor: pointer;
+  border: 1px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink);
+  box-shadow: inset 1px 1px 0 var(--white), inset -2px -2px 0 var(--paper-shade);
+  font-family: var(--font-read); font-size: var(--text-small); line-height: 1; text-align: left;
+}
+.beans-change-pic { display: flex; flex: none; width: 20px; height: 20px; }
+.beans-change-pic svg { width: 20px; height: 20px; }
+.beans-change-name { white-space: nowrap; }
+.beans-change[aria-checked="true"] {
+  background: var(--lantern); border-width: 2px; padding: 0 3px;
+  box-shadow: inset 1px 1px 0 #ffe08f, inset -2px -2px 0 #d99a30;
+}
+.beans-bed {
+  position: absolute; left: 356px; top: 48px; width: 156px; height: 134px; box-sizing: border-box;
+  background: var(--paper); border: 1px solid var(--ink);
+  box-shadow: inset 1px 1px 0 var(--white), inset -2px -2px 0 var(--paper-shade);
+}
+.beans-bed-title {
+  position: absolute; top: 2px; left: 8px; width: 138px; height: 22px; padding: 0;
+  display: grid; place-items: center; box-sizing: border-box;
+  font-size: var(--text-small); line-height: 1; white-space: nowrap;
+}
+.beans-slots {
+  position: absolute; left: 27px; top: 28px; display: grid;
+  grid-template-columns: repeat(2, 48px); grid-template-rows: repeat(2, 48px); gap: 4px;
+}
+.beans-slot {
+  display: grid; place-items: center; width: 48px; height: 48px; box-sizing: border-box;
+  background: var(--paper-shade); border: 2px dashed var(--ink-soft);
+}
+.beans-slot--filled { background: var(--paper); border: 2px solid var(--ink); }
+.beans-slot-pic { display: flex; }
+.beans-slot-pic svg { width: 32px; height: 32px; }
+.beans-tray { position: absolute; left: 10px; top: 190px; display: grid; grid-template-columns: repeat(6, 76px); gap: 8px; }
+.beans-tile {
+  position: relative; width: 76px; height: 72px; box-sizing: border-box; margin: 0; padding: 4px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  cursor: pointer; border: 1px solid var(--ink); border-radius: 0; background: var(--paper); color: var(--ink);
+  box-shadow: inset 1px 1px 0 var(--white), inset -2px -3px 0 var(--paper-shade);
+  font-family: var(--font-read); font-size: var(--text-small); line-height: 1;
+}
+.beans-tile-pic { display: flex; width: 32px; height: 32px; flex: none; }
+.beans-tile-pic svg { width: 32px; height: 32px; }
+.beans-tile-name { white-space: nowrap; }
+.beans-tile-mark { position: absolute; top: 2px; right: 2px; display: flex; width: 16px; height: 16px; }
+.beans-tile[aria-pressed="true"] { background: var(--lantern); box-shadow: inset 1px 1px 0 #ffe08f, inset -2px -3px 0 #d99a30; }
+.beans-change:focus-visible, .beans-tile:focus-visible { outline: 3px solid var(--ink); outline-offset: 1px; }
+.beans-needs [hidden], .beans-slot-pic[hidden], .beans-tile-mark[hidden] { display: none; }
+/* Bigger words retain both the picture and the full label in every fixed slot. */
+.large-text .beans-clock { height: 32px; }
+.large-text .beans-change { gap: 3px; }
