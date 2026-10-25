@@ -1,14 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import activity, { CARDS, LINES, HELP, nextNeedLine, tenthWord, cardLine, energyLine } from '../src/ui/activities/chain.js';
+import activity, { CARDS, CARD_PIXELS, cardsFor, LINES, HELP, helpFor, nextNeedLine, tenthWord, cardLine, energyLine } from '../src/ui/activities/chain.js';
 import {
   GRADES_CHAIN, STAMP_CHAIN, CHAIN_CARDS, EATS, ENERGY_TILES, normalizeChain,
   chainReady, chainOpening, cleanChainCreation, chainCreationMarkup,
-  sunEnergy, energyTiles, expectedEnergy, openCardSlot, openEnergySlot,
-  placeCard, placeEnergy, chainComplete,
+  topEnergy, energyTiles, expectedEnergy, openCardSlot, openEnergySlot,
+  placeCard, placeEnergy, chainComplete, CHAINS, chainFor, chainOfCards, CARD_WORDS, CARD_GLYPHS,
 } from '../src/chain.js';
 import { ICON_NAMES } from '../src/ui/icons.js';
+import { PAGE_CHARS, paginate } from '../src/ui/dialogue.js';
+import { declarations } from './helpers/css.js';
+import { Doc, Event } from './helpers/dom.js';
+import { cleanCreation, createState, publishCreation, saveState, loadState, getCreations } from '../src/progress.js';
 
 const cmd = id => ({ type: 'command', id });
 
@@ -36,19 +40,28 @@ test('chart rows and stacked cards leave room for Bigger words inside the field'
   assert.ok(4 * px('.chain-card', 'width') + 3 * px('.chain-cards', 'gap') <= 520 - 28);
   // Plate: picture, label, chip (including its frame), gaps, padding and border.
   assert.ok(px('.chain-plate', 'height') >= 48 + 24 * 1.2 + (24 * 1.1 + 4 + 8) + 6 + 12 + 6);
+  // Pondweed fills the label width. Its large line box must end above the tallest stack.
+  const labelBottom = 1 + 10 + px('.chain-picture', 'height') + px('.chain-plate', 'gap') + 24 * 1.2;
+  const stackTop = px('.chain-plate', 'height') - 1 - px('.chain-bar', 'bottom') - 4 * px('.chain-block', 'height') - 3 * px('.chain-bar', 'gap');
+  assert.ok(labelBottom <= stackTop);
 });
 const field = values => ({ type: 'field', ...values });
 const start = grade => activity.start(null, { grade, chapter: 1 });
-const full = (grade = 3, eater = 'otter') => normalizeChain({
-  kind: 'science', activity: 'chain', chain: ['plant', 'fish', eater],
+const full = (grade = 3, eater = chainFor(grade).cards[2]) => normalizeChain({
+  kind: 'science', activity: 'chain', chain: [...chainFor(grade).cards.slice(0, 2), eater],
   energy: expectedEnergy(grade), shone: true,
 }, grade, 1);
 const shortSentences = line => {
   assert.equal(typeof line, 'string');
-  for (const sentence of line.match(/[^.!?]+[.!?]?/g) ?? []) {
+  for (const sentence of line.split(/(?<=[.!?…]["'”’)\]]*)\s+/)) {
     assert.ok(sentence.trim().length <= 56, `${sentence.trim().length}: ${sentence}`);
   }
   assert.doesNotMatch(line, /Shine! [a-z]/);
+  for (const limit of Object.values(PAGE_CHARS)) {
+    const pages = paginate(line, limit);
+    assert.ok(pages.every(page => page.length <= limit));
+    assert.equal(pages.join(' '), line);
+  }
 };
 function deepFreeze(value) {
   if (value && typeof value === 'object') {
@@ -67,10 +80,10 @@ for (const grade of GRADES_CHAIN) {
     const legacy = { ...full(grade), activity: undefined, canopy: 'left', time: 20 };
     assert.deepEqual(activity.start(legacy, { grade, chapter: 1 }).state, state);
     assert.equal(activity.commands(state)[2].disabled, true);
-    for (const eater of ['otter', 'gull']) {
+    for (const eater of chainFor(grade).cards.slice(2)) {
       ({ state, ui } = start(grade));
       for (let i = 0; i < 3; i++) {
-        const card = ['plant', 'fish', eater][i];
+        const card = [...chainFor(grade).cards.slice(0, 2), eater][i];
         const before = structuredClone(state);
         const result = activity.act(deepFreeze(state), deepFreeze(ui), field({ card }), grade);
         assert.deepEqual(state, before);
@@ -79,13 +92,16 @@ for (const grade of GRADES_CHAIN) {
         assert.ok(result.line.startsWith(LINES.placed[card]));
         assert.equal(result.line, cardLine(card, state, grade));
         ({ state, ui } = result);
-        assert.equal(nextNeedLine(state), LINES.needNumber(i + 1));
+        assert.equal(nextNeedLine(state), i === 0 ? LINES.first(grade) : LINES.needNumber(i + 1));
         const n = expectedEnergy(grade)[i];
         const placed = activity.act(state, ui, field({ energy: n }), grade);
         assert.equal(placed.state.energy[i], n);
         assert.equal(placed.line, energyLine(placeEnergy(state, n), grade));
         assert.match(placed.line, new RegExp(`Plate ${i + 1} gets ${n}\\.`));
-        assert.match(placed.line, grade === 5 ? /10% of/ : /One tenth of/);
+        if (i === 0) {
+          assert.equal(placed.line, LINES.firstNumber(n, grade));
+          assert.doesNotMatch(placed.line, /10%|tenth|of null/);
+        } else assert.match(placed.line, grade === 5 ? /10% of/ : /One tenth of/);
         shortSentences(placed.line);
         ({ state, ui } = placed);
       }
@@ -129,9 +145,9 @@ test('ready requires the exact order, numbers, grade, discriminator and Shine', 
   assert.equal(chainReady(null), false);
   for (const grade of GRADES_CHAIN) {
     const ready = full(grade);
-    for (const eater of ['otter', 'gull']) assert.equal(chainReady(full(grade, eater)), true);
+    for (const eater of chainFor(grade).cards.slice(2)) assert.equal(chainReady(full(grade, eater)), true);
     for (let i = 0; i < 3; i++) {
-      for (const value of [null, 'junk', ...CHAIN_CARDS.filter(c => c !== ready.chain[i] && !(i === 2 && c === 'gull'))]) {
+      for (const value of [null, 'junk', ...Object.keys(CARD_WORDS).filter(c => c !== ready.chain[i] && !(i === 2 && c === chainFor(grade).cards[3]))]) {
         const chain = [...ready.chain]; chain[i] = value;
         assert.equal(chainReady({ ...ready, chain }), false);
       }
@@ -168,11 +184,21 @@ test('all wrong cards explain the food and preserve the same state', () => {
   assert.equal(openCardSlot(full().chain), 3);
 });
 
-test('number errors at grades 3 and 5 preserve work and explain amounts', () => {
-  for (const grade of [3, 5]) {
+test('the plant takes the biggest tile; later number errors explain the feeding step at every grade', () => {
+  for (const grade of GRADES_CHAIN) {
     const { state: empty, ui } = start(grade);
-    const state = placeCard(empty, 'plant').state;
-    const cases = [[sunEnergy(grade), 'same'], [sunEnergy(grade) / 2, 'high'], [expectedEnergy(grade)[1], 'low']];
+    const plant = placeCard(empty, chainFor(grade).cards[0]).state;
+    for (const value of energyTiles(grade).slice(1)) {
+      const tried = placeEnergy(plant, value);
+      assert.equal(tried.status, 'first'); assert.equal(tried.prev, null);
+      assert.equal(tried.state, plant); assert.equal(energyLine(tried), LINES.first(grade));
+      assert.equal(activity.act(plant, ui, field({ energy: value })).line, LINES.first(grade));
+    }
+    const numbered = placeEnergy(plant, topEnergy(grade));
+    assert.equal(numbered.prev, null);
+    assert.equal(numbered.state.energy[0], topEnergy(grade));
+    const state = placeCard(numbered.state, chainFor(grade).cards[1]).state;
+    const cases = [[topEnergy(grade), 'same'], [topEnergy(grade) / 2, 'high'], [expectedEnergy(grade)[2], 'low']];
     for (const [energy, status] of cases) {
       const result = placeEnergy(state, energy);
       assert.equal(result.status, status);
@@ -187,9 +213,9 @@ test('number errors at grades 3 and 5 preserve work and explain amounts', () => 
     assert.equal(energyLine(placeEnergy({ ...full(grade), shone: false }, energyTiles(grade)[0])), 'Every number is in. Choose Shine!');
     assert.equal(placeEnergy(state, -3).status, 'unknown');
     // With a numbered prefix and another empty plate, the number rail asks for a creature.
-    const partial = placeEnergy(state, expectedEnergy(grade)[0]).state;
+    const partial = numbered.state;
     assert.equal(openEnergySlot(partial), -1);
-    assert.equal(energyLine(placeEnergy(partial, energyTiles(grade)[0])), LINES.needCard2);
+    assert.equal(energyLine(placeEnergy(partial, energyTiles(grade)[0])), chainFor(grade).needs[1]);
   }
 });
 
@@ -229,7 +255,7 @@ test('cleaning validates prefixes, whitelisted integers and bounded scope', () =
   assert.equal(cleanChainCreation({ ...full(), grade: NaN, chapter: NaN }).chapter, 1);
   assert.equal(normalizeChain({}, 3.5).grade, 4);
   assert.deepEqual(normalizeChain({ ...full(), chain: ['fish', 'plant'] }).chain, [null, null, null]);
-  assert.deepEqual(normalizeChain({ ...full(), chain: ['plant'] }).energy, [100, null, null]);
+  assert.deepEqual(normalizeChain({ ...full(), chain: ['plant'] }).energy, [1000, null, null]);
 });
 
 test('creation markup never emits save text or unbounded numbers', () => {
@@ -240,11 +266,128 @@ test('creation markup never emits save text or unbounded numbers', () => {
   }
   for (const grade of GRADES_CHAIN) {
     const markup = chainCreationMarkup(full(grade));
-    assert.match(markup, /Your sunbeam chart: sun to sea plant to little fish to otter/);
-    assert.equal((markup.match(/width="6" height="6"/g) ?? []).length, 10);
+    assert.match(markup, grade === 4 ? /Your sunbeam chart\. Sun to pondweed to snail to koi/ : /Your sunbeam chart\. Sun to sea plant to little fish to otter/);
+    assert.equal((markup.match(/width="6" height="6"/g) ?? []).length, 9);
+    assert.equal((markup.match(/>÷10<\/text>/g) ?? []).length, 2);
     assert.doesNotMatch(markup, /stroke-dasharray/);
     assert.match(chainCreationMarkup({ ...full(grade), shone: false }), /stroke-dasharray/);
   }
+});
+
+test('each grade has its exact cards, biggest plant number and six tiles', () => {
+  assert.equal(chainFor(3), CHAINS.bay); assert.equal(chainFor(5), CHAINS.bay);
+  assert.equal(chainFor(4), CHAINS.pond);
+  assert.deepEqual(chainFor(4).cards, ['pondweed', 'snail', 'koi', 'frog']);
+  assert.deepEqual([3, 4, 5].map(topEnergy), [1000, 2000, 5000]);
+  assert.deepEqual([3, 4, 5].map(expectedEnergy), [[1000, 100, 10], [2000, 200, 20], [5000, 500, 50]]);
+  assert.deepEqual([3, 4, 5].map(energyTiles), [[1000, 500, 100, 50, 10, 1], [2000, 1000, 200, 100, 20, 2], [5000, 2500, 500, 250, 50, 5]]);
+  assert.equal(chainReady({ ...full(), chain: Array(3) }), false);
+  for (const grade of GRADES_CHAIN) {
+    const content = chainFor(grade);
+    assert.equal(chainOfCards(content.cards), content);
+    for (const card of content.cards.slice(1)) {
+      const { state, ui } = start(grade);
+      const tried = activity.act(state, ui, field({ card }));
+      assert.equal(tried.state, state); assert.equal(tried.ui, ui);
+      assert.equal(tried.line, `${CARD_WORDS[card].plural} cannot use sunlight. Who makes food from sunlight?`);
+    }
+    const { state: empty, ui } = start(grade);
+    const state = placeCard(empty, content.cards[0]).state;
+    for (const card of content.cards.slice(2)) {
+      const tried = activity.act(state, ui, field({ card }));
+      assert.equal(tried.state, state);
+      assert.equal(tried.line, `${CARD_WORDS[card].plural} do not eat ${content.food[1]}. ${content.questions[1]}`);
+    }
+    for (const card of Object.keys(CARD_WORDS).filter(id => !content.cards.includes(id))) {
+      assert.equal(placeCard(state, card).status, 'unknown');
+      assert.equal(activity.act(state, ui, field({ card })).state, state);
+    }
+  }
+});
+
+test('legacy bay pictures survive a grade-4 save round-trip, while opening starts the pond fresh', () => {
+  const legacy = { kind: 'science', activity: 'chain', chapter: 1, grade: 4,
+    chain: ['plant', 'fish', 'gull'], energy: [100, 10, 1], shone: true };
+  const cleaned = cleanCreation('science', legacy);
+  assert.deepEqual(cleaned.chain, legacy.chain);
+  assert.deepEqual(cleaned.energy, legacy.energy);
+  assert.equal(cleaned.shone, false);
+  assert.deepEqual(cleanChainCreation(cleaned), cleaned);
+  const values = new Map();
+  const storage = { setItem: (key, value) => values.set(key, value), getItem: key => values.get(key) ?? null };
+  const published = publishCreation({ ...createState(), chapter: 1, grade: 4 }, 'science', legacy);
+  assert.equal(saveState(published, storage), true);
+  const saved = getCreations(loadState(storage)).science;
+  assert.deepEqual(saved, cleaned);
+  assert.match(chainCreationMarkup(saved), /Sun to sea plant to little fish to gull/);
+  assert.deepEqual(activity.start(saved, { grade: 4, chapter: 1 }).state, start(4).state);
+  for (const eater of ['koi', 'frog']) {
+    const pond = full(4, eater);
+    assert.deepEqual(cleanChainCreation(pond), pond);
+    assert.deepEqual(activity.start(pond, { grade: 4, chapter: 1 }).state, pond);
+    assert.match(chainCreationMarkup(pond), new RegExp(`Sun to pondweed to snail to ${eater}`));
+  }
+  assert.equal(chainOfCards(null), CHAINS.bay);
+  assert.equal(chainOfCards(['__proto__']), CHAINS.bay);
+});
+
+test('pond illustrations have distinct 24px glyphs and transparent 16 by 16 pixel maps', () => {
+  assert.equal(new Set(CHAINS.pond.cards.map(id => CARD_GLYPHS[id])).size, 4);
+  for (const id of CHAINS.pond.cards) {
+    assert.equal(CARD_PIXELS[id].length, 16, id);
+    assert.ok(CARD_PIXELS[id].every(row => row.length === 16), id);
+    assert.ok(CARD_PIXELS[id].some(row => row.includes('.')), id);
+    assert.ok(CARD_PIXELS[id].some(row => /[hbs]/.test(row)), id);
+  }
+});
+
+test('pond field keeps its nodes through play and labels both feeding arrows at both text sizes', () => {
+  const previous = globalThis.document;
+  const doc = new Doc(); globalThis.document = doc;
+  const css = readFileSync(new URL('../src/ui/activities/chain.css', import.meta.url), 'utf8');
+  try {
+    for (const large of [false, true]) {
+      const host = doc.createElement('div'); doc.body.append(host);
+      host.className = large ? 'large-text' : '';
+      let result = start(4);
+      const view = activity.mountField(host, { grade: 4, dispatch(action) {
+        result = activity.act(result.state, result.ui, action); view.update(result.state, result.ui);
+      } });
+      view.update(result.state, result.ui);
+      const cards = host.querySelectorAll('.chain-card'), plates = host.querySelectorAll('.chain-plate');
+      const firstPicture = plates[0].querySelector('.chain-creature');
+      cards[0].focus();
+      cards[0].dispatchEvent(new Event('keydown', { key: 'ArrowRight' }));
+      assert.equal(doc.activeElement, cards[1]);
+      assert.equal(cards.filter(card => card.tabIndex === 0).length, 1);
+      const down = new Event('keydown', { key: 'ArrowDown' }); cards[1].dispatchEvent(down);
+      assert.equal(down.defaultPrevented, false);
+      for (const [i, value] of [2000, 200, 20].entries()) {
+        cards[i].click(); host.querySelector(`[data-energy="${value}"]`).click();
+      }
+      result = activity.act(result.state, result.ui, cmd('shine')); view.update(result.state, result.ui);
+      assert.equal(chainReady(result.state), true);
+      assert.deepEqual(plates.map(plate => plate.querySelector('.chain-energy').textContent), ['2000', '200', '20']);
+      assert.deepEqual(plates.map(plate => plate.querySelectorAll('.chain-block').filter(block => !block.hidden).length), [4, 3, 2]);
+      assert.deepEqual(host.querySelectorAll('.chain-plate'), plates);
+      assert.equal(plates[0].querySelector('.chain-creature'), firstPicture);
+      const sun = host.querySelector('.chain-sun-card');
+      assert.equal(sun.querySelectorAll('.chain-block, .chain-energy').length, 0);
+      assert.equal(sun.textContent.trim(), 'Sunsunlight');
+      for (const arrow of host.querySelectorAll('.chain-arrow')) {
+        assert.equal(arrow.getAttribute('aria-label'), 'Divide by 10.');
+        assert.equal(arrow.querySelector('.chain-step').textContent, '÷10');
+      }
+      for (const el of host.querySelectorAll('[aria-label]')) shortSentences(el.getAttribute('aria-label'));
+      view.destroy(); assert.equal(host.children.length, 0); host.remove();
+    }
+    assert.equal(declarations(css, '.chain-step')['font-size'], 'var(--text-small)');
+    assert.equal(declarations(css, '.chain-source')['font-size'], 'var(--text-small)');
+    const px = (selector, property) => Number.parseFloat(declarations(css, selector)[property]);
+    const padding = declarations(css, '.chain-field').padding.split(' ').map(Number.parseFloat);
+    assert.ok(px('.chain-sun-card', 'width') + px('.chain-source-gap', 'width') + 3 * px('.chain-plate', 'width') + 2 * px('.chain-arrow', 'width')
+      <= px('.chain-field', 'width') - 2 * padding[1]);
+  } finally { if (previous === undefined) delete globalThis.document; else globalThis.document = previous; }
 });
 
 test('all reachable lines and templates fit the 56-character sentence rule', () => {
@@ -256,6 +399,8 @@ test('all reachable lines and templates fit the 56-character sentence rule', () 
   assert.equal(HELP.length, 4);
   assert.equal(HELP.at(-1), 'Choose Pin chart.');
   for (const grade of GRADES_CHAIN) {
+    helpFor(grade).forEach(shortSentences);
+    assert.equal(activity.helpFor(grade)[1], `Tap a number: each step keeps ${tenthWord(grade)}.`);
     const seen = new Set(), queue = [start(grade).state];
     while (queue.length) {
       const state = queue.shift(), key = JSON.stringify(state);
@@ -263,7 +408,7 @@ test('all reachable lines and templates fit the 56-character sentence rule', () 
       seen.add(key);
       shortSentences(chainOpening(state));
       shortSentences(nextNeedLine(state));
-      for (const action of [...CHAIN_CARDS.map(card => field({ card })), ...energyTiles(grade).map(energy => field({ energy })), ...['shine', 'needs', 'reset'].map(cmd)]) {
+      for (const action of [...chainFor(grade).cards.map(card => field({ card })), ...energyTiles(grade).map(energy => field({ energy })), ...['shine', 'needs', 'reset'].map(cmd)]) {
         const result = activity.act(deepFreeze(state), { shine: 0 }, action);
         if (result.line) shortSentences(result.line);
         if (!seen.has(JSON.stringify(result.state))) queue.push(result.state);
@@ -277,7 +422,7 @@ test('all reachable lines and templates fit the 56-character sentence rule', () 
     shortSentences(LINES.question(i));
     shortSentences(LINES.needNumber(i + 1));
   }
-  assert.deepEqual(EATS, { plant: 'sun', fish: 'plant', otter: 'fish', gull: 'fish' });
+  assert.deepEqual(EATS, { plant: 'sun', fish: 'plant', otter: 'fish', gull: 'fish', pondweed: 'sun', snail: 'pondweed', koi: 'snail', frog: 'snail' });
 });
 
 // A focused fake DOM: tree, event delegation, focus and attributes, with SVG treated as leaf markup.
@@ -322,12 +467,14 @@ test('chart uses compact visible names with full accessible names and dialogue a
       } });
       view.update(result.state, result.ui);
       const root = host.children[0], cards = root.querySelectorAll('.chain-card');
-      assert.deepEqual(cards.map(card => card.querySelector('.chain-card-word').textContent), ['Plant', 'Fish', 'Otter', 'Gull']);
-      assert.deepEqual(cards.slice(0, 2).map(card => card.getAttribute('aria-label')), ['Sea plant', 'Little fish']);
-      for (const [i, fullName] of ['Sea plant', 'Little fish'].entries()) {
+      const words = cardsFor(grade).map(card => card.word);
+      const compact = grade === 4 ? words : ['Plant', 'Fish', 'Otter', 'Gull'];
+      assert.deepEqual(cards.map(card => card.querySelector('.chain-card-word').textContent), compact);
+      assert.deepEqual(cards.slice(0, 2).map(card => card.getAttribute('aria-label')), words.slice(0, 2));
+      for (const [i, fullName] of words.slice(0, 2).entries()) {
         root.listeners.click({ target: cards[i] });
         const plate = root.querySelectorAll('.chain-plate')[i];
-        assert.equal(plate.querySelector('.chain-word').textContent, ['Plant', 'Fish'][i]);
+        assert.equal(plate.querySelector('.chain-word').textContent, compact[i]);
         assert.equal(plate.getAttribute('role'), 'group');
         assert.equal(plate.getAttribute('aria-label'), fullName);
         assert.equal(cards[i].getAttribute('aria-label'), `${fullName}, placed`);
@@ -356,7 +503,11 @@ test('field mounts once, updates in place, has two keyboard rails and recovers f
       const tabs = list => list.filter(b => b.tabIndex === 0).length;
       assert.equal(tabs(cards), 1); assert.equal(tabs(tiles), 1);
       assert.deepEqual(tiles.map(t => Number(t.dataset.energy)), energyTiles(grade));
-      assert.equal(root.querySelectorAll('.chain-block').filter(b => !b.hidden).length, 4);
+      assert.equal(root.querySelectorAll('.chain-block').filter(b => !b.hidden).length, 0);
+      assert.equal(root.querySelector('.chain-sun-card').querySelector('.chain-energy'), null);
+      assert.equal(root.querySelector('.chain-sun-card').querySelector('.chain-bar'), null);
+      assert.equal(root.querySelector('.chain-source').textContent, 'sunlight');
+      assert.deepEqual(root.querySelectorAll('.chain-step').map(label => label.textContent), ['÷10', '÷10']);
       let prevented = 0, stopped = 0;
       const key = (target, key) => root.listeners.keydown({ target, key, preventDefault() { prevented++; }, stopPropagation() { stopped++; } });
       cards[0].focus(); key(cards[0], 'ArrowRight');
@@ -368,19 +519,19 @@ test('field mounts once, updates in place, has two keyboard rails and recovers f
       root.listeners.click({ target: tiles[1] });
       assert.deepEqual(dispatched.at(-1), { type: 'field', energy: energyTiles(grade)[1] });
       cards[0].focus(); root.listeners.click({ target: cards[0] });
-      assert.deepEqual(dispatched.at(-1), { type: 'field', card: 'plant' });
-      const placed = activity.act(initial.state, initial.ui, field({ card: 'plant' }));
+      assert.deepEqual(dispatched.at(-1), { type: 'field', card: chainFor(grade).cards[0] });
+      const placed = activity.act(initial.state, initial.ui, field({ card: chainFor(grade).cards[0] }));
       fieldUI.update(placed.state, placed.ui);
       assert.equal(cards[0].disabled, true); assert.equal(cards[0].tabIndex, -1);
       assert.equal(document.activeElement, cards[1]);
-      assert.equal(cards[0].attrs['aria-label'], 'Sea plant, placed');
+      assert.equal(cards[0].attrs['aria-label'], `${cardsFor(grade)[0].word}, placed`);
       assert.equal(cards[0].querySelector('.chain-card-check').hidden, false);
       const count = dispatched.length; root.listeners.click({ target: cards[0] });
       assert.equal(dispatched.length, count);
       key(cards[1], 'ArrowLeft'); assert.equal(document.activeElement, cards[1]);
       fieldUI.update(full(grade), { shine: 1 });
       assert.ok(root.classes.has('chain-field--shine'));
-      assert.equal(root.querySelectorAll('.chain-block').filter(b => !b.hidden).length, 10);
+      assert.equal(root.querySelectorAll('.chain-block').filter(b => !b.hidden).length, 9);
       assert.equal(tabs(cards), 1); assert.equal(tabs(tiles), 1);
       assert.ok(tiles.every(b => !b.disabled));
       assert.equal(root.querySelectorAll('.chain-plate')[0], plates[0]);

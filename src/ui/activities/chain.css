@@ -12,6 +12,9 @@
   display: flex; align-items: center; flex-direction: column; gap: 3px; padding: 10px 4px 6px;
 }
 .chain-plate::after, .chain-sun-card::after { content: ''; position: absolute; right: 4px; top: 4px; width: 8px; height: 8px; background: var(--paper-shade); clip-path: polygon(0 0,8px 0,8px 8px,6px 8px,6px 6px,4px 6px,4px 4px,2px 4px,2px 2px,0 2px); pointer-events: none; }
+.chain-sun-card { width: 92px; }
+.chain-source { font-size: var(--text-small); line-height: 1.1; }
+.chain-source-gap { width: 16px; flex: none; }
 .chain-picture {
   position: relative;
   width: 52px; height: 48px; flex: none; display: grid; place-items: center;
@@ -28,10 +31,11 @@
 .chain-word { white-space: nowrap; font-size: var(--text-field); line-height: 1.2; }
 .chain-energy { font-family: var(--font-pixel); font-size: var(--text-field); line-height: 1.1; padding: 2px 5px; }
 .chain-energy::before { border: 1px solid var(--ink); background: var(--paper); clip-path: none; box-shadow: inset 2px 2px 0 var(--white), inset -2px -3px 0 var(--paper-shade); }
-.chain-bar { position: absolute; right: 1px; bottom: 7px; width: 12px; display: flex; flex-direction: column-reverse; gap: 2px; }
+.chain-bar { position: absolute; right: 1px; bottom: 2px; width: 12px; display: flex; flex-direction: column-reverse; gap: 2px; }
 .chain-block { display: block; box-sizing: border-box; width: 10px; height: 10px; border: 1px solid var(--ink); background: var(--paper-shade); box-shadow: inset 1px 1px 0 var(--paper), inset -2px -2px 0 #d6c39d; }
 .chain-block--lit { background: var(--lantern); border: 1px solid var(--ink); box-shadow: inset 1px 1px 0 #ffe6a0, inset -2px -2px 0 #d9a532; }
-.chain-arrow { width: 20px; flex: none; display: flex; color: var(--sea); }
+.chain-arrow { width: 30px; flex: none; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--sea); }
+.chain-step { font-size: var(--text-small); line-height: 1; color: var(--ink); }
 .chain-arrow svg { display: block; image-rendering: pixelated; }
 .chain-cards, .chain-tiles { display: flex; justify-content: center; gap: 6px; }
 .chain-cards { margin-top: 8px; height: 52px; }
