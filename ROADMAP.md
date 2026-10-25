@@ -22,6 +22,7 @@ All Aboard · Summer Festival is a playable prototype with seven creative encoun
 
 **Added 2026-10-25:**
 
+- All seven neighbors plus Pip and Nori now come from the team's reference drawings in `docs/art/source/neighbors/`.
 - Four grade-2 activities: **Taro’s crate rows**, **Momo’s bean test**, **Hana’s compass errands**, and **Sora’s story ribbon**, with their own saves, village creations and Guide stamps. Kindergarten and grade 1 keep their earlier activities.
 - Banner goals now grow from free stamps to shape/color patterns and mirror designs. Sign goals grow from two words to complete sentences and describing words.
 - Grade 4 has a pond food chain and Help Day set B. Food-chain numbers start at the plant, and feeding arrows show ÷10. Grade 5 must cut pizza halves; finished tales can be reread with their proof highlighted.

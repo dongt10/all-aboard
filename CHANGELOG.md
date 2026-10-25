@@ -26,6 +26,8 @@ Changes to All Aboard, grouped by release.
 
 ### Art
 
+- Hana, Kiko and Sora rebuilt from the team's drawings with true left, right and back views.
+- Pip and Nori redrawn from approved concept designs in the team's style, with true left and right profiles; the references are pinned and the sheets are derived from them.
 - Yuki and Fumi now come from the team's drawings, with side and back views, and the reference drawings are pinned so they can never be swapped silently.
 - Yuki's and Fumi's right-facing profiles are drawn as their own view, not a mirror, so the calico patch and the pocket tag stay on the correct side.
 
