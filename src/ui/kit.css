@@ -85,8 +85,8 @@ body.game {
 
 /* Landscape-first: portrait windows get a friendly card, with a way past it. */
 .rotate-card { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(43, 45, 92, .92); }
-.rotate-card__frame { display: grid; gap: 12px; max-width: 320px; text-align: center; font-size: 22px; font-weight: 700; }
-.rotate-card__note { font-size: 16px; font-weight: 400; }
+.rotate-card__frame { display: grid; gap: 12px; max-width: 320px; text-align: center; font-size: var(--text-command); font-weight: 700; }
+.rotate-card__note { font-size: var(--text-small); font-weight: 400; }
 
 /* Calm motion, from the comfort setting or the device. */
 .calm *, .calm *::before, .calm *::after { animation: none !important; transition: none !important; }

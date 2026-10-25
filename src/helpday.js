@@ -20,10 +20,10 @@ export const STAMP_HELPDAY = 'Different strengths get every job done together.';
 // Board order. `need` is the chip on the card, `needSays` the same need inside a screen-reader sentence,
 // `glyph` the 24×24 picture the activity draws, `at` the bench caption word.
 export const HELP_JOBS = [
-  { id: 'lanterns', name: 'Hang lanterns', need: 'Up high', needSays: 'needs up high', glyph: 'lantern', at: 'lanterns' },
-  { id: 'drum', name: 'Carry the drum', need: 'Heavy', needSays: 'it is heavy', glyph: 'drum', at: 'drum' },
-  { id: 'gate', name: 'Greet at the gate', need: 'All day', needSays: 'needs a helper all day', glyph: 'gate', at: 'gate' },
-  { id: 'mail', name: 'Deliver invitations', need: 'All over town', needSays: 'goes all over town', glyph: 'envelope', at: 'mail' },
+  { id: 'lanterns', name: 'Lanterns', description: 'Hang lanterns', need: 'Up high', needSays: 'needs up high', glyph: 'lantern', at: 'lanterns' },
+  { id: 'drum', name: 'Carry drum', description: 'Carry the drum', need: 'Heavy', needSays: 'it is heavy', glyph: 'drum', at: 'drum' },
+  { id: 'gate', name: 'Greet guests', description: 'Greet at the gate', need: 'All day', needSays: 'needs a helper all day', glyph: 'gate', at: 'gate' },
+  { id: 'mail', name: 'Deliver mail', description: 'Deliver invitations', need: 'Around town', needSays: 'goes all over town', glyph: 'envelope', at: 'mail' },
 ];
 // Bench order. `figure` is the sprite id in figures/index.js (Kiko is the music neighbor, Taro the math one:
 // a cameo at Hana's stall, not a change to data.js). `color` is the token on the small team board; every token

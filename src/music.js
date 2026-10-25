@@ -1,4 +1,4 @@
-import { sanitizeBandSnapshot } from './audio.js';
+import { sanitizeBandSnapshot, phraseNotes } from './audio.js';
 export { createDefaultBand, sanitizeBandSnapshot } from './audio.js';
 
 export const CAST=[
@@ -9,7 +9,7 @@ export const CAST=[
 ];
 export function bandPlaybackMessage(snapshot,{quiet=false}={}) {
   const band=sanitizeBandSnapshot(snapshot);
-  const musicalTracks=band.tracks.filter(track=>track.enabled&&track.notes.some(note=>note!==null));
+  const musicalTracks=band.tracks.filter(track=>track.enabled&&[...band.form].some(letter=>phraseNotes(track,letter).some(note=>note!==null)));
   if(!musicalTracks.length)return `${quiet?'See beat: everyone':'Everyone'} is resting. Invite a friend or add a note.`;
   if(!musicalTracks.some(track=>track.volume>0))return quiet?'See beat: friend volumes are at zero. Raise one to see their beat.':'Your friends are muted. Raise a friend’s volume to listen.';
   if(quiet)return 'See beat: watch the beat without sound.';

@@ -35,15 +35,19 @@ export function createApp(root, { scenes = {}, storage } = {}) {
 
   const banner = document.createElement('p');
   banner.className = 'px-frame save-off';
-  banner.setAttribute('role', 'status');
+  banner.setAttribute('aria-hidden', 'true');
   banner.textContent = 'Saving is off. Keep this tab open.';
   banner.hidden = true;
   // Outside the stage, so an open window (which makes the stage behind it inert) can't silence it.
   const live = document.createElement('div');
   live.className = 'sr-only';
   live.setAttribute('aria-live', 'polite');
+  const saveStatus = document.createElement('div');
+  saveStatus.className = 'sr-only';
+  saveStatus.setAttribute('role', 'status');
+  saveStatus.setAttribute('aria-atomic', 'true');
   stage.append(banner);
-  root.append(live);
+  root.append(live, saveStatus);
   applySettings(stage, state.settings);
 
   const calm = () => Boolean(state.settings.reducedMotion);
@@ -69,7 +73,7 @@ export function createApp(root, { scenes = {}, storage } = {}) {
     const route = routeIntent(event);
     if (!route || route === 'native') return;
     if (route === 'click-target') { event.preventDefault(); event.target.click(); return; }
-    if (windowOpen() || manager.busy) return;   // windows handle their own B and arrows
+    if (stage.inert || windowOpen() || manager.busy) return;   // windows handle their own B and arrows
     if (manager.scene?.handleIntent?.(keyIntent(event))) event.preventDefault();
   }
   document.addEventListener('keydown', onKey);
@@ -85,6 +89,7 @@ export function createApp(root, { scenes = {}, storage } = {}) {
       state = next;
       saveOk = saveState(state, storage);
       banner.hidden = saveOk;
+      saveStatus.textContent = saveOk ? '' : banner.textContent;
       applySettings(stage, state.settings);
       return state;
     },
@@ -115,6 +120,7 @@ export function createApp(root, { scenes = {}, storage } = {}) {
       stopSpeaking();
       manager.scene?.destroy();
       live.remove();
+      saveStatus.remove();
       unmountStage();
     },
   };

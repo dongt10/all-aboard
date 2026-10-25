@@ -2,11 +2,28 @@ import { STAMP_CHAIN } from '../src/chain.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { guideEntries, stampCount, learnedText, stampGrade, SIDE_BIOS } from '../src/ui/guide.js';
-import { createState, publishCreation } from '../src/progress.js';
+import { createState, publishCreation, saveDraft, normalizeState } from '../src/progress.js';
 import { CHARACTERS } from '../src/data.js';
 
 const sign = { kind: 'writing', text: 'Welcome!', chapter: 0, grade: 0 };
 const SUBJECTS = CHARACTERS.map(c => c.id);
+
+test('earned statements follow the published activity, including legacy grade 3–5 work', () => {
+  const old = {
+    math: { left: [1], right: [1], rolled: true }, science: { canopy: 'left', time: 10 },
+    reading: { found: ['key', 'umbrella', 'book'] },
+    community: { placements: [{ item: 'bench', x: 10, y: 90 }, { item: 'quiet', x: 10, y: 10 }, { item: 'sign', x: 90, y: 10 }], tried: true },
+  };
+  const activities = { math: 'pizza', science: 'chain', reading: 'tales', community: 'helpday' };
+  for (const grade of [3, 4, 5]) for (const [kind, values] of Object.entries(old)) {
+    let state = publishCreation({ ...createState(), chapter: 1, grade }, kind, { kind, chapter: 1, grade, ...values });
+    state = saveDraft(state, kind, { kind, chapter: 1, grade, activity: activities[kind] });
+    const stamp = guideEntries(normalizeState(state)).find(e => e.id === kind).stamp;
+    assert.deepEqual(stamp, { earned: true, learned: learnedText(kind, 2) }, `${kind} grade ${grade} legacy stamp ignores new draft`);
+    state = publishCreation(state, kind, { kind, chapter: 1, grade, activity: activities[kind] });
+    assert.equal(guideEntries(state).find(e => e.id === kind).stamp.learned, learnedText(kind, grade));
+  }
+});
 
 test('the guide lists the seven neighbors, then Pip, Nori and Cricket', () => {
   const entries = guideEntries(createState());

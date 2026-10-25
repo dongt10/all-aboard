@@ -135,8 +135,8 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
         part.button.dataset.fit = who ? (fits(job.id, who.id) ? 'yes' : 'no') : '';
         part.button.dataset.filled = String(Boolean(who));
         part.button.setAttribute('aria-label', who
-          ? `${job.name}, ${job.needSays}. ${who.name} is here, ${fits(job.id, who.id) ? 'it fits' : 'try again'}.`
-          : `${job.name}, ${job.needSays}, empty. Send ${chosen.name} here.`);
+          ? `${job.description}, ${job.needSays}. ${who.name} is here, ${fits(job.id, who.id) ? 'it fits' : 'try again'}.`
+          : `${job.description}, ${job.needSays}, empty. Send ${chosen.name} here.`);
         // Only a changed occupant replaces the sprite; the card and its focus persist.
         if (part.who !== (who?.id ?? null)) {
           part.figure.innerHTML = who ? figureMarkup(who.figure, { scale: 0.75 }) : '';

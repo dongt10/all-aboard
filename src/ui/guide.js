@@ -4,7 +4,7 @@ import { STAMP_HELPDAY } from '../helpday.js';
 import { STAMP_TALES } from '../tales.js';
 // The Matsuri Guide: the town's character index and the child's stamp book. Pure, no DOM.
 import { CHARACTERS } from '../data.js';
-import { getCompleted } from '../progress.js';
+import { getCompleted, getRewards } from '../progress.js';
 import { SUBJECT_THEME } from './palette.js';
 
 // What each stamp says, by the lowest grade it applies to (0 is Kindergarten). The last row at or below the grade wins.
@@ -44,11 +44,16 @@ const SIDE_CAST = [
 export const stampGrade = state => (state?.chapter === 1 ? state.grade : 0);
 
 export function guideEntries(state) {
-  const done = new Set(getCompleted(state));
+  const rewards = new Map(getRewards(state).map(record => [record.subjectId, record]));
   const grade = stampGrade(state);
+  const learned = id => {
+    const record = rewards.get(id);
+    const legacy = record && !record.creation?.activity && ['math', 'science', 'reading', 'community'].includes(id);
+    return learnedText(id, legacy ? Math.min(grade, 2) : grade);
+  };
   const neighbors = CHARACTERS.map(c => ({
     id: c.id, name: c.name, species: c.species, role: `${SUBJECT_THEME[c.id].label} · ${c.location}`, bio: c.description,
-    subject: c.id, stamp: { earned: done.has(c.id), learned: learnedText(c.id, grade) }, canFind: true, canVisit: true,
+    subject: c.id, stamp: { earned: rewards.has(c.id), learned: learned(c.id) }, canFind: true, canVisit: true,
   }));
   const side = SIDE_CAST.map(s => ({ id: s.id, name: s.name, species: s.species, role: s.role, bio: SIDE_BIOS[s.id], subject: null, stamp: null, canFind: s.canFind, canVisit: false }));
   return [...neighbors, ...side];

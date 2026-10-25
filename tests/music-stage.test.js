@@ -141,7 +141,7 @@ Object.assign(globalThis, {
   cancelAnimationFrame: () => {},
 });
 
-const { createState, getCreations } = await import('../src/progress.js');
+const { createState, getCreations, getDraft } = await import('../src/progress.js');
 const { figureMarkup } = await import('../src/ui/figures/index.js');
 const { createMusicScene, ECHO_LINES, lanternStep } = await import('../src/ui/screens/music.js');
 const { isEdited } = await import('../src/ui/band.js');
@@ -323,6 +323,36 @@ test('grade 2: a Sounds-window edit during the demo ends the demo; tab-hide says
   } finally { realTimers(); }
 });
 
+test('Echo retries replay the target until a successful copy unlocks the next rhythm', async () => {
+  fakeTimers();
+  const ctx = fakeCtx(at(2)), scene = createMusicScene(ctx); scene.mount();
+  try {
+    const echo = ctx.stage.querySelector('[data-sign="echo"]');
+    const lanterns = ctx.stage.querySelectorAll('button.music-lantern');
+    const demonstrate = async () => {
+      echo.click(); await tick();
+      const mask = [lanterns[0].classList.contains('is-lit')];
+      for (let beat = 1; beat < 8; beat++) { runTicks(1); mask.push(lanterns[beat].classList.contains('is-lit')); }
+      runTicks(1);
+      assert.ok(lanterns.every(l => l.classList.contains('is-rest')));
+      return mask;
+    };
+    const first = await demonstrate();
+    assert.deepEqual(first, [true, false, false, true, false, false, true, false]);
+    for (const beat of [1, 2, 4]) lanterns[beat].click();
+    assert.equal(text(ctx), ECHO_LINES.notYet);
+    assert.deepEqual(await demonstrate(), first, 'an incorrect copy retries the same target');
+    // Interrupt a retry before the demonstration finishes, then replay the same target again.
+    echo.click(); await tick(); runTicks(2);
+    scene.pause();
+    assert.equal(text(ctx), ECHO_LINES.stopped);
+    assert.deepEqual(await demonstrate(), first, 'stopping a demo does not skip its target');
+    for (const beat of [0, 3, 6]) lanterns[beat].click();
+    assert.equal(text(ctx), ECHO_LINES.matched);
+    assert.deepEqual(await demonstrate(), [true, true, false, false, true, true, false, false]);
+  } finally { scene.destroy(); realTimers(); }
+});
+
 test('See beat ticks at 60000 / tempo and restarts when Speed changes', () => {
   fakeTimers();
   try {
@@ -334,6 +364,27 @@ test('See beat ticks at 60000 / tempo and restarts when Speed changes', () => {
     slot(ctx.stage, 'quiet').click();
     assert.equal(timers.size, 0);
     scene.destroy();
+  } finally { realTimers(); }
+});
+
+test('See beat keeps A highlighted when ABA shortens at either phrase boundary', () => {
+  fakeTimers();
+  try {
+    for (const boundary of [8, 16]) {
+      const ctx = fakeCtx(at(5)), scene = createMusicScene(ctx); scene.mount();
+      try {
+        slot(ctx.stage, 'quiet').click();
+        runTicks(boundary - 1);
+        ctx.stage.querySelector('[data-sign="form"]').click(); // ABA -> A
+        runTicks(1);
+        const letters = ctx.stage.querySelectorAll('.music-form__letters b');
+        assert.equal(letters.length, 1);
+        assert.ok(letters[0].classList.contains('is-now'), `A highlights at old beat ${boundary}`);
+        assert.ok(ctx.stage.querySelectorAll('.music-lantern')[0].classList.contains('is-lit'));
+        runTicks(8);
+        assert.ok(letters[0].classList.contains('is-now'), 'A stays highlighted on the next loop');
+      } finally { scene.destroy(); }
+    }
   } finally { realTimers(); }
 });
 
@@ -403,4 +454,38 @@ test('Sounds opens the other lane’s window and its edits flow through edit() w
   assert.ok(ctx.stage.querySelector('.win'), 'reopens after close (handle cleared)');
   scene.destroy();
   assert.equal(ctx.stage.querySelector('.win'), null, 'destroy closes the window');
+});
+
+test('changing only Band volume in Sounds saves the draft and unlocks Send band', () => {
+  const ctx = fakeCtx(at(1)), scene = createMusicScene(ctx); scene.mount();
+  try {
+    assert.equal(slot(ctx.stage, 'save').disabled, true);
+    slot(ctx.stage, 'tunes').click();
+    const input = ctx.stage.querySelector('.sounds [data-master]');
+    input.type = 'range'; input.value = '0.2';
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('change'));
+    ctx.stage.querySelector('.win__close').click();
+    assert.equal(getDraft(ctx.getState(), 'music').masterVolume, 0.2);
+    assert.equal(slot(ctx.stage, 'save').disabled, false);
+  } finally { scene.destroy(); }
+});
+
+test('Sounds edit feedback reaches a live region inside the modal with Read to me off', () => {
+  const state = at(1); state.settings.autoRead = false;
+  const ctx = fakeCtx(state), scene = createMusicScene(ctx); scene.mount();
+  try {
+    slot(ctx.stage, 'tunes').click();
+    assert.equal(ctx.stage.querySelector('.music').inert, true);
+    ctx.stage.querySelector('.sounds [data-tab="bass"]').click();
+    const live = ctx.stage.querySelector('.win [aria-live="polite"]');
+    assert.ok(live, 'feedback lives inside the active window');
+    assert.equal(live.getAttribute('aria-atomic'), 'true');
+    ctx.stage.querySelector('.sounds [data-pattern="1"]').click();
+    assert.equal(live.textContent, 'Tune 2! It starts when the song comes back to beat 1.');
+    ctx.stage.querySelector('.sounds [data-beat="1"]').click();
+    assert.equal(live.textContent, 'Beat 2 is a sound now.');
+    assert.equal(ctx.stage.querySelector('.win [aria-live="polite"]'), live, 'panel repaint keeps the live region');
+    for (let at = live; at; at = at.parentElement) assert.equal(at.inert, false);
+  } finally { scene.destroy(); }
 });

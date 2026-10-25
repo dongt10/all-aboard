@@ -202,6 +202,13 @@ function mountField(host, { dispatch }) {
       cloth.style.background = state.background;
       layer.innerHTML = state.stamps.map(s => `<span class="banner-stamp-spot" style="left:${s.x}%;top:${s.y}%">${stampSVG(s.shape, s.color, s.rotation)}</span>`).join('');
       layer.setAttribute('aria-label', `Your banner, ${ENCOUNTER_COLOR_NAMES[state.background]} cloth, ${state.stamps.length} ${state.stamps.length === 1 ? 'stamp' : 'stamps'}`);
+      cells.forEach((cell, i) => {
+        const stamp = state.stamps[stampAt(state, i)];
+        const contents = stamp
+          ? `${ENCOUNTER_COLOR_NAMES[stamp.color]} ${stamp.shape}, rotated ${stamp.rotation} degrees. Tap to replace.`
+          : 'Empty. Tap to stamp.';
+        cell.setAttribute('aria-label', `Row ${Math.floor(i / COLUMNS) + 1}, column ${(i % COLUMNS) + 1}. ${contents}`);
+      });
     }
     if (ui !== current.ui) {
       setRadio(paints.buttons, ui.color);

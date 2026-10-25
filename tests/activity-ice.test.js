@@ -2,13 +2,29 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import ice, { iceLabel, ICE_LINES } from '../src/ui/activities/ice.js';
 import { ICON_NAMES } from '../src/ui/icons.js';
-import { encounterOpeningDialogue, encounterReady, predictionLine, scienceNextStep } from '../src/encounters.js';
+import { encounterOpeningDialogue, encounterReady, predictionLine, scienceNextStep, iceRemaining } from '../src/encounters.js';
 
 const cmd = id => ({ type: 'command', id });
 const run = (s, ids, grade) => ids.reduce((acc, id) => ice.act(acc.state, acc.ui, cmd(id), grade), s);
 const sentences = text => text.split(/(?<=[.!?])\s+/);
 const GRADES = [0, 1, 2, 3, 4, 5];
 const chapterOf = grade => (grade === 0 ? 0 : 1);
+
+test('first shade after sunny waits explains the fresh ice at every grade and for both trays', () => {
+  for (const grade of GRADES) for (const side of ['left', 'right']) for (const waits of [1, 2, 3, 4]) {
+    const sunny = run(ice.start(null, { chapter: chapterOf(grade), grade }), Array(waits).fill('wait'), grade);
+    assert.ok(iceRemaining(sunny.state.time, false) < 100);
+    for (const action of [cmd(`shade-${side}`), { type: 'field', tray: side }]) {
+      const shaded = ice.act(sunny.state, sunny.ui, action, grade);
+      assert.equal(shaded.state.time, 0);
+      assert.equal(shaded.state.canopy, side);
+      assert.equal(iceRemaining(shaded.state.time, true), 100);
+      assert.equal(iceRemaining(shaded.state.time, false), 100);
+      assert.equal(shaded.line, grade >= 3 ? ICE_LINES.movedGuess(side) : ICE_LINES.moved(side));
+      assert.equal(shaded.ui.predicted, side);
+    }
+  }
+});
 
 test('commands: Shade A, Shade B, Wait 5 min, then Serve ice last and disabled, at every grade', () => {
   for (const grade of GRADES) {

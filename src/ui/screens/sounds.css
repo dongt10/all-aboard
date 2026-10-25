@@ -5,6 +5,8 @@
    Tallest tab (grades 3–5, Sora or Nori): tabs 44 + hint 31 + tunes 60 + staircase 96 + volume 32 +
    band volume 32 + 5 gaps × 8 = 335. The lead's tab has no Tune buttons. ROW_HEIGHTS in sounds.js
    carries the same numbers so the test asserts the budget. */
+/* Leave 824px inside the frame for eight full sound labels at Bigger words. */
+.win:has(.sounds) { width: min(864px, 100%); }
 .sounds { display: grid; gap: 8px; font-size: var(--text-field); }
 .sounds-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
 .sounds-tab { min-height: 44px; font-size: var(--text-field); }

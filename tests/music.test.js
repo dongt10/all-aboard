@@ -51,6 +51,28 @@ test('a pending audio resume cannot restart after stop',async()=>{
  try{const engine=createBandEngine(),started=engine.start(createDefaultBand());engine.stop();resume();assert.equal(await started,false);engine.destroy();}
  finally{if(old===undefined)delete globalThis.AudioContext;else globalThis.AudioContext=old;}
 });
+test('edits during a pending audio resume reach the first scheduled beat and master gain',async()=>{
+ const original={AudioContext:globalThis.AudioContext,requestAnimationFrame:globalThis.requestAnimationFrame,cancelAnimationFrame:globalThis.cancelAnimationFrame};
+ let resume,oscillators=0,engine;const volumes=[];
+ const parameter=()=>({value:0,setValueAtTime(value){volumes.push(value);},linearRampToValueAtTime(){},exponentialRampToValueAtTime(){},setTargetAtTime(){}});
+ globalThis.AudioContext=class{
+   constructor(){this.currentTime=0;this.state='running';this.destination={};}
+   resume(){return new Promise(resolve=>resume=resolve);}close(){return Promise.resolve();}
+   createDynamicsCompressor(){return mockCompressor();}
+   createGain(){return {gain:parameter(),connect(){},disconnect(){}};}
+   createOscillator(){oscillators++;return {frequency:parameter(),connect(){},disconnect(){},start(){},stop(){},addEventListener(){}};}
+ };
+ globalThis.requestAnimationFrame=()=>1;globalThis.cancelAnimationFrame=()=>{};
+ try{
+   const band=createDefaultBand();band.tracks.forEach(t=>{t.enabled=t.id==='bass';});
+   engine=createBandEngine();const started=engine.start(band);
+   const edited={...band,masterVolume:.2,tracks:band.tracks.map(t=>({...t,enabled:false}))};
+   engine.update(edited);resume();
+   assert.equal(await started,true);
+   assert.equal(oscillators,0,'the first beat uses the edits made while resume was pending');
+   assert.deepEqual(volumes,[.2],'startup preserves the latest band volume');
+ }finally{engine?.destroy();for(const [key,value]of Object.entries(original)){if(value===undefined)delete globalThis[key];else globalThis[key]=value;}}
+});
 
 test('Play controller makes a second press cancel pending resume without a second start',async()=>{
  const {createPlaybackController}=await import('../src/music.js');
@@ -78,6 +100,24 @@ test('silent creative scores remain valid and playback distinguishes rests, mute
  band.tracks[0].notes[0]=0;band.tracks[0].volume=0;assert.match(bandPlaybackMessage(band),/friends are muted/);
  band.tracks[0].volume=.5;band.masterVolume=0;assert.match(bandPlaybackMessage(band),/sound off/);assert.match(bandPlaybackMessage(band,{quiet:true}),/watch the beat without sound/);
  assert.equal(sanitizeBandSnapshot(band).masterVolume,0);band.masterVolume=.5;assert.match(bandPlaybackMessage(band),/Your band is playing/);
+});
+test('playback status includes phrase B notes and their volumes for AB and ABA',async()=>{
+ const {bandPlaybackMessage}=await import('../src/music.js');
+ for(const form of ['AB','ABA']){
+   const band=createDefaultBand();band.form=form;band.tracks.forEach(t=>t.notes.fill(null));
+   assert.deepEqual(notesForBeat(band,0),[]);
+   assert.deepEqual(notesForBeat(band,8).map(({id,pitch})=>[id,pitch]),[['bass',0],['voice',3]]);
+   assert.match(bandPlaybackMessage(band),/Your band is playing/);
+   assert.match(bandPlaybackMessage(band,{quiet:true}),/watch the beat without sound/);
+   band.tracks.forEach(t=>{t.volume=0;});
+   assert.match(bandPlaybackMessage(band),/friends are muted/);
+   assert.match(bandPlaybackMessage(band,{quiet:true}),/friend volumes are at zero/);
+   band.tracks.forEach(t=>{t.volume=1;t.enabled=t.id==='percussion';});
+   assert.match(bandPlaybackMessage(band),/Everyone is resting/,'Cricket keeps its rests in B');
+   band.tracks[0].enabled=true;band.masterVolume=0;
+   assert.match(bandPlaybackMessage(band),/sound off/);
+   band.form='A';assert.match(bandPlaybackMessage(band),/Everyone is resting/,'unused B notes do not count');
+ }
 });
 
 test('unexpected context suspension stops stale playback and never resumes automatically',async()=>{

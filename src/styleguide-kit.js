@@ -30,7 +30,10 @@ const LINES = {
   ready: 'Two crates on the left! Now you can send the cart.',
   sent: 'Off it goes! Thank you, builder.',
 };
-const help = () => openWindow(stage, { title: 'How to play', body: '<p>Choose a command with the arrows, then press Enter or Z.</p><p style="margin-top:8px"><button class="px-button" type="button">Got it</button></p>' });
+const help = () => {
+  const win = openWindow(stage, { title: 'How to play', body: '<p>Choose a command with the arrows, then press Enter or Z.</p><p style="margin-top:8px"><button class="px-button" type="button" data-help-done>Got it</button></p>' });
+  if (win) stage.querySelector('[data-help-done]').addEventListener('click', win.close);
+};
 const dialogue = createDialogue(section.querySelector('.kit-demo__dlg'), { speak, onHelp: help, isLarge: () => stage.classList.contains('large-text'), autoRead: () => false });
 
 let left = 0, right = 0;

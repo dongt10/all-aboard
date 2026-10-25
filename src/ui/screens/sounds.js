@@ -136,12 +136,17 @@ export function openSoundsWindow(ctx, { getBand, getGrade, getSelected, onEdit, 
   if (ctx.scenes?.busy) return null;   // never over a scene change
   let selected = getSelected?.() ?? 'melody';
   const grade = () => gradeNumber(getGrade?.() ?? 0);
-  const edit = (next, line = null, save = true) => onEdit?.(next, line, { save });
+  const edit = (next, line = null, save = true) => {
+    onEdit?.(next, line, { save });
+    if (line) feedback.textContent = Array.isArray(line) ? line[1] : line;
+  };
   const body = document.createElement('div');
   body.className = 'sounds';
   body.innerHTML = `<div class="sounds-tabs" role="tablist" aria-label="Musicians">${CAST.map(c => `<button type="button" role="tab" class="px-chip sounds-tab" data-tab="${c.id}" style="--musician:${MUSICIAN_COLORS[c.id]}"><i class="music-swatch"></i>${c.icon} ${c.name}</button>`).join('')}</div>
-    <div class="sounds-panel" role="tabpanel"></div>`;
+    <div class="sounds-panel" role="tabpanel"></div>
+    <p class="sr-only sounds-feedback" aria-live="polite" aria-atomic="true"></p>`;
   const panel = body.querySelector('.sounds-panel');
+  const feedback = body.querySelector('.sounds-feedback');
 
   function paint() {
     body.querySelectorAll('[data-tab]').forEach(tab => {

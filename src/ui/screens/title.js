@@ -80,7 +80,11 @@ export function createTitleScene(ctx) {
         const avatar = event.target.closest('.avatar-choice');
         if (avatar) { ctx.commit(chooseAvatar(ctx.getState(), avatar.dataset.avatar)); syncAvatars(); return; }
         const tile = event.target.closest('.grade-tile');
-        if (tile) { ctx.commit(chooseGrade(ctx.getState(), gradeChoices()[Number(tile.dataset.grade)])); syncGradeTiles(root, ctx.getState()); }
+        if (tile) {
+          ctx.commit(chooseGrade(ctx.getState(), gradeChoices()[Number(tile.dataset.grade)]));
+          syncGradeTiles(root, ctx.getState());
+          root.querySelector('.title-start span').textContent = ctx.getState().hasStarted ? 'Continue' : 'Start';
+        }
       });
       root.querySelector('.title-start').addEventListener('click', () => start());
       ctx.stage.append(root);

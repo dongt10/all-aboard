@@ -159,7 +159,7 @@ function guidePage(entry, state) {
   ].join('');
   // Kiko's page, once a band is made: a grown-up's download of the band, kept out of the kid's music window.
   const record = entry.id === 'music' && getCreations(state).music
-    ? `<div class="guide-record"><button type="button" class="px-button" data-action="record">${icon('download')}<span>Save recording</span></button>
+    ? `<div class="guide-record"><button type="button" class="px-button" data-action="record">${icon('download')}<span>Save song</span></button>
         <p class="guide-record__status" role="status">${RECORDING_LINES.idle}</p></div>`
     : '';
   return `<div class="guide-page__who">
@@ -270,5 +270,5 @@ export function openHelpWindow(ctx, title, steps = []) {
     const button = event.target.closest('[data-step]');
     if (button) ctx.speak(steps[Number(button.dataset.step)]);
   });
-  return open(ctx, 'help', { title: title || 'Help', body });
+  return open(ctx, 'help', { title: title || 'Help', body, onClose: stopSpeaking });
 }

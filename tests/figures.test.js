@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { FEET_ROW, allFigures, getFigure, frameFor, figureMarkup, playerFigureId } from '../src/ui/figures/index.js';
 import { readPNG } from './helpers/png.js';
+import { readFileSync } from 'node:fs';
 
 test('views map to sheet rows and walk steps to columns', () => {
   const boy = getFigure('player-boy');
@@ -80,4 +81,52 @@ test('both kids walk in all four directions and have a joy face', () => {
     const kid = getFigure(id);
     assert.deepEqual([kid.views, kid.walks, kid.joy], [['front', 'left', 'right', 'back'], true, true]);
   }
+});
+
+test('roadmap art and cast counts agree with the shipped sheets', () => {
+  const roadmap = readFileSync(new URL('../ROADMAP.md', import.meta.url), 'utf8');
+  assert.equal(allFigures().length, 12);
+  assert.match(roadmap, /\*\*Art:\*\* 64×64 PNG frames in 256×256 sprite sheets/);
+  assert.match(roadmap, /11 character identities in 12 sprite sheets/);
+  assert.match(roadmap.split('## Housekeeping')[1], /64×64 PNG frames, 256×256 sheets, and 11 character identities across 12 sprite sheets/);
+});
+
+test('style guide cast wraps narrow previews and respects live reduced-motion changes', async t => {
+  const nodes = allFigures().map(figure => ({ dataset: { figure: figure.id }, writes: 0,
+    set innerHTML(value) { this.html = value; this.writes++; } }));
+  const styles = [], sections = [], timers = [];
+  const media = { matches: true, addEventListener(type, fn) { assert.equal(type, 'change'); this.change = fn; } };
+  const prior = ['document', 'window'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
+  Object.assign(globalThis, {
+    document: {
+      createElement: tag => ({ tag }), head: { append: node => styles.push(node.textContent) },
+      querySelector: selector => { assert.equal(selector, '#guide'); return { append: node => sections.push(node) }; },
+      querySelectorAll: selector => { assert.equal(selector, '.guide-walk'); return nodes; },
+    },
+    window: { matchMedia: query => { assert.equal(query, '(prefers-reduced-motion: reduce)'); return media; } },
+  });
+  t.after(() => { for (const [key, descriptor] of prior) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; } });
+  t.mock.method(globalThis, 'setInterval', callback => { timers.push(callback); return 0; });
+  await import('../src/styleguide.js');
+  const css = styles.join('\n');
+  assert.match(css, /\.guide-walk\{[^}]*flex-wrap:wrap/);
+  assert.match(css, /\.guide-sheet\{[^}]*max-width:100%;height:auto/);
+  assert.match(css, /\.guide-figure\{[^}]*max-width:100%;min-width:0/);
+  const page = readFileSync(new URL('../styleguide.html', import.meta.url), 'utf8');
+  assert.match(page, /\.guide-page\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\)/, 'the page track can shrink below the sheet intrinsic width');
+  assert.ok(sections.some(s => s.innerHTML.includes('Cast')));
+  const standing = nodes.map(node => ['front', 'left', 'right', 'back'].map(facing => figureMarkup(node.dataset.figure, { facing, scale: 2 })).join('') + figureMarkup(node.dataset.figure, { pose: 'joy', scale: 2 }));
+  assert.deepEqual(nodes.map(node => node.html), standing, 'reduced motion starts standing');
+  timers[0](); timers[0]();
+  assert.ok(nodes.every(node => node.writes === 1), 'no repeated DOM replacement while reduced');
+  media.matches = false; media.change();
+  assert.notDeepEqual(nodes.map(node => node.html), standing, 'walking resumes when requested');
+  timers[0]();
+  assert.deepEqual(nodes.map(node => node.html), standing, 'the walk advances through its standing frame');
+  timers[0]();
+  media.matches = true; media.change();
+  assert.deepEqual(nodes.map(node => node.html), standing, 'live reduction returns to standing');
+  const writes = nodes.map(node => node.writes);
+  timers[0]();
+  assert.deepEqual(nodes.map(node => node.writes), writes);
 });

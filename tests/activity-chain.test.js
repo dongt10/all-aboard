@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import activity, { CARDS, LINES, HELP, nextNeedLine, tenthWord, cardLine, energyLine } from '../src/ui/activities/chain.js';
 import {
   GRADES_CHAIN, STAMP_CHAIN, CHAIN_CARDS, EATS, ENERGY_TILES, normalizeChain,
@@ -10,6 +11,32 @@ import {
 import { ICON_NAMES } from '../src/ui/icons.js';
 
 const cmd = id => ({ type: 'command', id });
+
+test('chart cards, tiles, plate labels and energy chips use the 20/24px field scale', () => {
+  const css = readFileSync(new URL('../src/ui/activities/chain.css', import.meta.url), 'utf8');
+  for (const selector of ['.chain-card', '.chain-tile', '.chain-word', '.chain-energy']) {
+    const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selectors]) => selectors.split(',').some(s => s.trim() === selector));
+    const fonts = rules.flatMap(([, , declarations]) => [...declarations.matchAll(/font-size:\s*([^;]+);/g)].map(m => m[1]));
+    assert.equal(fonts.at(-1), 'var(--text-field)', selector);
+  }
+});
+
+test('chart rows and stacked cards leave room for Bigger words inside the field', () => {
+  const css = readFileSync(new URL('../src/ui/activities/chain.css', import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rule = selector => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .filter(([, selectors]) => selectors.split(',').some(s => s.trim() === selector)).map(([, , declarations]) => declarations).join(' ');
+  const px = (selector, property) => Number(rule(selector).match(new RegExp(`${property}:\\s*([\\d.]+)px`))[1]);
+  const row = px('.chain-row', 'height'), cards = px('.chain-cards', 'height'), tiles = px('.chain-tiles', 'height');
+  const height = px('.chain-field', 'height');
+  const verticalPadding = Number(rule('.chain-field').match(/padding:\s*([\d.]+)px/)[1]) * 2;
+  assert.ok(verticalPadding + row + cards + tiles + px('.chain-cards', 'margin-top') + px('.chain-tiles', 'margin-top') <= height);
+  // A 24px label, 16px glyph, two 3px borders and two 2px paddings fit a card.
+  assert.ok(px('.chain-card', 'height') >= 24 + 16 + 6 + 4);
+  assert.match(rule('.chain-card'), /flex-direction:\s*column/);
+  assert.ok(4 * px('.chain-card', 'width') + 3 * px('.chain-cards', 'gap') <= 520 - 28);
+  // Plate: picture, label, chip (including its frame), gaps, padding and border.
+  assert.ok(px('.chain-plate', 'height') >= 48 + 24 * 1.2 + (24 * 1.1 + 4 + 8) + 6 + 12 + 6);
+});
 const field = values => ({ type: 'field', ...values });
 const start = grade => activity.start(null, { grade, chapter: 1 });
 const full = (grade = 3, eater = 'otter') => normalizeChain({

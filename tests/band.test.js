@@ -93,6 +93,16 @@ test('a default band saved today reads as untouched after the progress round tri
     assert.equal(isEdited(cleanCreation('music', { ...toggleMusician(saved, 'voice'), chapter: g ? 1 : 0, grade: g }), g), true, `grade ${g} edit survives`);
   }
 });
+test('band volume alone counts as edited, with the default used for older saves', () => {
+  for (const grade of GRADES) {
+    const band = defaultBandFor(grade);
+    assert.equal(isEdited({ ...band, masterVolume: 0.2 }, grade), true);
+    assert.equal(isEdited({ ...band, masterVolume: 0 }, grade), true);
+    const { masterVolume, ...older } = band;
+    assert.equal(isEdited(older, grade), false);
+    assert.equal(isEdited({ ...older, masterVolume }, grade), false);
+  }
+});
 test('the finish gate never throws on a thin or broken band', () => {
   assert.equal(isEdited({ tracks: [{ id: 'bass' }] }, 1), true);
   assert.equal(isEdited({}, 1), false);

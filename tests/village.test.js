@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { HUD_ZONES, VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, hotspotRect, roamRect, talkPoint, nearestNeighbor, stepPlayer, stallState, overlaps, wanderTarget, stepToward, guideArrow } from '../src/ui/village-map.js';
+import { readFileSync } from 'node:fs';
+import { createVillageScene } from '../src/ui/screens/village.js';
+import { createState } from '../src/progress.js';
+import { HUD_ZONES, VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, clampWalk, hotspotRect, roamRect, talkPoint, nearestNeighbor, stepPlayer, stallState, overlaps, wanderTarget, stepToward, guideArrow } from '../src/ui/village-map.js';
 import { creationMarkup } from '../src/ui/creations.js';
 import { STAGE } from '../src/ui/stage.js';
 import { CHARACTERS } from '../src/data.js';
@@ -23,7 +26,7 @@ test('every neighbor and side character has a roomy patch clear of the HUD and e
 });
 
 test('hotspots follow the feet they are given', () => {
-  assert.deepEqual(hotspotRect('math'), { x: 84, y: 220, w: 112, h: 112 });
+  assert.deepEqual(hotspotRect('math'), { x: 84, y: 210, w: 112, h: 112 });
   assert.deepEqual(hotspotRect('math', { x: 150, y: 302 }), { x: 94, y: 222, w: 112, h: 112 });
   assert.deepEqual(hotspotRect('pip', { x: 100, y: 200 }), { x: 64, y: 128, w: 72, h: 88 });
   assert.deepEqual(talkPoint('math', { x: 150, y: 302 }), { x: 150, y: 342 });
@@ -45,8 +48,8 @@ test('wander targets stay inside the home patch', () => {
       assert.ok(hot.x >= roam.x && hot.y >= roam.y && hot.x + hot.w <= roam.x + roam.w && hot.y + hot.h <= roam.y + roam.h, `${id} hotspot stays in its roam rect`);
     }
   }
-  assert.deepEqual(wanderTarget('math', () => 0), { x: 104, y: 296 });
-  assert.deepEqual(wanderTarget('math', () => 0.5), { x: 140, y: 300 });
+  assert.deepEqual(wanderTarget('math', () => 0), { x: 104, y: 286 });
+  assert.deepEqual(wanderTarget('math', () => 0.5), { x: 140, y: 290 });
 });
 
 test('stepToward walks a capped step and faces the way it goes', () => {
@@ -76,8 +79,8 @@ test('the player can talk only when standing near a neighbor', () => {
 test('walking moves 24px and stops at the edges', () => {
   assert.deepEqual(stepPlayer({ x: 480, y: 500 }, 'up'), { x: 480, y: 476 });
   assert.deepEqual(stepPlayer({ x: 40, y: 300 }, 'left'), { x: 40, y: 300 });
-  assert.deepEqual(stepPlayer({ x: 900, y: 510 }, 'right'), { x: 920, y: 510 });
-  assert.deepEqual(stepPlayer({ x: 900, y: 510 }, 'down'), { x: 900, y: 510 });
+  assert.deepEqual(stepPlayer({ x: 880, y: 510 }, 'right'), { x: 890, y: 510 });
+  assert.deepEqual(stepPlayer({ x: 880, y: 510 }, 'down'), { x: 880, y: 510 });
   assert.deepEqual(stepPlayer({ x: 900, y: 510 }, 'a'), { x: 900, y: 510 });
 });
 
@@ -197,11 +200,11 @@ test('a saved draft in this grade marks its stall started, and switching grade c
   const statusOf = (state, id) => stallState(id, getCreations(state), getCompleted(state), draftsOf(state));
   const grade3 = { ...createState(), chapter: 1, grade: 3 };
   assert.equal(statusOf(grade3, 'math'), 'new');
-  const drafted = saveDraft(grade3, 'math', { kind: 'math', left: [2], right: [], rolled: false });
+  const drafted = saveDraft(grade3, 'math', { kind: 'math', chapter: 1, grade: 3, left: [2], right: [], rolled: false });
   assert.equal(statusOf(drafted, 'math'), 'started');
   assert.equal(statusOf(drafted, 'art'), 'new');
   assert.equal(statusOf({ ...drafted, grade: 1 }, 'math'), 'new', 'drafts are per grade');
-  const made = publishCreation(drafted, 'math', { kind: 'math', left: [2], right: [2], rolled: true });
+  const made = publishCreation(drafted, 'math', { kind: 'math', chapter: 1, grade: 3, left: [2], right: [2], rolled: true });
   assert.equal(statusOf(made, 'math'), 'made');
 });
 
@@ -255,4 +258,279 @@ test('banded creations use their own safe drawings and preserve legacy fallbacks
   assert.match(creationMarkup('science', { canopy: 'left', time: 10 }), /world-ices/);
   assert.match(creationMarkup('reading', { activity: 'tales', solved: [] }), /world-book/);
   assert.match(creationMarkup('reading', { found: ['key'] }), /world-book/);
+});
+
+
+// Scene regressions use the same small fake DOM as fixes-behavior.test.js.
+// It models the browser's focus loss when a focused control becomes hidden.
+const FOCUSABLE_TAGS = new Set(['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT']);
+const camel = name => name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+
+function attrOf(el, name) {
+  if (name.startsWith('data-')) return el.dataset[camel(name.slice(5))] ?? null;
+  if (name === 'tabindex') return el._tabIndex === undefined ? null : String(el._tabIndex);
+  return el.attrs.get(name) ?? null;
+}
+function matchCompound(el, compound) {
+  let rest = compound;
+  const tag = rest.match(/^[a-z]+/i)?.[0];
+  if (tag && el.tagName !== tag.toUpperCase()) return false;
+  rest = rest.slice(tag?.length ?? 0);
+  while (rest) {
+    let m;
+    if ((m = rest.match(/^\.([\w-]+)/))) { if (!el.classList.contains(m[1])) return false; }
+    else if ((m = rest.match(/^\[([\w-]+)(?:="([^"]*)")?\]/))) { const v = attrOf(el, m[1]); if (v === null || (m[2] !== undefined && v !== m[2])) return false; }
+    else if ((m = rest.match(/^:not\((.+?\]?)\)/))) { if (matchCompound(el, m[1])) return false; }
+    else if ((m = rest.match(/^:disabled/))) { if (!el.disabled) return false; }
+    else throw new Error(`fake DOM: unsupported selector ${compound}`);
+    rest = rest.slice(m[0].length);
+  }
+  return true;
+}
+function matches(el, selector) {
+  return selector.split(',').some(part => {
+    const chain = part.trim().split(/\s+/);
+    if (!matchCompound(el, chain.at(-1))) return false;
+    let at = el.parentElement;
+    for (let i = chain.length - 2; i >= 0; i--) {
+      while (at && !matchCompound(at, chain[i])) at = at.parentElement;
+      if (!at) return false;
+      at = at.parentElement;
+    }
+    return true;
+  });
+}
+
+const VOID = new Set(['input', 'br', 'img', 'hr', 'meta']);
+function parseInto(host, html) {
+  const stack = [host];
+  for (const [, close, tag, attrs, selfClose] of html.replace(/<!--[\s\S]*?-->/g, '').matchAll(/<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>/g)) {
+    if (close) { const i = stack.findLastIndex(el => el.tagName === tag.toUpperCase()); if (i > 0) stack.length = i; continue; }
+    const el = new El(tag, host.ownerDocument);
+    for (const [, k, v = ''] of attrs.matchAll(/([\w:-]+)(?:="([^"]*)")?/g)) {
+      if (k === 'class') el.className = v;
+      else if (k.startsWith('data-')) el.dataset[camel(k.slice(5))] = v;
+      else if (k === 'hidden' || k === 'disabled') el[k] = true;
+      else el.setAttribute(k, v);
+    }
+    stack.at(-1).append(el);
+    if (!selfClose && !VOID.has(tag.toLowerCase())) stack.push(el);
+  }
+}
+
+class Event {
+  constructor(type, init = {}) { Object.assign(this, { type, bubbles: true, defaultPrevented: false, repeat: false }, init); }
+  preventDefault() { this.defaultPrevented = true; }
+  stopPropagation() { this.stopped = true; }
+}
+class Target {
+  constructor() { this.listeners = {}; }
+  addEventListener(type, fn, options) { (this.listeners[type] ??= []).push({ fn, once: options?.once }); }
+  removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] ?? []).filter(l => l.fn !== fn); }
+  fire(event) {
+    for (const l of [...(this.listeners[event.type] ?? [])]) { if (l.once) this.removeEventListener(event.type, l.fn); l.fn(event); }
+  }
+}
+class El extends Target {
+  constructor(tag, doc) {
+    super();
+    Object.assign(this, { tagName: tag.toUpperCase(), ownerDocument: doc, children: [], parentElement: null, dataset: {}, attrs: new Map(), hidden: false, inert: false, disabled: false, textContent: '', value: '', _html: '' });
+    const set = this._classes = new Set();
+    this.classList = { add: (...n) => n.forEach(c => set.add(c)), remove: (...n) => n.forEach(c => set.delete(c)), contains: c => set.has(c), toggle: (c, on = !set.has(c)) => { if (on) set.add(c); else set.delete(c); return on; } };
+    this.style = { setProperty(k, v) { this[k] = v; } };
+  }
+  get className() { return [...this._classes].join(' '); }
+  set className(v) { this._classes.clear(); String(v).split(/\s+/).filter(Boolean).forEach(c => this._classes.add(c)); }
+  get tabIndex() { return this._tabIndex ?? (FOCUSABLE_TAGS.has(this.tagName) ? 0 : -1); }
+  set tabIndex(v) { this._tabIndex = v; }
+  get innerHTML() { return this._html; }
+  set innerHTML(v) { this.children.forEach(c => { c.parentElement = null; }); this.children = []; this._html = String(v); parseInto(this, this._html); }
+  get firstElementChild() { return this.children[0] ?? null; }
+  get isConnected() { let at = this; while (at.parentElement) at = at.parentElement; return at === this.ownerDocument.body; }
+  setAttribute(k, v) { if (k === 'tabindex') this._tabIndex = Number(v); else this.attrs.set(k, String(v)); }
+  getAttribute(k) { return attrOf(this, k); }
+  removeAttribute(k) { this.attrs.delete(k); }
+  toggleAttribute(k, on = !this.attrs.has(k)) { if (on) this.attrs.set(k, ''); else this.attrs.delete(k); return on; }
+  append(...nodes) { for (const n of nodes) if (typeof n !== 'string') { n.remove(); n.parentElement = this; this.children.push(n); } }
+  after(...nodes) { const p = this.parentElement; nodes.forEach(n => p?.append(n)); }
+  remove() { const p = this.parentElement; if (p) p.children = p.children.filter(c => c !== this); this.parentElement = null; }
+  contains(other) { for (let at = other; at; at = at.parentElement) if (at === this) return true; return false; }
+  closest(selector) { for (let at = this; at; at = at.parentElement) if (matches(at, selector)) return at; return null; }
+  matches(selector) { return matches(this, selector); }
+  querySelectorAll(selector) {
+    const out = [];
+    const walk = el => el.children.forEach(c => { if (matches(c, selector)) out.push(c); walk(c); });
+    walk(this);
+    return out;
+  }
+  querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null; }
+  focusable() {
+    if (this.disabled || !(FOCUSABLE_TAGS.has(this.tagName) || this._tabIndex !== undefined)) return false;
+    for (let at = this; at; at = at.parentElement) if (at.hidden || at.inert) return false;
+    return this.isConnected;
+  }
+  focus() { if (this.focusable()) this.ownerDocument._active = this; }
+  blur() { if (this.ownerDocument._active === this) this.ownerDocument._active = null; }
+  click() { if (!this.disabled) this.dispatchEvent(new Event('click')); }
+  dispatchEvent(event) {
+    event.target ??= this;
+    for (let at = this; at && !event.stopped; at = at.parentElement) at.fire(event);
+    if (!event.stopped && this.isConnected) this.ownerDocument.fire(event);
+    return !event.defaultPrevented;
+  }
+  getClientRects() { return this.focusable() ? [{}] : []; }
+  getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: 0 }; }
+}
+class Doc extends Target {
+  constructor() { super(); this.hidden = false; this._active = null; this.body = new El('body', this); }
+  createElement(tag) { return new El(tag, this); }
+  // Like a browser: a removed, hidden or inert element can't hold focus, so it falls back to <body>.
+  get activeElement() { return this._active?.focusable() ? this._active : this.body; }
+  dispatchEvent(event) { event.target ??= this; this.fire(event); }
+}
+
+
+function villageFixture(t, { calm = false, large = false, ...options } = {}) {
+  const doc = new Doc(), frames = new Map(), restore = [];
+  let frameId = 0, time = 0;
+  for (const [key, value] of Object.entries({
+    document: doc,
+    MutationObserver: class { observe() {} disconnect() {} },
+    requestAnimationFrame: callback => { frames.set(++frameId, callback); return frameId; },
+    cancelAnimationFrame: id => frames.delete(id),
+    matchMedia: () => ({ matches: false }),
+  })) {
+    const original = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
+    restore.push(() => original ? Object.defineProperty(globalThis, key, original) : delete globalThis[key]);
+  }
+  const stage = doc.createElement('div'), gone = [];
+  stage.className = `stage${calm ? ' calm' : ''}${large ? ' large-text' : ''}`;
+  doc.body.append(stage);
+  const scene = createVillageScene({ stage, getState: () => createState(), go: (...args) => { gone.push(args); return true; } }, options);
+  scene.mount();
+  const root = stage.querySelector('.village');
+  root.getBoundingClientRect = () => ({ left: 0, top: 0, width: 960, height: 540 });
+  const tick = (ms = 16) => {
+    time += ms;
+    const pending = [...frames.values()]; frames.clear();
+    pending.forEach(callback => callback(time));
+  };
+  const pos = () => {
+    const el = root.querySelector('.village-player');
+    return { x: parseFloat(el.style.left) + 32, y: parseFloat(el.style.top) + 57 };
+  };
+  const tap = (x, y) => root.querySelector('.village-map').dispatchEvent(new Event('click', { clientX: x, clientY: y }));
+  t.after(() => { scene.destroy(); restore.forEach(reset => reset()); });
+  return { doc, scene, root, stage, gone, tick, pos, tap };
+}
+
+const cssBlock = (css, selector) => {
+  const start = css.indexOf(`\n${selector} {`) + 1;
+  assert.ok(start > 0, `${selector} exists`);
+  return css.slice(start, css.indexOf('}', start));
+};
+const cssPx = (block, property) => {
+  const match = block.match(new RegExp(`(?:[;{]\\s*)${property}:\\s*(-?[\\d.]+)px`));
+  assert.ok(match, `${property} has a pixel value in ${block}`);
+  return Number(match[1]);
+};
+
+test('bottom dialogue keeps More and its focus ring inside the stage at both text sizes', () => {
+  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
+  const kit = readFileSync(new URL('../src/ui/kit.css', import.meta.url), 'utf8');
+  const interaction = readFileSync(new URL('../src/ui/interaction.css', import.meta.url), 'utf8');
+  const inset = cssPx(cssBlock(css, '.village-dialogue'), 'bottom');
+  const moreBottom = cssPx(cssBlock(interaction, '.dlg__more'), 'bottom');
+  const focus = cssBlock(kit, ':focus-visible');
+  const outline = cssPx(focus, 'outline') + cssPx(focus, 'outline-offset');
+  const frameBorder = cssPx(cssBlock(kit, '.px-frame, .px-button, .px-chip, .px-icon-button, .px-toggle'), 'border');
+  assert.ok(STAGE.height - inset - frameBorder - moreBottom + outline <= STAGE.height, 'More and its full focus ring fit');
+});
+
+test('the welcome and Kiko dialogue leave the reading stall, easel and wandering hotspot clear', async () => {
+  const { easelRect } = await import('../src/ui/village-map.js');
+  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
+  const interaction = readFileSync(new URL('../src/ui/interaction.css', import.meta.url), 'utf8');
+  const top = cssBlock(css, '.village-dialogue--top');
+  const dialogue = { x: cssPx(top, 'left'), y: cssPx(top, 'top') - 25, w: cssPx(cssBlock(css, '.village-dialogue'), 'width'), h: cssPx(cssBlock(interaction, '.dlg'), 'height') + 50 };
+  const reading = VILLAGE_SPOTS.reading;
+  for (const [label, rect] of Object.entries({ hotspot: roamRect('reading'), stall: { x: reading.x - 64, y: reading.y - 96, w: 128, h: 80 }, easel: easelRect('reading') })) {
+    assert.equal(overlaps(dialogue, rect), false, `dialogue clears Sora's ${label}, including tabs and focus rings`);
+  }
+});
+
+test('walking away from a focused Talk chip returns focus to the village', t => {
+  const f = villageFixture(t, { calm: true });
+  const goal = talkPoint('community');
+  f.tap(goal.x, goal.y); f.tick();
+  const chip = f.root.querySelector('.village-talk');
+  assert.equal(chip.hidden, false); chip.focus();
+  assert.ok(f.doc.activeElement === chip);
+  for (let i = 0; i < 4; i++) f.scene.handleIntent('right');
+  assert.equal(chip.hidden, true);
+  assert.ok(f.doc.activeElement === f.root, 'focus must not fall back to the body');
+});
+
+for (const destination of ['neighbor', 'ground']) test(`arrow input immediately interrupts a ${destination} tap-walk`, t => {
+  const f = villageFixture(t, { calm: true });
+  f.tap(480, 320); f.tick(); f.stage.classList.remove('calm');
+  if (destination === 'neighbor') f.root.querySelector('.village-actor[data-id="writing"]').click();
+  else f.tap(820, 200);
+  f.tick();
+  const before = f.pos();
+  f.scene.handleIntent('left'); f.tick(100);
+  const after = f.pos();
+  assert.equal(after.y, before.y, 'the new step starts at the current feet');
+  assert.equal(after.x, before.x - 24, 'Left immediately moves one step left at keyboard speed');
+  for (let i = 0; i < 10; i++) f.tick(100);
+  assert.deepEqual(f.pos(), after, 'the old destination stays cancelled');
+  assert.deepEqual(f.gone, [], 'the cancelled neighbor is never visited');
+});
+
+const playerRects = p => [
+  { x: p.x - 32, y: p.y - 57, w: 64, h: 64 },
+  { x: p.x + 26, y: p.y - 52, w: 44, h: 36 },
+];
+function assertVisiblePlayer(p) {
+  for (const rect of playerRects(p)) {
+    assert.ok(rect.x >= 0 && rect.y >= 0 && rect.x + rect.w <= STAGE.width && rect.y + rect.h <= STAGE.height, `player and Find pointer fit at ${JSON.stringify(p)}`);
+    for (const hud of HUD_ZONES) assert.equal(overlaps(rect, hud), false, `player and Find pointer clear the HUD at ${JSON.stringify(p)}`);
+  }
+}
+
+test('keyboard movement keeps the full player and Find pointer clear of every HUD edge', () => {
+  for (const route of [['left', 'up', 'right', 'down'], ['up', 'left', 'down', 'right']]) {
+    let p = { ...PLAYER_START };
+    for (const intent of route) for (let i = 0; i < 50; i++) {
+      p = stepPlayer(p, intent); assertVisiblePlayer(p);
+    }
+  }
+  assert.deepEqual(stepPlayer({ x: 460, y: 445 }, 'down'), { x: 460, y: 445 }, 'Down stops above the board without a sideways shift');
+  assert.deepEqual(stepPlayer({ x: 472, y: 450 }, 'left'), { x: 472, y: 450 }, 'Left stops beside the board without a vertical shift');
+});
+
+for (const calm of [false, true]) test(`ground walks avoid the HUD throughout the route (calm=${calm})`, t => {
+  const f = villageFixture(t, { calm, large: true, guide: 'art' });
+  for (const goal of [[100, 510], [100, 96], [920, 96], [920, 510], [100, 160], [800, 510]]) {
+    f.tap(...goal);
+    for (let i = 0; i < 50; i++) { f.tick(100); assertVisiblePlayer(f.pos()); }
+    assert.equal(f.root.querySelector('.village-pointer').hidden, false);
+    assert.deepEqual(f.pos(), clampWalk({ x: goal[0], y: goal[1] }), 'the walk reaches its clear destination');
+  }
+});
+
+
+test('the Find chip has a fixed box that fits the movement clearance with Bigger words', () => {
+  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
+  const pointer = cssBlock(css, '.village-pointer');
+  assert.equal(cssPx(pointer, 'width'), 44);
+  assert.equal(cssPx(pointer, 'height'), 36);
+});
+
+for (const id of Object.keys(VILLAGE_SPOTS)) test(`tap-walking to ${id} still arrives and opens its activity`, t => {
+  const f = villageFixture(t, { guide: id });
+  f.root.querySelector(`.village-actor[data-id="${id}"]`).click();
+  for (let i = 0; i < 40; i++) { f.tick(100); assertVisiblePlayer(f.pos()); }
+  assert.deepEqual(f.gone, id === 'music' ? [['music']] : [['encounter', { id }]]);
 });

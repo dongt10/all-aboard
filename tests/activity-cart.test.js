@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import cart, { cartWeights, LINES } from '../src/ui/activities/cart.js';
 import { encounterReady, encounterOpeningDialogue } from '../src/encounters.js';
 
@@ -193,6 +194,41 @@ function fakeDocument() {
   doc.createElement = make;
   return doc;
 }
+
+test('both raised cart bays stay below the total badges at either text size', () => {
+  const previous = globalThis.document;
+  globalThis.document = fakeDocument();
+  try {
+    const css = readFileSync(new URL('../src/ui/activities/cart.css', import.meta.url), 'utf8');
+    const box = css.match(/\.cart__move\s*\{([^}]+)\}/)[1];
+    const px = property => Number(box.match(new RegExp(`${property}:\\s*([\\d.]+)px`))[1]);
+    const x = px('left'), y = px('top'), width = px('width'), height = px('height');
+    const pivot = { x: x + width / 2, y: y + height };
+    const host = document.createElement('div');
+    const view = cart.mountField(host, { grade: 1, dispatch() {} });
+    for (const side of ['left', 'right']) {
+      let s = cart.start({ kind: 'math', left: [], right: [] }, { grade: 1 });
+      for (let i = 0; i < 8; i++) {
+        s = cart.act(s.state, s.ui, { type: 'command', id: `load-${side}` }, 1);
+        view.update(s.state, s.ui);
+        const angle = Number(host.querySelector('.cart__body').style.transform.match(/rotate\(([-\d.]+)deg\)/)[1]) * Math.PI / 180;
+        const raisedY = Math.min(...[x, x + width].map(cornerX => pivot.y + (cornerX - pivot.x) * Math.sin(angle) - height * Math.cos(angle)));
+        for (const badgeBottom of [44, 48.8]) assert.ok(raisedY > badgeBottom, `${side}: bay at ${raisedY} overlaps badge ending at ${badgeBottom}`);
+      }
+    }
+    view.destroy();
+  } finally { globalThis.document = previous; }
+});
+
+test('the selected crate outline stays inside the field', () => {
+  const css = readFileSync(new URL('../src/ui/activities/cart.css', import.meta.url), 'utf8');
+  const top = Number(css.match(/\.cart__sizes\s*\{[^}]*top:\s*([\d.]+)px/)[1]);
+  const selected = css.match(/\.cart__size\[aria-checked="true"\]\s*\{([^}]+)\}/)[1];
+  const lift = Number(selected.match(/translateY\(([-\d.]+)px\)/)[1]);
+  const outline = Number(selected.match(/outline:\s*([\d.]+)px/)[1]);
+  const offset = Number(selected.match(/outline-offset:\s*([\d.]+)px/)[1]);
+  assert.ok(top + lift - outline - offset >= 0, 'selected outline protrudes above the field');
+});
 
 test('the field: a crate rail per band, loaded crates are buttons that take themselves off, arrows walk the rail', () => {
   const previous = globalThis.document;

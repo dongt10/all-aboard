@@ -346,7 +346,7 @@ test('guide window: the subtitle sits under the title, which keeps its id for th
   ctx.stage.querySelector('.win__close').click();
 });
 
-test('guide window: Kiko gets a Save recording button only once a band is made', async () => {
+test('guide window: Kiko gets a short Save song button with an icon only once a band is made', async () => {
   const kikoIndex = ctx => guideEntries(ctx.getState()).findIndex(entry => entry.id === 'music');
   const without = fakeCtx(withArt());
   openGuideWindow(without, { id: 'music' });
@@ -359,7 +359,10 @@ test('guide window: Kiko gets a Save recording button only once a band is made',
   openGuideWindow(ctx, { id: 'music' });
   const button = ctx.stage.querySelector('[data-action="record"]');
   assert.ok(button, 'the band is made, so the button shows');
-  assert.match(ctx.stage.querySelector('.guide-page').innerHTML, /data-action="record">.*<span>Save recording<\/span>/s);
+  const label = ctx.stage.querySelector('.guide-page').innerHTML.match(/data-action="record">.*?<span>([^<]+)<\/span>/s)?.[1];
+  assert.equal(label, 'Save song');
+  assert.ok(label.length <= 12);
+  assert.ok(button.querySelector('svg.icon'), 'the recording action keeps its download icon');
   const status = ctx.stage.querySelector('.guide-record__status');
   assert.ok(ctx.stage.querySelector('.guide-page').innerHTML.includes(`role="status">${RECORDING_LINES.idle}<`), 'idle line shows before a tap');
   assert.equal(status.getAttribute('role'), 'status');

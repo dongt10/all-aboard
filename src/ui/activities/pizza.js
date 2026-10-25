@@ -131,7 +131,7 @@ function mountField(host, { dispatch = () => {} } = {}) {
       equation.textContent = `${state.slices} ÷ 4 = ${ready ? shareText(r.share) : '?'}`;
       equation.classList.toggle('pizza-equation--ready', ready);
       const left = state.halves ? `${r.remaining} of ${state.slices * 2} halves` : `${r.remainingWhole} of ${state.slices} slices`;
-      board.setAttribute('aria-label', `Pizza, ${left} left${state.grade >= 5 ? '. Tap to cut the leftovers in half' : ''}`);
+      board.setAttribute('aria-label', `Pizza, ${left} left${state.grade >= 5 && !state.halves && r.remaining > 0 ? '. Tap to cut the leftovers in half' : ''}`);
       const count = (state.slices * 2) / piece, used = (state.slices * 2 - r.remaining) / piece, angle = 360 / count;
       wedges.forEach(({ node, crust, cheese, pepper }, j) => {
         node.setAttribute('visibility', j >= used && j < count ? 'visible' : 'hidden');

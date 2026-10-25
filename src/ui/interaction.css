@@ -5,6 +5,7 @@
 .dlg { position: relative; width: 472px; height: 136px; max-width: 100%; outline: none; }
 .dlg__frame { height: 100%; padding: 10px 14px 8px; }
 .dlg__text { height: 100%; overflow: hidden; font-family: var(--font-read); font-size: var(--text-body); line-height: 1.25; overflow-wrap: anywhere; cursor: pointer; }
+.dlg__measure { position: absolute; inset: 10px 14px 8px; height: auto; visibility: hidden; pointer-events: none; }
 .large-text .dlg__text { line-height: 1.18; }
 .dlg__speaker, .dlg__tabs, .dlg__more { position: absolute; z-index: 1; }
 .dlg__speaker, .dlg__tabs { top: -18px; }

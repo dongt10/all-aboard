@@ -193,10 +193,11 @@ export function createBandEngine({onBeat=()=>{},onStatus=()=>{}}={}) {
           master=context.createGain();master.connect(context.destination);
           mix=createBandMix(context,master);
         }
+        pending=sanitizeBandSnapshot(snapshot);
         await context.resume();
         if(token!==epoch||destroyed)return false;
         if(context.state!=='running'){status('unavailable');return false;}
-        pending=sanitizeBandSnapshot(snapshot);active=pending;
+        active=pending;
         master.gain.setValueAtTime(pending.masterVolume,context.currentTime);
         nextTime=context.currentTime+.055;nextBeat=0;running=true;
         schedule();timer=setInterval(schedule,25);paint();status('playing');return true;

@@ -41,8 +41,8 @@ Each decision has a recommendation, and the rest of this roadmap assumes it.
 
 **Already decided by the UI remake:**
 
-- **Art:** 32×48 code-drawn pixel art, with a seam for hand-drawn PNGs later. The art plan’s asset guide should say so.
-- **Cast:** 11 figures, with Cricket on rhythm. The art plan still says ten.
+- **Art:** 64×64 PNG frames in 256×256 sprite sheets. Rows are front, left, right, back; columns are step A, stand, step B, joy, with feet on row 56.
+- **Cast:** 11 character identities in 12 sprite sheets: two player looks, seven neighbors, and three side characters, with Cricket on rhythm.
 - **Screen:** one landscape 960×540 stage. Portrait phones get a “turn sideways” card.
 - **Fonts:** Andika and Pixelify Sans, self-hosted.
 
@@ -296,7 +296,7 @@ Make words and tasks into data, as the art plan asks.
 ## Housekeeping
 
 - Add the Project Brief to `docs/`. It isn’t in the repository yet.
-- Keep one copy of the art plan, and update it for the remake: 11 figures, the 32×48 code-drawn style, and the PNG seam.
+- Keep one copy of the art plan aligned with the shipped contract: 64×64 PNG frames, 256×256 sheets, and 11 character identities across 12 sprite sheets.
 - Link this roadmap from the README once the remake’s README rewrite lands.
 
 [Back to top](#all-aboard)

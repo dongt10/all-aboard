@@ -10,7 +10,7 @@
 .helpday-count { font-size: var(--text-small); line-height: 1; }
 .helpday-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .helpday-job {
-  height: 104px; min-width: 0; box-sizing: border-box; padding: 0 2px; margin: 0;
+  height: 106px; min-width: 0; box-sizing: border-box; padding: 0 2px; margin: 0;
   border: 3px solid var(--ink); background: var(--paper); color: var(--ink);
   box-shadow: inset -2px -2px 0 var(--paper-shade); cursor: pointer; font-family: var(--font-read);
   display: flex; flex-direction: column; justify-content: space-between; text-align: left;
@@ -19,10 +19,10 @@
 .helpday-glyph { display: flex; flex: none; width: 20px; }
 .helpday-glyph svg { width: 20px; height: 20px; }
 .helpday-job-name { font-size: var(--text-field); line-height: 1; overflow-wrap: normal; }
-.helpday-job-body { display: flex; align-items: center; justify-content: space-between; gap: 2px; min-height: 56px; }
+.helpday-job-body { display: flex; align-items: center; justify-content: space-between; gap: 2px; min-height: 52px; }
 .helpday-need { background: var(--paper-shade); color: var(--ink); font-size: var(--text-small); line-height: 1; padding: 1px; }
 .helpday-slot {
-  position: relative; width: 56px; height: 56px; flex: none; box-sizing: border-box;
+  position: relative; width: 52px; height: 52px; flex: none; box-sizing: border-box;
   display: grid; place-items: center; border: 2px dashed var(--ink);
 }
 .helpday-job[data-filled="true"] .helpday-slot { border-style: solid; }
@@ -49,8 +49,6 @@
 .helpday-helper[aria-checked="true"] .helpday-helper-name::after { content: ' ✓'; }
 .helpday-job:focus-visible, .helpday-helper:focus-visible { outline: 3px solid var(--lantern); outline-offset: 1px; }
 .helpday-badge[hidden], .helpday-at[hidden], .helpday-strength[hidden] { display: none; }
-/* Keep two title lines at the readable small token when Bigger words is on. */
-.large-text .helpday-job-name { font-size: var(--text-small); }
 /* The location replaces the visible strength after assignment; Ask still repeats the clue. */
 .large-text .helpday-helper[data-assigned="true"] .helpday-strength { display: none; }
 .calm .helpday-helper { transition: none; }

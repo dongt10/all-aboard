@@ -174,7 +174,7 @@ const cart = {
           });
         }
         const { left, right } = cartBalance(state);
-        body.style.transform = `rotate(${Math.max(-9, Math.min(9, (right - left) * 2))}deg)`;
+        body.style.transform = `rotate(${Math.max(-3, Math.min(3, (right - left) * 2))}deg)`;
         if (rolls !== null && ui.rolls !== rolls && ui.lastRoll) replay(ui.lastRoll === 'smooth' ? 'cart--roll' : 'cart--wobble');
         rolls = ui.rolls;
       },

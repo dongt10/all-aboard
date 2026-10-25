@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import activity, { HELP, GLYPHS, helperLabel } from '../src/ui/activities/helpday.js';
 import {
   GRADES_HELPDAY, STAMP_HELPDAY, HELP_JOBS, HELP_HELPERS, HELP_FITS,
@@ -12,6 +13,28 @@ import { ICON_NAMES } from '../src/ui/icons.js';
 import { arrangeCommands, nextCursorIndex } from '../src/ui/menu.js';
 
 const pairs = Object.entries(HELP_FITS).map(([job, helper]) => ({ job, helper }));
+
+test('job names stay on the field scale when Bigger words is enabled', () => {
+  const css = readFileSync(new URL('../src/ui/activities/helpday.css', import.meta.url), 'utf8');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(([, selectors]) => selectors.trim().endsWith('.helpday-job-name'));
+  const fonts = rules.flatMap(([, , declarations]) => [...declarations.matchAll(/font-size:\s*([^;]+);/g)].map(m => m[1]));
+  assert.ok(fonts.length);
+  assert.ok(fonts.every(font => font === 'var(--text-field)'), 'job names must grow from 20px to 24px');
+});
+
+test('two large job-name lines and the helper slot fit each card and the board', () => {
+  const css = readFileSync(new URL('../src/ui/activities/helpday.css', import.meta.url), 'utf8');
+  const rule = selector => [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .find(([, selectors]) => selectors.trim() === selector)[2];
+  const px = (selector, property) => Number(rule(selector).match(new RegExp(`${property}:\\s*([\\d.]+)px`))[1]);
+  const card = px('.helpday-job', 'height'), slot = px('.helpday-slot', 'height');
+  const border = px('.helpday-job', 'border');
+  assert.ok(card - 2 * border >= 2 * 24 + slot, 'two 24px lines fit above the slot');
+  assert.ok(slot - 2 * px('.helpday-slot', 'border') >= 48, 'the 48px helper fits inside the slot border');
+  const board = px('.helpday-board', 'height');
+  assert.ok(px('.helpday-header', 'height') + 2 * card + px('.helpday-grid', 'gap') + 2 * px('.helpday-board', 'border') <= board);
+  assert.ok(board + 10 <= px('.helpday-field', 'height'), 'board fits with the field padding');
+});
 const fixture = { kind: 'community', activity: 'helpday', chapter: 1, grade: 3, crew: pairs };
 const fresh = grade => activity.start(null, { grade, chapter: 1 });
 const freeze = value => {
@@ -277,6 +300,15 @@ test('field keeps nodes and focus, supports grid/radio arrows and native clicks,
       field.update(result.state, result.ui);
       const root = host.children[0], jobs = root.querySelectorAll('.helpday-job'), radios = root.querySelectorAll('.helpday-helper');
       assert.equal(jobs.length, 4); assert.equal(radios.length, 4);
+      for (const [i, job] of jobs.entries()) {
+        const name = job.querySelector('.helpday-job-name').textContent;
+        const need = job.querySelector('.helpday-need').textContent;
+        assert.ok(name.length <= 12, `${name} exceeds 12 characters`);
+        assert.ok(need.length <= 12, `${need} exceeds 12 characters`);
+        assert.ok(job.querySelector('.helpday-glyph').querySelector('svg'), 'each job has an icon');
+        const full = ['Hang lanterns', 'Carry the drum', 'Greet at the gate', 'Deliver invitations'][i];
+        assert.ok(job.getAttribute('aria-label').startsWith(full), 'full job description remains accessible');
+      }
       assert.deepEqual(jobs.map(b => b.tabIndex), [0, -1, -1, -1]);
       assert.deepEqual(radios.map(b => b.tabIndex), [0, -1, -1, -1]);
       assert.equal(root.querySelector('.helpday-bench').getAttribute('role'), 'radiogroup');

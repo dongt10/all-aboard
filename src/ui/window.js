@@ -37,7 +37,7 @@ export function openWindow(stage, { title, body, onClose, initialFocus } = {}) {
   }
   // Tab wraps at the window's edges; anywhere else the browser moves focus on its own.
   function trapTab(event) {
-    const items = [...dialog.querySelectorAll(TABBABLE)].filter(el => el.getClientRects().length);
+    const items = [...dialog.querySelectorAll(TABBABLE)].filter(el => el.tabIndex >= 0 && el.getClientRects().length);
     const active = document.activeElement;
     const inside = dialog.contains(active);
     const atEdge = event.shiftKey ? active === items[0] || active === dialog : active === items.at(-1);

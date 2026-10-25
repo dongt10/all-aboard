@@ -8,8 +8,8 @@ import { createDialogue } from '../dialogue.js';
 import { onceAtATime } from '../scenes.js';
 import { creationMarkup } from '../creations.js';
 import {
-  VILLAGE_SPOTS, SIDE_SPOTS, PLAYER_START, WALK_BOUNDS, STEP, homeSpot, hotspotRect, talkPoint, nearestNeighbor,
-  stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, villageMapSVG, stallSVG, easelRect,
+  VILLAGE_SPOTS, SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, talkPoint, nearestNeighbor,
+  clampWalk, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, villageMapSVG, stallSVG, easelRect,
 } from '../village-map.js';
 
 const SIDE = {
@@ -87,7 +87,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   let root = null, dialogue = null, frame = 0, last = 0, paused = false, alive = false, leaving = false;
   let findTarget = homeSpot(guide) ? guide : null;
   const actors = new Map();          // id → { id, el, fig, pos, target, facing, step, clock, waitUntil, render }
-  const player = { pos: { ...PLAYER_START }, target: null, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
+  const player = { pos: { ...PLAYER_START }, target: null, tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
   let near = null;
 
   const state = () => ctx.getState();
@@ -214,6 +214,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const chip = root.querySelector('.village-talk');
     if (id !== near) {
       near = id;
+      if (!id && chip.contains(document.activeElement)) root.focus({ preventScroll: true });
       chip.hidden = !id;
       if (id) {
         chip.innerHTML = `<span class="village-talk__key" aria-hidden="true">Enter</span><span aria-hidden="true">·</span><span>Talk to ${esc(nameOf(id))}</span>`;
@@ -239,7 +240,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const dir = guideArrow(player.pos, target.pos);
     pointer.textContent = ARROW_GLYPH[dir];
     pointer.dataset.dir = dir;
-    pointer.style.left = px(Math.min(WALK_BOUNDS.maxX, player.pos.x + 26));
+    pointer.style.left = px(player.pos.x + 26);
     pointer.style.top = px(player.pos.y - 52);
     pointer.style.zIndex = '801';
   }
@@ -271,12 +272,12 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     a.step = STEP_CYCLE[Math.floor(a.clock / WANDER_STEP_MS) % 4];
   }
   function tickPlayer(dt) {
-    const goal = player.visitOnArrive ? clampToBounds(talkPoint(player.visitOnArrive, actors.get(player.visitOnArrive).pos)) : player.target;
+    const goal = player.visitOnArrive ? clampWalk(talkPoint(player.visitOnArrive, actors.get(player.visitOnArrive).pos)) : player.target;
     if (!goal) { player.step = 0; return; }
     player.target = goal;
     const move = stepToward(player.pos, goal, player.speed * dt / 1000);
     const dx = goal.x - player.pos.x, dy = goal.y - player.pos.y;
-    player.pos = move.pos;
+    player.pos = clampWalk(move.pos);
     player.clock += dt * player.speed / PLAYER_SPEED;   // the legs keep up with a tap walk
     if (Math.abs(dx) >= Math.abs(dy) && dx) player.facing = dx > 0 ? 'right' : 'left';
     else if (dy) player.facing = dy > 0 ? 'front' : 'back';
@@ -285,13 +286,13 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   }
   function arrive() {
     player.target = null;
+    player.tapWalk = false;
     player.step = 0;
     player.clock = 0;
     const id = player.visitOnArrive;
     player.visitOnArrive = null;
     if (id) { player.facing = 'back'; visit(id); }
   }
-  const clampToBounds = p => ({ x: Math.max(WALK_BOUNDS.minX, Math.min(WALK_BOUNDS.maxX, p.x)), y: Math.max(WALK_BOUNDS.minY, Math.min(WALK_BOUNDS.maxY, p.y)) });
 
   function tick(t) {
     if (!alive) return;
@@ -312,7 +313,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     hush();
     const a = actors.get(id);
     if (!a) return;
-    const goal = clampToBounds(talkPoint(id, a.pos));
+    const goal = clampWalk(talkPoint(id, a.pos));
     if (calm()) {   // no walking tween: stand there and go
       player.pos = goal;
       player.facing = 'back';
@@ -321,11 +322,13 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       return;
     }
     player.visitOnArrive = id;
+    player.tapWalk = true;
     player.clock = 0;
     player.speed = Math.max(PLAYER_SPEED, Math.hypot(goal.x - player.pos.x, goal.y - player.pos.y) / (TAP_WALK_MS / 1000));
   }
   function stepBy(intent) {
     hush();
+    if (player.tapWalk) { player.target = null; player.tapWalk = false; player.clock = 0; }
     player.visitOnArrive = null;
     player.facing = FACING_FOR[intent];
     const from = player.target ?? player.pos;
@@ -375,8 +378,9 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       hush();
       player.visitOnArrive = null;
       player.speed = PLAYER_SPEED * 1.5;
-      player.target = clampToBounds({ x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height });
-      if (calm()) { player.pos = player.target; player.target = null; }
+      player.target = clampWalk({ x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height });
+      player.tapWalk = true;
+      if (calm()) { player.pos = player.target; player.target = null; player.tapWalk = false; }
     }
   }
 
@@ -416,6 +420,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     pause() {
       paused = true;
       player.target = null;
+      player.tapWalk = false;
       player.visitOnArrive = null;
     },
     destroy() {

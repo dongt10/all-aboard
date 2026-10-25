@@ -43,3 +43,40 @@ test('the item-get card draws box-style creations large, not at their easel size
   const zoom = Number(body.match(/zoom:\s*([\d.]+)/)?.[1]);
   assert.ok(zoom >= 2, `zoom ${zoom}`);
 });
+
+test('completed signs fit the item-get art content height and remain scrollable at both text sizes', () => {
+  const all = css(['src/ui/screens/encounter.css']);
+  const body = rulesFor(all, '.item-get__art > span.world-sign');
+  const zoom = Number(body.match(/zoom:\s*([\d.]+)/)?.[1]);
+  const height = Number(body.match(/max-height:\s*([\d.]+)px/)?.[1]);
+  const art = rulesFor(all, '.item-get__art');
+  const available = Number(art.match(/height:\s*([\d.]+)px/)[1]) - 2 * 8 - 2 * 4;
+  assert.ok(height > 0 && height * zoom <= available, 'zoomed sign stays within the 164px content height');
+  assert.match(body, /overflow-y:\s*auto/, 'long text can be scrolled instead of painting outside the card');
+});
+
+test('Guide signs fit the creation frame after zoom at either text size', () => {
+  const all = css(['src/ui/screens/windows.css']);
+  const body = rulesFor(all, '.guide-creation > span.world-sign');
+  const zoom = Number(rulesFor(all, '.guide-creation > span.creation').match(/zoom:\s*([\d.]+)/)[1]);
+  const height = Number(body.match(/max-height:\s*([\d.]+)px/)?.[1]);
+  const width = Number(body.match(/max-width:\s*([\d.]+)px/)?.[1]);
+  assert.ok(height > 0 && height * zoom <= 68, 'fits the frame content height');
+  assert.ok(width > 0 && width * zoom <= 108, 'fits the frame content width');
+  assert.match(body, /overflow-y:\s*auto/);
+});
+
+test('portrait heading and note follow the reading-size variables', () => {
+  const all = css(['src/ui/kit.css']);
+  assert.match(rulesFor(all, '.rotate-card__frame'), /font-size:\s*var\(--text-command\)/);
+  assert.match(rulesFor(all, '.rotate-card__note'), /font-size:\s*var\(--text-small\)/);
+});
+
+test('dialogue measurement shares the visible text inset without joining its live region', () => {
+  const all = css(['src/ui/interaction.css']);
+  const body = rulesFor(all, '.dlg__measure');
+  assert.match(body, /position:\s*absolute/);
+  assert.match(body, /inset:\s*10px 14px 8px/);
+  assert.match(body, /height:\s*auto/);
+  assert.match(body, /visibility:\s*hidden/);
+});

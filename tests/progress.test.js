@@ -25,7 +25,7 @@ test('chapter and grade changes keep independent drafts and creations', () => {
   let state = publishCreation(createState(),'writing',sign('Hello!'));
   state.chapter=1;state.grade=2;
   state=publishCreation(state,'writing',{...sign('Grade two welcomes you'),chapter:1,grade:2});
-  state.grade=5;state=saveDraft(state,'music',createDefaultBand());
+  state.grade=5;state=saveDraft(state,'music',{...createDefaultBand(),chapter:1,grade:5});
   assert.deepEqual(getCompleted(state),[]);
   assert.equal(getDraft(state,'music').tracks.length,4);
   state.grade=2;assert.equal(getCreations(state).writing.text,'Grade two welcomes you');
@@ -207,4 +207,68 @@ test('all four banded creations repair junk and round-trip through drafts and pu
     const ice = { kind: 'science', chapter: 1, grade, canopy: 'left', time: 10 };
     assert.deepEqual(cleanCreation('science', ice), ice, 'legacy ice is never migrated by grade');
   }
+});
+
+test('saved maps snap and deduplicate cells, require a fresh trial, and round-trip', () => {
+  const input = { kind: 'community', chapter: 1, grade: 1, tried: true, placements: [
+    { item: 'bench', x: 11, y: 50 }, { item: 'quiet', x: 12, y: 49 },
+    { item: 'quiet', x: -10, y: 11 }, { item: 'sign', x: 999, y: 30 },
+  ] };
+  const clean = cleanCreation('community', input);
+  assert.deepEqual(clean.placements, [
+    { item: 'bench', x: 10, y: 50 }, { item: 'quiet', x: 10, y: 10 }, { item: 'sign', x: 90, y: 30 },
+  ]);
+  assert.equal(clean.tried, false);
+  assert.equal(input.tried, true, 'input is unchanged');
+  assert.equal(input.placements.length, 4);
+  assert.deepEqual(normalizeEncounterSnapshot('community', input, 1, 1), clean);
+  const valid = { ...clean, tried: true };
+  assert.deepEqual(cleanCreation('community', valid), valid, 'an unchanged map keeps its trial');
+  const storage = memoryStorage();
+  saveState(saveDraft({ ...createState(), chapter: 1, grade: 1 }, 'community', input), storage);
+  assert.deepEqual(getDraft(loadState(storage), 'community'), clean);
+});
+
+test('only an absent activity discriminator uses the legacy save format', () => {
+  const cart = { kind: 'math', chapter: 0, grade: 0, left: [2], right: [1, 1], rolled: true };
+  const state = publishCreation(createState(), 'math', cart);
+  for (const activity of ['unknown', 'chain', '', null, false, 0, undefined]) {
+    const unsupported = { ...cart, activity, left: [1], right: [1] };
+    assert.equal(cleanCreation('math', unsupported), null);
+    const loaded = normalizeState({ ...state, drafts: { 'chapter-0': { math: unsupported } } });
+    assert.deepEqual(getDraft(loaded, 'math'), cart, 'invalid draft falls back to the published cart');
+  }
+  for (const kind of ['science', 'art', 'reading', 'writing', 'community', 'music']) {
+    assert.equal(cleanCreation(kind, { kind, activity: 'unknown' }), null, kind);
+  }
+  assert.deepEqual(cleanCreation('math', cart), cart);
+});
+
+test('drafts and progress reject snapshots from another chapter or grade', async () => {
+  const { chainReady } = await import('../src/chain.js');
+  const chain = { kind: 'science', activity: 'chain', chapter: 1, grade: 3,
+    chain: ['plant', 'fish', 'gull'], energy: [100, 10, 1], shone: true };
+  assert.equal(chainReady(chain), true);
+  const record = { creation: chain, completedAt: '2026-10-24T10:00:00Z' };
+  for (const [chapter, grade] of [[1, 5], [0, 1]]) {
+    const scope = scopeKey(chapter, grade), state = { ...createState(), chapter, grade };
+    const loaded = normalizeState({ ...state, drafts: { [scope]: { science: chain } }, progress: { [scope]: { science: record } } });
+    assert.equal(getDraft(loaded, 'science'), null);
+    assert.deepEqual(getCompleted(loaded), []);
+    assert.deepEqual(getCreations(loaded), {});
+    assert.deepEqual(saveDraft(state, 'science', chain), state);
+    assert.deepEqual(publishCreation(state, 'science', chain), state);
+  }
+  const scoped = { ...createState(), chapter: 1, grade: 3 };
+  for (const wrong of [{ ...chain, grade: 2 }, { ...chain, chapter: 0, grade: 0 }]) {
+    const repaired = normalizeState({ ...scoped, drafts: { 'chapter-1-grade-3': { science: wrong } }, progress: { 'chapter-1-grade-3': { science: { ...record, creation: wrong } } } });
+    assert.equal(getDraft(repaired, 'science'), null, 'activity clamping cannot hide the wrong scope');
+    assert.deepEqual(getCompleted(repaired), []);
+  }
+  const valid = normalizeState({ ...scoped, drafts: { 'chapter-1-grade-3': { science: chain } }, progress: { 'chapter-1-grade-3': { science: record } } });
+  assert.deepEqual(getDraft(valid, 'science'), chain);
+  assert.equal(chainReady(getCreations(valid).science), true);
+  const mixed = normalizeState({ ...valid, grade: 5, drafts: { 'chapter-1-grade-5': { science: chain } } });
+  assert.equal(getDraft(mixed, 'science'), null);
+  assert.equal(chainReady(getCreations({ ...mixed, grade: 3 }).science), true, 'valid grade remains intact');
 });

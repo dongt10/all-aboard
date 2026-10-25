@@ -78,10 +78,11 @@ export function defaultBandFor(grade) {
 
 // Tolerates a saved track with missing fields: the finish gate must never throw.
 const trackKey = track => JSON.stringify({ id: track.id, enabled: track.enabled, pattern: track.pattern, notes: (track.notes ?? []).map(cleanNote), volume: track.volume });
-// Send band stays off until the child changed something: a track, the speed, or the form.
+// Send band stays off until the child changed something: a track, volume, speed, or form.
 export function isEdited(band, grade) {
   const base = defaultBandFor(grade), tracks = Array.isArray(band?.tracks) ? band.tracks : [];
   if ((band?.tempo ?? 90) !== base.tempo || (band?.form ?? 'A') !== base.form) return true;
+  if ((band?.masterVolume ?? base.masterVolume) !== base.masterVolume) return true;
   return base.tracks.some(track => trackKey(track) !== trackKey(tracks.find(t => t?.id === track.id) ?? track));
 }
 

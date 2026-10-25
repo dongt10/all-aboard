@@ -203,6 +203,7 @@ export function createMusicScene(ctx) {
     clearInterval(quietTimer);
     const tick = () => {
       quietBand = applyBeatChanges(quietBand, band, quietBeat);
+      quietBeat %= phraseLength(quietBand);
       showBeat({ beat: quietBeat, notes: notesForBeat(quietBand, quietBeat), phraseIndex: Math.floor(quietBeat / 8) });
       quietBeat = (quietBeat + 1) % phraseLength(quietBand);
     };
@@ -247,7 +248,7 @@ export function createMusicScene(ctx) {
     let line = lead === 'percussion' ? restsLine(notes) : shapeLine(melodyShape(notes));
     if (echo?.phase === 'copy') {
       const sounds = notes.filter(n => n !== null && n !== undefined).length, wanted = echo.mask.filter(Boolean).length;
-      if (echoMatches(notes, echo.mask)) { echo = null; line = ECHO_LINES.matched; }
+      if (echoMatches(notes, echo.mask)) { echo = null; echoCount++; line = ECHO_LINES.matched; }
       else if (sounds >= wanted) line = ECHO_LINES.notYet;   // enough sounds placed, but on the wrong beats
     }
     edit(next, { line: ['Kiko', line] });
@@ -266,7 +267,7 @@ export function createMusicScene(ctx) {
   async function startEcho() {
     stopAll();
     stopSpeaking();
-    const mask = pickEcho(echoCount++), token = echoToken;
+    const mask = echo?.mask ?? pickEcho(echoCount), token = echoToken;
     echo = { mask, phase: 'demo', beat: 0, timer: null };
     $('[data-sign="echo"]')?.classList.add('is-busy');
     say('Kiko', ECHO_LINES.listen);

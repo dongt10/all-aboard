@@ -80,6 +80,25 @@ test('every tab fits the Bigger-words body budget, and the CSS carries the same 
   assert.match(css, /= 335\./);
 });
 
+test('eight sound labels fit the Sounds window width at Bigger words', () => {
+  const css = read('src/ui/screens/sounds.css');
+  const shared = read('src/ui/interaction.css');
+  const windowRule = css.match(/\.win:has\(\.sounds\)\s*\{([^}]+)\}/)?.[1]
+    ?? shared.match(/\.win\s*\{([^}]+)\}/)[1];
+  const width = Number(windowRule.match(/width:\s*min\((\d+)px,\s*100%\)/)[1]);
+  const gap = Number(css.match(/\.sounds-beats\s*\{[^}]*gap:\s*(\d+)px/)[1]);
+  // The reported Andika bold advance for " sound" at 20px is 63.48px; reserve another
+  // full em for the musical glyph, plus each button's 4px borders and 2px padding.
+  const required = 8 * (63.48 + 20 + 2 * (4 + 2)) + 7 * gap;
+  const available = width - 2 * (4 + 16); // shared frame border and horizontal padding
+  assert.ok(required <= available, `${required}px of labels must fit in ${available}px`);
+  assert.ok(width <= 960 - 2 * 24, 'window fits inside the stage backdrop');
+  for (const [grade, id] of [[1, 'bass'], [3, 'percussion']]) {
+    const band = setTrackNotes(createDefaultBand(), id, Array(8).fill(0));
+    assert.equal(count(soundsPanelMarkup(band, grade, id), /<span>♪ sound<\/span>/g), 8);
+  }
+});
+
 test('every line Kiko says from the window fits one 56-character page, in plain words', () => {
   for (const g of [0, 1, 2, 3, 4, 5]) for (const c of CAST) onePage(hintLine(c, soundsPlan(g, c.id)));
   for (const p of [0, 1]) { onePage(tuneLine(p)); assert.doesNotMatch(tuneLine(p), /phrase/i); }

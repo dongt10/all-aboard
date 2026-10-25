@@ -310,6 +310,28 @@ test('field pools buttons, shows reactions, has sibling give/pieces and recovers
   fieldView.destroy(); assert.equal(host.children.length, 0); assert.deepEqual(root.listeners, {});
 });
 
+test('pizza board offers cutting only while whole leftovers can still be cut', () => {
+  const doc = fakeDoc(), host = doc.createElement('section');
+  const view = pizza.mountField(host);
+  const board = host.querySelector('.pizza-board');
+  let s = fresh(5);
+  view.update(s.state);
+  assert.match(board.getAttribute('aria-label'), /6 of 6 slices left\. Tap to cut/);
+  s = step(s, field({ pizza: true }));
+  view.update(s.state);
+  assert.equal(board.getAttribute('aria-label'), 'Pizza, 12 of 12 halves left');
+  s = fresh(5);
+  while (remainingUnits(s.state)) s = step(s, field({ give: 0 }));
+  view.update(s.state);
+  assert.equal(board.getAttribute('aria-label'), 'Pizza, 0 of 6 slices left');
+  s = step(s, field({ take: 0 }));
+  view.update(s.state);
+  assert.match(board.getAttribute('aria-label'), /1 of 6 slices left\. Tap to cut/);
+  view.update(fresh(4).state);
+  assert.doesNotMatch(board.getAttribute('aria-label'), /Tap to cut/);
+  view.destroy();
+});
+
 test('keyboard rail focuses only; Down and native Enter/Space are left for frame/browser', () => {
   const doc = fakeDoc(), host = doc.createElement('section'), actions = [];
   const view = pizza.mountField(host, { dispatch: a => actions.push(a) });

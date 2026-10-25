@@ -40,7 +40,7 @@ function shade(state, ui, side) {
   const first = ui.predicted == null;   // the first Shade pick of a run is the guess (kept in ui, never saved)
   const nextUi = first ? { ...ui, predicted: side } : ui;
   const guess = first && predicts(state);
-  if (state.canopy !== 'none') return { state: next, ui: nextUi, line: guess ? ICE_LINES.movedGuess(side) : ICE_LINES.moved(side) };
+  if (state.canopy !== 'none' || state.time > 0) return { state: next, ui: nextUi, line: guess ? ICE_LINES.movedGuess(side) : ICE_LINES.moved(side) };
   return { state: next, ui: nextUi, line: guess ? ICE_LINES.guessed(side) : ICE_LINES.shaded(side) };
 }
 

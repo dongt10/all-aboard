@@ -48,8 +48,8 @@ import { allFigures, figureMarkup } from './ui/figures/index.js';
 
 const style = document.createElement('style');
 style.textContent = `.guide-icon{margin:0;display:grid;justify-items:center;gap:4px;width:96px;font-size:13px}
-.guide-sheet{image-rendering:pixelated;border:4px solid var(--ink);background:repeating-conic-gradient(#e9dfc8 0 25%,#f6efe0 0 50%) 0 0/32px 32px}
-.guide-figure{margin:0;display:grid;gap:8px}.guide-walk{display:flex;gap:6px;align-items:flex-end;min-height:128px}`;
+.guide-sheet{max-width:100%;height:auto;image-rendering:pixelated;border:4px solid var(--ink);background:repeating-conic-gradient(#e9dfc8 0 25%,#f6efe0 0 50%) 0 0/32px 32px}
+.guide-figure{margin:0;display:grid;gap:8px;max-width:100%;min-width:0}.guide-walk{display:flex;flex-wrap:wrap;gap:6px;align-items:flex-end;min-height:128px}`;
 document.head.append(style);
 
 addSection('Icons', `<div class="guide-row">${ICON_NAMES.map(name => `<figure class="guide-icon">${icon(name)}${icon(name, { size: 48 })}<figcaption>${name}</figcaption></figure>`).join('')}</div>`,
@@ -60,13 +60,15 @@ const castCard = figure => `<figure class="guide-figure"><img class="guide-sheet
 addSection('Cast', `<div class="guide-row">${allFigures().map(castCard).join('')}</div>`,
   'Each sheet is 4×4 frames of 64×64: rows front, left, right, back; columns step A, stand, step B, joy. The loops below play the walk in every direction, then the joy face.');
 const WALK = [1, 0, 2, 0];
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 let tick = 0;
 const drawWalks = () => {
   document.querySelectorAll('.guide-walk').forEach(node => {
-    const id = node.dataset.figure, step = WALK[tick % WALK.length];
+    const id = node.dataset.figure, step = reducedMotion.matches ? 0 : WALK[tick % WALK.length];
     node.innerHTML = ['front', 'left', 'right', 'back'].map(facing => figureMarkup(id, { facing, step, scale: 2 })).join('') + figureMarkup(id, { pose: 'joy', scale: 2 });
   });
-  tick++;
+  if (!reducedMotion.matches) tick++;
 };
 drawWalks();
-setInterval(drawWalks, 180);
+reducedMotion.addEventListener('change', drawWalks);
+setInterval(() => { if (!reducedMotion.matches) drawWalks(); }, 180);

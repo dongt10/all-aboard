@@ -6,7 +6,7 @@
 
 /* Crate sizes: a small rail of crates between the totals. The picked one is lifted inside an ink ring,
    and a bigger number comes in a wider crate, so weight shows as size, color and number. */
-.cart__sizes { position: absolute; z-index: 3; left: 50%; top: 6px; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 8px; }
+.cart__sizes { position: absolute; z-index: 3; left: 50%; top: 8px; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 8px; }
 .cart__size {
   --crate: var(--lantern);
   width: 36px; height: 44px; padding: 0; cursor: pointer;

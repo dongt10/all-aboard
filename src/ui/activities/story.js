@@ -7,7 +7,12 @@ const PICTURES = ['key', 'umbrella', 'book', 'cup'];
 const READY_LINE = ' All three are packed. Your story is ready to share.';
 const START_OVER_LINE = 'The bag is empty again. Let’s read!';
 
-const question = (state, grade) => readingStep(state.found, grade)?.question ?? '';
+const readingLine = (state, grade) => {
+  const step = readingStep(state.found, grade);
+  if (!step) return '';
+  const passage = /[.!?]$/.test(step.passage) ? step.passage : `${step.passage}.`;
+  return `${passage} ${step.question}`;
+};
 
 function start(snapshot, { chapter = 0, grade = 1 } = {}) {
   return { state: normalizeEncounterSnapshot('reading', snapshot, grade, chapter), ui: { review: null } };
@@ -15,7 +20,7 @@ function start(snapshot, { chapter = 0, grade = 1 } = {}) {
 
 function opening(state, ui, grade) {
   if (encounterReady(state)) return encounterOpeningDialogue(state);
-  return `Help me pack three things for the festival. ${question(state, grade)}`;
+  return `Help me pack three things for the festival. ${readingLine(state, grade)}`;
 }
 
 function commands(state, ui, grade) {
@@ -33,9 +38,12 @@ function act(state, ui, action, grade) {
   const { id } = action;
   if (id === 'next') {
     if (!ui.review) return { state, ui };
-    return { state, ui: { ...ui, review: null }, line: question(state, grade) };
+    return { state, ui: { ...ui, review: null }, line: readingLine(state, grade) };
   }
-  if (id === 'again') return { state: { ...state, found: [] }, ui: { ...ui, review: null }, line: START_OVER_LINE };
+  if (id === 'again') {
+    const next = { ...state, found: [] };
+    return { state: next, ui: { ...ui, review: null }, line: `${START_OVER_LINE} ${readingLine(next, grade)}` };
+  }
   if (!id?.startsWith('pick-') || ui.review || encounterReady(state)) return { state, ui };
   const result = readingChoice(state.found, id.slice(5), grade);
   const next = { ...state, found: result.found };
@@ -52,7 +60,7 @@ function mountField(host, { grade = 1 } = {}) {
   host.append(root);
   const page = root.querySelector('.story-page'), part = root.querySelector('.story-part'), passage = root.querySelector('.story-passage');
   const bag = root.querySelector('.story-bag'), bagTitle = root.querySelector('.story-bag__title');
-  const slots = [...root.querySelectorAll('.story-slot')].map(el => ({ el, pic: el.children[0], label: el.children[1], id: null }));
+  const slots = [...root.querySelectorAll('.story-slot')].map(el => ({ el, pic: el.children[0], label: el.children[1], id: undefined }));
   const setText = (el, text) => { if (el.textContent !== text) el.textContent = text; };
 
   function update(state, ui = {}) {

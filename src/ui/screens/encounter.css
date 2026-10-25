@@ -48,6 +48,7 @@
    zooms that same drawing; signs and books get room to wrap so every word shows. */
 .item-get__art > span.creation { width: auto; height: auto; max-width: 64px; max-height: none; zoom: 3.5; }
 .item-get__art > span.world-sign, .item-get__art > span.world-book { max-width: 120px; zoom: 2; }
+.item-get__art > span.world-sign { max-height: 82px; overflow-y: auto; }
 .item-get__figure { line-height: 0; }
 .item-get__go { font-family: var(--font-read); }
 .item-get__spark { position: absolute; width: 12px; height: 12px; background: var(--lantern); box-shadow: 0 0 0 4px var(--ink); animation: item-get-spark 900ms steps(3) infinite; }

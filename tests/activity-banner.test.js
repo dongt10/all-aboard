@@ -199,7 +199,7 @@ test('field stamps wear the ink outline and the turn chip holds no number', () =
   assert.match(css, /\.banner-option__turn:empty\s*\{\s*display:\s*none/);
   assert.doesNotMatch(css, /\.banner-option__turn\s*\{[^}]*font/, 'the chip is a picture, not text');
   const js = readFileSync(new URL('../src/ui/activities/banner.js', import.meta.url), 'utf8').replace(/\/\/.*$/gm, '');
-  assert.doesNotMatch(js, /°|degrees/, 'no degrees reach the screen or the screen reader');
+  assert.doesNotMatch(js, /°/, 'the visible turn chip holds no degree text');
 });
 
 // A few lines of fake DOM so the field can be mounted without a browser (the story test's pattern, plus
@@ -239,6 +239,40 @@ function fakeDocument() {
   }
   return { createElement: make, focused };
 }
+
+test('cloth cells describe empty spaces and the top stamp after replacing, undoing and reopening', () => {
+  const previous = globalThis.document;
+  globalThis.document = fakeDocument();
+  try {
+    const host = document.createElement('div');
+    const view = banner.mountField(host, { dispatch() {} });
+    const cells = host.querySelector('.banner-grid').children;
+    let s = banner.start(null, { grade: 1 });
+    view.update(s.state, s.ui);
+    assert.equal(cells[0].getAttribute('aria-label'), 'Row 1, column 1. Empty. Tap to stamp.');
+    s = field(s, { cell: 0 });
+    s = field(s, { shape: 'leaf' });
+    s = field(s, { color: '#6dbea0' });
+    s = cmd(s, 'turn');
+    s = field(s, { cell: 1 });
+    view.update(s.state, s.ui);
+    assert.equal(cells[0].getAttribute('aria-label'), 'Row 1, column 1. Coral star, rotated 0 degrees. Tap to replace.');
+    assert.equal(cells[1].getAttribute('aria-label'), 'Row 1, column 2. Mint leaf, rotated 45 degrees. Tap to replace.');
+    const before = s;
+    s = field(s, { cell: 0 });
+    view.update(s.state, s.ui);
+    assert.match(cells[0].getAttribute('aria-label'), /Mint leaf, rotated 45 degrees/);
+    s = cmd(s, 'undo');
+    view.update(s.state, s.ui);
+    assert.match(cells[0].getAttribute('aria-label'), /Coral star, rotated 0 degrees/);
+    // Old saves can stack stamps; announce the one drawn on top.
+    const stacked = { ...before.state, stamps: [...before.state.stamps, { ...before.state.stamps[1], ...stampPosition(0) }] };
+    s = banner.start(stacked, { grade: 1 });
+    view.update(s.state, s.ui);
+    assert.match(cells[0].getAttribute('aria-label'), /Mint leaf, rotated 45 degrees/);
+    view.destroy();
+  } finally { globalThis.document = previous; }
+});
 
 test('the field draws outlined stamps, marks the turned preview without a number, and taps dispatch cells', () => {
   globalThis.document = fakeDocument();

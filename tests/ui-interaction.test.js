@@ -47,6 +47,17 @@ test('Bigger words pages split long sentences between words and keep every word'
   assert.ok(pages.length === 2 && pages.every(page => page.length <= 56));
   assert.equal(pages.join(' '), text);
 });
+test('dialogue splits oversized words and respects rendered fit even below the character cap', () => {
+  const text = 'W'.repeat(120);
+  const pages = paginate(text, PAGE_CHARS.large);
+  assert.ok(pages.every(page => page.length <= PAGE_CHARS.large));
+  assert.equal(pages.join(''), text);
+  const fits = page => Math.ceil(page.length * (1401.6 / 46) / 436) * 35.4 <= 110;
+  const wide = paginate('W'.repeat(46), PAGE_CHARS.large, fits);
+  assert.ok(wide.length > 1, 'wide letters need More even below 56 characters');
+  assert.ok(wide.every(fits));
+  assert.equal(wide.join(''), 'W'.repeat(46));
+});
 test('the menu cursor follows the same command when commands change', () => {   // Review Focus 5
   const a = [{ id: 'load-left' }, { id: 'load-right' }, { id: 'weight' }, { id: 'roll' }];
   const b = [{ id: 'load-left' }, { id: 'load-right' }, { id: 'weight' }, { id: 'finish', finish: true }];

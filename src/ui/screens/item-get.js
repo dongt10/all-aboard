@@ -9,6 +9,7 @@ let serial = 0;
 // figureHTML are trusted markup from creations.js and figures; the name is set as text.
 export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {}) {
   return new Promise(resolve => {
+    const opener = document.activeElement;
     const titleId = `item-get-title-${++serial}`;
     const backdrop = document.createElement('div');
     backdrop.className = 'item-get';
@@ -34,6 +35,7 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {})
       done = true;
       backdrop.remove();
       dimmed.forEach(child => { child.inert = false; });
+      if (opener?.isConnected && !opener.disabled) opener.focus({ preventScroll: true });
       resolve();
     }
     card.addEventListener('click', finish);

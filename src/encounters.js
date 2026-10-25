@@ -18,6 +18,23 @@ export function gradeBand(grade) {
   if (!Number.isFinite(g)) return 0;
   return g <= 0 ? 0 : g <= 2 ? 1 : 3;
 }
+// Saved maps use the same five centers as the field. Keep the first item in each cell.
+export function normalizeCommunityMap(input) {
+  const original = Array.isArray(input.placements) ? input.placements : [];
+  const snap = n => 10 + 20 * Math.round(((Number.isFinite(n) ? clamp(n, 10, 90) : 10) - 10) / 20);
+  const occupied = new Set();
+  const placements = original.filter(p => p && !Array.isArray(p) && ['bench', 'sign', 'quiet'].includes(p.item))
+    .map(p => ({ item: p.item, x: snap(p.x), y: snap(p.y) }))
+    .filter(p => {
+      const cell = `${p.x},${p.y}`;
+      if (occupied.has(cell)) return false;
+      occupied.add(cell);
+      return true;
+    }).slice(0, 12);
+  const changed = placements.length !== original.length || placements.some((p, i) =>
+    p.item !== original[i]?.item || p.x !== original[i]?.x || p.y !== original[i]?.y);
+  return { placements, tried: input.tried === true && !changed };
+}
 export function normalizeEncounterSnapshot(kind, input = {}, grade = 1, chapter = 0) {
   const s = input && typeof input === 'object' && input.kind === kind ? input : {};
   const base = {kind, grade:clamp(grade,0,5), chapter:clamp(chapter,0,99)};
@@ -31,7 +48,7 @@ export function normalizeEncounterSnapshot(kind, input = {}, grade = 1, chapter 
   if (kind === 'art') return {...base,background:ENCOUNTER_COLORS.includes(s.background)?s.background:'#fff1cf',stamps:(Array.isArray(s.stamps)?s.stamps:[]).filter(x=>x&&SHAPES.includes(x.shape)&&ENCOUNTER_COLORS.includes(x.color)).slice(0,30).map(x=>({shape:x.shape,color:x.color,x:clamp(x.x,5,95),y:clamp(x.y,5,95),rotation:clamp(x.rotation,0,359)}))};
   if (kind === 'reading') return {...base,found:normalizeReadingFound(s.found)};
   if (kind === 'writing') return {...base,text:typeof s.text==='string'?s.text.slice(0,120):''};
-  return {...base,placements:(Array.isArray(s.placements)?s.placements:[]).filter(x=>x&&['bench','sign','quiet'].includes(x.item)).slice(0,12).map(x=>({item:x.item,x:clamp(x.x,10,90),y:clamp(x.y,10,90)})),tried:s.tried===true};
+  return {...base,...normalizeCommunityMap(s)};
 }
 // Taro's cart starts with crates on the left so the child has something to match. The right side is always empty.
 export function startingCargo(grade) {

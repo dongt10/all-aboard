@@ -1,6 +1,24 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeEncounterSnapshot,cartBalance,iceRemaining,routeReport,encounterReady } from '../src/encounters.js';
+test('every repaired saved placement occupies a visible cell and can be removed', async () => {
+ const { default: square, cellPosition } = await import('../src/ui/activities/square.js');
+ const input={kind:'community',chapter:1,grade:1,tried:true,placements:[
+  {item:'bench',x:11,y:50},{item:'quiet',x:12,y:49},{item:'quiet',x:29,y:9},
+  {item:'sign',x:100,y:31},null,{item:'unknown',x:50,y:50},
+ ]};
+ let {state,ui}=square.start(input,{chapter:1,grade:1});
+ assert.equal(state.tried,false);
+ assert.equal(state.placements.length,3);
+ const cells=Array.from({length:25},(_,cell)=>cellPosition(cell));
+ for(const p of state.placements)assert.ok(cells.some(c=>c.x===p.x&&c.y===p.y));
+ assert.equal(new Set(state.placements.map(p=>`${p.x},${p.y}`)).size,state.placements.length);
+ assert.deepEqual(square.start(state,{chapter:1,grade:1}).state,state,'repair is idempotent');
+ ui={...ui,tool:'remove'};
+ for(let cell=0;cell<25;cell++)state=square.act(state,ui,{type:'field',cell}).state;
+ assert.deepEqual(state.placements,[]);
+ assert.equal(routeReport(state).blocked,false);
+});
 test('cargo groups can differ while total weight balances',()=>{const s=normalizeEncounterSnapshot('math',{kind:'math',left:[2,3],right:[5],rolled:true},4);assert.deepEqual(cartBalance(s),{left:5,right:5,balanced:true});assert.equal(encounterReady(s),true);s.right=[];assert.equal(encounterReady(s),false);});
 test('empty cart cannot count as a completed creation',()=>assert.equal(encounterReady({kind:'math',left:[],right:[],rolled:true}),false));
 test('ice model has equal starts and a slower shaded melt',()=>{assert.equal(iceRemaining(0,false),iceRemaining(0,true));assert.ok(iceRemaining(10,true)>iceRemaining(10,false));assert.equal(iceRemaining(100,false),0);assert.equal(encounterReady({kind:'science',canopy:'none',time:20}),false);});

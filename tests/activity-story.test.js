@@ -1,13 +1,32 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import story from '../src/ui/activities/story.js';
-import { READING_ITEMS } from '../src/reading.js';
+import { READING_ITEMS, readingStep } from '../src/reading.js';
+import { paginate, PAGE_CHARS } from '../src/ui/dialogue.js';
 
 const cmd = id => ({ type: 'command', id });
 const GRADES = [0, 1, 2, 3, 4, 5];
 const PAGE = 56;                                   // one dialogue page with Bigger words on
 const sentences = text => text.split(/(?<=[.!?])\s+/).filter(Boolean);
 const fitsOnePage = (text, at) => { for (const s of sentences(text)) assert.ok(s.length <= PAGE, `${at}: "${s}" is ${s.length} chars, over ${PAGE}`); };
+
+test('opening and Next part put the current passage before its question in spoken dialogue', () => {
+  for (const grade of GRADES) {
+    let s = story.start(null, { grade, chapter: grade ? 1 : 0 });
+    for (const id of READING_ITEMS) {
+      const part = readingStep(s.state.found, grade);
+      const line = id === 'key' ? story.opening(s.state, s.ui, grade) : s.line;
+      assert.ok(line.includes(part.passage), `grade ${grade}, ${id}: missing passage`);
+      assert.ok(line.indexOf(part.passage) < line.indexOf(part.question));
+      for (const limit of Object.values(PAGE_CHARS)) {
+        assert.deepEqual(paginate(line, limit).join(' '), line);
+        assert.ok(paginate(line, limit).every(page => page.length <= limit));
+      }
+      s = story.act(s.state, s.ui, cmd(`pick-${id}`), grade);
+      if (id !== 'book') s = story.act(s.state, s.ui, cmd('next'), grade);
+    }
+  }
+});
 
 test('the four pictures are the commands, and the opening asks the first question', () => {
   const { state, ui } = story.start(null, { chapter: 1, grade: 2 });
@@ -23,7 +42,7 @@ test('a right pick explains why, then Next moves to the next part', () => {
   assert.deepEqual([picked.state.found, picked.line], [['key'], 'Key packed! The key fits the lock on Sora’s door.']);
   assert.deepEqual(story.commands(picked.state, picked.ui, 2).map(c => c.id), ['next']);
   const next = story.act(picked.state, picked.ui, cmd('next'), 2);
-  assert.equal(next.line, 'What does Sora pack to stay dry?');
+  assert.equal(next.line, 'Rain is coming. Sora packs an umbrella to stay dry. What does Sora pack to stay dry?');
   assert.equal(story.commands(next.state, next.ui, 2).find(c => c.id === 'pick-key').disabled, true);
 });
 
@@ -43,7 +62,7 @@ test('grades 3–5 read a clue that never names the item', () => {
 
 test('K says the word the way the buttons spell it', () => {                              // plan 1B: "Key", not "KEY"
   const { state, ui } = story.start(null, { chapter: 0, grade: 0 });
-  assert.equal(story.opening(state, ui, 0), 'Help me pack three things for the festival. Put the Key in the bag.');
+  assert.equal(story.opening(state, ui, 0), 'Help me pack three things for the festival. Key. Put the Key in the bag.');
   const wrong = story.act(state, ui, cmd('pick-cup'), 0);
   assert.equal(wrong.line, 'That says Cup. Look for Key.');
   const right = story.act(state, ui, cmd('pick-key'), 0);
@@ -64,7 +83,7 @@ test('Start over empties the bag and says so, then the first question is back', 
   const s = story.start({ kind: 'reading', found: READING_ITEMS }, { chapter: 1, grade: 2 });
   const again = story.act(s.state, s.ui, cmd('again'), 2);
   assert.deepEqual(again.state.found, []);
-  assert.equal(again.line, 'The bag is empty again. Let’s read!');
+  assert.equal(again.line, 'The bag is empty again. Let’s read! Sora will lock her door. She packs a key. What does Sora pack to lock her door?');
   assert.deepEqual(story.commands(again.state, again.ui, 2).map(c => c.id), ['pick-key', 'pick-umbrella', 'pick-book', 'pick-cup']);
   assert.match(story.opening(again.state, again.ui, 2), /lock her door\?$/);
 });
@@ -143,6 +162,7 @@ test('the field shows Part N of 3, the K word as Key, and the bag count', () => 
     assert.equal(text('.story-part'), 'Part 1 of 3');
     assert.equal(text('.story-passage'), 'Key');
     assert.equal(text('.story-bag__title'), 'Bag 0/3');
+    assert.deepEqual(root.querySelectorAll('.story-slot__label').map(el => el.textContent), ['Empty', 'Empty', 'Empty']);
     const picked = story.act(state, ui, cmd('pick-key'), 0);
     field.update(picked.state, picked.ui);
     assert.equal(text('.story-part'), 'Part 1 of 3 · ✓ Packed');
@@ -153,6 +173,9 @@ test('the field shows Part N of 3, the K word as Key, and the bag count', () => 
     assert.equal(text('.story-part'), 'The whole story');
     assert.equal(text('.story-passage'), 'Ready for the festival!');
     assert.equal(text('.story-bag__title'), 'Bag 3/3');
+    const again = story.act(ready.state, ready.ui, cmd('again'), 0);
+    field.update(again.state, again.ui);
+    assert.deepEqual(root.querySelectorAll('.story-slot__label').map(el => el.textContent), ['Empty', 'Empty', 'Empty']);
     field.destroy();
   } finally { delete globalThis.document; }
 });
