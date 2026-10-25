@@ -96,3 +96,14 @@ test('the music reward reads like the others on the item-get card', () => {
   assert.ok(CHARACTERS.every(c => !/^your /i.test(c.reward.label)), 'no reward starts with "Your"');
   assert.deepEqual(CHARACTERS.map(c => c.id), SUBJECTS, 'ids unchanged');
 });
+
+test('every Guide biography fits 56 characters per sentence at every grade', () => {
+  for (const grade of [0, 1, 2, 3, 4, 5]) {
+    const entries = guideEntries({ ...createState(), chapter: grade ? 1 : 0, grade: grade || 1 });
+    for (const entry of entries) for (const sentence of entry.bio.split(/(?<=[.!?…])\s+/)) {
+      assert.ok(sentence.length <= 56, `${entry.name}: ${sentence.length} characters`);
+    }
+    assert.equal(entries.find(e => e.id === 'pip').bio, 'Pip brings notes to every home.');
+    assert.equal(entries.find(e => e.id === 'music').bio, 'Kiko makes music you can see and hear.');
+  }
+});

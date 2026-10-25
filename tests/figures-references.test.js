@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { readPNG } from './helpers/png.js';
 
 const source = new URL('../docs/art/source/neighbors/', import.meta.url);
@@ -83,6 +84,17 @@ for (const [id, reference] of Object.entries(manifest.characters)) {
       if (rgba[3]) bottom = y;
     }
     assert.equal(bottom, reference.feetRow, `${id} feet row. ${rule}`);
+  });
+
+  test(`${reference.name}: hand-drawn side stands match the pinned RGBA hashes`, () => {
+    for (const [side, row] of [['left', 1], ['right', 2]]) {
+      const rgba = new Uint8Array(size * size * 4);
+      for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+        rgba.set(framePixel(row, 1, x, y), (y * size + x) * 4);
+      }
+      assert.equal(createHash('sha256').update(rgba).digest('hex'), reference.sideStandSha256[side],
+        `${id} ${side} stand (row ${row}, column 1) changed. Update the manifest deliberately to accept new profiles. ${rule}`);
+    }
   });
 
   test(`${reference.name}: joy changes only the eye box`, () => {

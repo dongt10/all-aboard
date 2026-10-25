@@ -141,7 +141,7 @@ Object.assign(globalThis, {
   cancelAnimationFrame: () => {},
 });
 
-const { createState, getCreations, getDraft } = await import('../src/progress.js');
+const { createState, getCreations, getDraft, saveState, loadState } = await import('../src/progress.js');
 const { figureMarkup } = await import('../src/ui/figures/index.js');
 const { createMusicScene, ECHO_LINES, lanternStep } = await import('../src/ui/screens/music.js');
 const { isEdited } = await import('../src/ui/band.js');
@@ -214,6 +214,53 @@ test('grade 1: lantern buttons flip Cricket sound/rest, Kiko counts, Send band l
   scene.destroy();
 });
 
+test('K: the opening instruction describes resting and rejoining the fresh band', () => {
+  for (const largeText of [false, true]) {
+    const state = at(0); state.settings.largeText = largeText;
+    const ctx = fakeCtx(state), scene = createMusicScene(ctx); scene.mount();
+    try {
+      assert.match(text(ctx), /^Tap a friend to rest or join\./);
+      if (largeText) assert.ok(text(ctx).length <= 56);
+      const friends = ctx.stage.querySelectorAll('.music-musician');
+      assert.ok(friends.every(friend => friend.getAttribute('aria-pressed') === 'true'));
+      const kiko = friends.find(friend => friend.dataset.id === 'melody');
+      kiko.click();
+      assert.equal(kiko.getAttribute('aria-pressed'), 'false');
+      assert.match(text(ctx), /^Kiko rests for now\./);
+      kiko.click();
+      assert.equal(kiko.getAttribute('aria-pressed'), 'true');
+      assert.match(text(ctx), /^Kiko joins on the next beat\./);
+    } finally { scene.destroy(); }
+  }
+});
+
+test('a completed default band stays ready after storage reload at every grade', async () => {
+  const data = new Map(), storage = { getItem: key => data.get(key), setItem: (key, value) => data.set(key, value) };
+  for (const grade of [0, 1, 2, 3, 4, 5]) {
+    const ctx = fakeCtx(at(grade)), scene = createMusicScene(ctx); scene.mount();
+    try {
+      assert.equal(slot(ctx.stage, 'save').disabled, true, `grade ${grade} starts unready`);
+      slot(ctx.stage, 'quiet').click();
+      assert.equal(slot(ctx.stage, 'save').disabled, false);
+      slot(ctx.stage, 'save').click(); await tick();
+      const card = ctx.stage.querySelector('.item-get');
+      assert.ok(card);
+      card.firstElementChild.click(); await tick();
+      assert.ok(getCreations(ctx.getState()).music);
+      assert.equal(isEdited(getCreations(ctx.getState()).music, grade), false, 'default score is unchanged');
+      assert.equal(saveState(ctx.getState(), storage), true);
+    } finally { scene.destroy(); }
+    const restored = loadState(storage);
+    const ctx2 = fakeCtx(restored), scene2 = createMusicScene(ctx2); scene2.mount();
+    try { assert.equal(slot(ctx2.stage, 'save').disabled, false, `grade ${grade} completed band stays ready`); }
+    finally { scene2.destroy(); }
+    const other = { ...restored, chapter: 1, grade: grade === 5 ? 1 : grade + 1 };
+    const ctx3 = fakeCtx(other), scene3 = createMusicScene(ctx3); scene3.mount();
+    try { assert.equal(slot(ctx3.stage, 'save').disabled, true, 'completion does not unlock another grade'); }
+    finally { scene3.destroy(); }
+  }
+});
+
 test('grade 3: lanterns cycle Kiko notes, hang by pitch, Kiko names the shape', () => {
   const ctx = fakeCtx(at(3)), scene = createMusicScene(ctx); scene.mount();
   const ls = ctx.stage.querySelectorAll('button.music-lantern');
@@ -255,16 +302,91 @@ test('grade 4: Form chip disabled at A B, steady badge; grade 5 cycles form and 
   scene.destroy();
 });
 
-// Fake intervals: the echo demo and See beat tick on setInterval, so the tests drive the clock by hand.
+// Fake intervals and a monotonic clock drive silent Echo and See beat without real waits.
 const realSetInterval = globalThis.setInterval, realClearInterval = globalThis.clearInterval;
-const timers = new Map(); let timerId = 0;
+const realPerformance = globalThis.performance;
+const timers = new Map(); let timerId = 0, timerNow = 0;
 function fakeTimers() {
-  timers.clear();
+  timers.clear(); timerNow = 0;
+  globalThis.performance = { now: () => timerNow };
   globalThis.setInterval = (fn, delay) => { const id = ++timerId; timers.set(id, { fn, delay }); return id; };
   globalThis.clearInterval = id => { timers.delete(id); };
 }
-function realTimers() { globalThis.setInterval = realSetInterval; globalThis.clearInterval = realClearInterval; }
-const runTicks = n => { for (let i = 0; i < n; i++) for (const t of [...timers.values()]) t.fn(); };
+function realTimers() { globalThis.setInterval = realSetInterval; globalThis.clearInterval = realClearInterval; globalThis.performance = realPerformance; }
+const runTicks = n => {
+  for (let i = 0; i < n && timers.size; i++) {
+    timerNow += Math.min(...[...timers.values()].map(t => t.delay));
+    for (const t of [...timers.values()]) t.fn();
+  }
+};
+
+test('audible Echo lights follow scheduled audio after a delayed tick and stop after eight beats', async () => {
+  fakeTimers();
+  const original = { AudioContext: globalThis.AudioContext, requestAnimationFrame: globalThis.requestAnimationFrame, cancelAnimationFrame: globalThis.cancelAnimationFrame };
+  const starts = [], frames = new Map(); let context, frameId = 0;
+  const parameter = () => ({ value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {} });
+  globalThis.AudioContext = class {
+    constructor() { context = this; this.currentTime = 0; this.state = 'running'; this.destination = {}; }
+    resume() { return Promise.resolve(); } close() { return Promise.resolve(); }
+    createDynamicsCompressor() { return { threshold: {}, knee: {}, ratio: {}, attack: {}, release: {}, connect() {}, disconnect() {} }; }
+    createGain() { return { gain: parameter(), connect() {}, disconnect() {} }; }
+    createOscillator() { return { frequency: parameter(), connect() {}, disconnect() {}, start(time) { starts.push(time); }, stop() {}, addEventListener() {} }; }
+  };
+  globalThis.requestAnimationFrame = callback => { frames.set(++frameId, callback); return frameId; };
+  globalThis.cancelAnimationFrame = id => frames.delete(id);
+  const paint = () => { const pending = [...frames.values()]; frames.clear(); pending.forEach(fn => fn()); };
+  const ctx = fakeCtx(at(2)), scene = createMusicScene(ctx); scene.mount();
+  try {
+    ctx.stage.querySelector('[data-sign="echo"]').click(); await tick();
+    const lanterns = ctx.stage.querySelectorAll('.music-lantern');
+    assert.ok(lanterns.every(l => !l.classList.contains('is-lit')), 'lights wait for the audio lead-in');
+    context.currentTime = 2; timerNow = 2000;
+    for (const timer of [...timers.values()]) timer.fn();
+    assert.ok(starts.some(time => Math.abs(time - 2.055) < 1e-9), 'Cricket scheduled the fourth beat at 2.055 seconds');
+    context.currentTime = 2.055; paint();
+    assert.deepEqual(lanterns.map(l => l.classList.contains('is-lit')), [false, false, false, true, false, false, false, false]);
+    assert.ok(ctx.stage.querySelector('.music-musician[data-id="percussion"]').classList.contains('is-performing'));
+    // A later paint catches up through the last beat and the next phrase boundary.
+    context.currentTime = .055 + 8 * 60 / 90 + .001;
+    for (const timer of [...timers.values()]) timer.fn();
+    paint();
+    assert.equal(text(ctx), ECHO_LINES.copy);
+    assert.ok(lanterns.every(l => l.classList.contains('is-rest') && !l.classList.contains('is-lit')));
+    assert.equal(timers.size, 0, 'audio scheduler is stopped');
+    assert.equal(frames.size, 0, 'stopping from onBeat leaves no animation frame');
+    // If the browser suspends a later demonstration, it must not stay busy waiting for beats.
+    const echo = ctx.stage.querySelector('[data-sign="echo"]');
+    echo.click(); await tick();
+    context.state = 'suspended'; context.onstatechange();
+    assert.ok(!echo.classList.contains('is-busy'));
+    assert.match(text(ctx), /^Sound was interrupted\./);
+    assert.equal(timers.size, 0);
+    assert.equal(frames.size, 0);
+  } finally {
+    scene.destroy(); realTimers();
+    for (const [key, value] of Object.entries(original)) { if (value === undefined) delete globalThis[key]; else globalThis[key] = value; }
+  }
+});
+
+test('silent Echo uses elapsed time after delayed callbacks at every speed', async () => {
+  fakeTimers();
+  try {
+    for (const speedTaps of [0, 1, 2]) {
+      const ctx = fakeCtx(at(2)), scene = createMusicScene(ctx); scene.mount();
+      try {
+        for (let i = 0; i < speedTaps; i++) ctx.stage.querySelector('[data-sign="speed"]').click();
+        ctx.stage.querySelector('[data-sign="echo"]').click(); await tick();
+        const lanterns = ctx.stage.querySelectorAll('.music-lantern');
+        const interval = [...timers.values()][0], started = timerNow;
+        timerNow = started + interval.delay * 3.1; interval.fn();
+        assert.deepEqual(lanterns.map(l => l.classList.contains('is-lit')), [false, false, false, true, false, false, false, false]);
+        timerNow = started + interval.delay * 8.1; interval.fn();
+        assert.equal(text(ctx), ECHO_LINES.copy);
+        assert.equal(timers.size, 0);
+      } finally { scene.destroy(); }
+    }
+  } finally { realTimers(); }
+});
 
 test('grade 2: Echo plays a demo at the band’s speed, clears Cricket, a live match ends it, a wrong copy is told', async () => {
   fakeTimers();

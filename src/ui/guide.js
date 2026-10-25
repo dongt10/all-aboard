@@ -29,7 +29,7 @@ export function learnedText(subject, grade = 0) {
 }
 
 export const SIDE_BIOS = {
-  pip: 'A duck courier who delivers every invitation, except his own.',
+  pip: 'Pip brings notes to every home.',
   nori: 'A turtle festival helper. Slow is her favorite speed.',
   cricket: 'Plays the tap-tap rhythm in Kiko’s band.',
 };
@@ -52,7 +52,7 @@ export function guideEntries(state) {
     return learnedText(id, legacy ? Math.min(grade, 2) : grade);
   };
   const neighbors = CHARACTERS.map(c => ({
-    id: c.id, name: c.name, species: c.species, role: `${SUBJECT_THEME[c.id].label} · ${c.location}`, bio: c.description,
+    id: c.id, name: c.name, species: c.species, role: `${SUBJECT_THEME[c.id].label} · ${c.location}`, bio: c.id === 'music' ? 'Kiko makes music you can see and hear.' : c.description,
     subject: c.id, stamp: { earned: rewards.has(c.id), learned: learned(c.id) }, canFind: true, canVisit: true,
   }));
   const side = SIDE_CAST.map(s => ({ id: s.id, name: s.name, species: s.species, role: s.role, bio: SIDE_BIOS[s.id], subject: null, stamp: null, canFind: s.canFind, canVisit: false }));

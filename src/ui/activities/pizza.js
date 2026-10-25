@@ -10,14 +10,14 @@ export const LINES = PIZZA_LINES;
 export const PIZZA_GLYPH = '<svg class="icon" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" aria-hidden="true"><path d="M11 2a10 10 0 0 0-9 9h9zM13 2v9h9a10 10 0 0 0-9-9zM2 13a10 10 0 0 0 20 0z"/></svg>';
 const validPlate = i => Number.isInteger(i) && i >= 0 && i < 4;
 
-function changePlate(state, ui, i, giving) {
+function changePlate(state, ui, i, giving, piece = pieceUnits(state)) {
   if (!validPlate(i)) return { state, ui };
-  const piece = pieceUnits(state);
+  if (![1, 2].includes(piece) || (!state.halves && piece !== 2)) return { state, ui };
   if (giving && remainingUnits(state) < piece) return { state, ui, line: LINES.pizzaEmpty };
   if (!giving && state.plates[i] < piece) return { state, ui };
   const plates = state.plates.map((n, at) => at === i ? n + (giving ? piece : -piece) : n);
   const next = { ...state, plates, tried: false };
-  return { state: next, ui, line: giving ? giveLine(next, i, state.tried) : takeLine(next, state.tried) };
+  return { state: next, ui, line: giving ? giveLine(next, i, state.tried) : takeLine(next, state.tried, piece) };
 }
 
 function act(state, ui, action) {
@@ -44,7 +44,7 @@ function act(state, ui, action) {
   const fields = ['give', 'take', 'pizza'].filter(key => Object.hasOwn(action, key));
   if (fields.length !== 1) return { state, ui };
   if (fields[0] === 'give') return changePlate(state, ui, action.give, true);
-  if (fields[0] === 'take') return changePlate(state, ui, action.take, false);
+  if (fields[0] === 'take') return changePlate(state, ui, action.take, false, action.units);
   if (action.pizza !== true) return { state, ui };
   if (state.grade < 5) return { state, ui, line: LINES.tapHint };
   if (remainingUnits(state) === 0) return { state, ui, line: LINES.cutEmpty };
@@ -108,7 +108,7 @@ function mountField(host, { dispatch = () => {} } = {}) {
     const give = event.target.closest?.('.pizza-give');
     const take = event.target.closest?.('.pizza-piece');
     if (give) { focusGive(Number(give.dataset.give)); dispatch({ type: 'field', give: Number(give.dataset.give) }); }
-    else if (take && !take.hidden) dispatch({ type: 'field', take: Number(take.dataset.take) });
+    else if (take && !take.hidden) dispatch({ type: 'field', take: Number(take.dataset.take), units: Number(take.dataset.units) });
     else if (event.target.closest?.('.pizza-board')) dispatch({ type: 'field', pizza: true });
   };
   const onKey = event => {
@@ -162,8 +162,10 @@ function mountField(host, { dispatch = () => {} } = {}) {
         pieces[i].forEach((b, j) => {
           if (j >= visible && doc.activeElement === b) focusGive(i);
           b.hidden = j >= visible;
-          b.classList.toggle('pizza-piece--half', j === visible - 1 && units % 2 === 1);
-          b.setAttribute('aria-label', `Take a ${state.halves ? 'half' : 'slice'} back from ${friend.name}`);
+          const half = j === visible - 1 && units % 2 === 1;
+          b.classList.toggle('pizza-piece--half', half);
+          b.dataset.units = half ? '1' : '2';
+          b.setAttribute('aria-label', `Take a ${half ? 'half' : 'slice'} back from ${friend.name}`);
         });
       });
       previous = state;

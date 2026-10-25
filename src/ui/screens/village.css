@@ -105,6 +105,8 @@
 /* Creations (shared by the stall easels, the parade, and the item-get card) */
 .creation { display: block; box-sizing: border-box; max-width: 100%; }
 .creation.world-sign { background: var(--paper-shade); color: var(--ink); border: 2px solid var(--ink); font: 700 var(--text-small)/1.15 var(--font-read); padding: 2px 4px; max-height: calc(var(--text-small) * 1.15 * 4 + 8px); overflow: hidden; overflow-wrap: anywhere; text-align: center; }
+/* Thumbnail signs keep their full board and text, scaled into the 64×40 easel interior. */
+.village-easel > .world-sign { position: absolute; left: 50%; top: 50%; width: 240px; max-width: none; max-height: none; overflow: visible; transform: translate(-50%, -50%) scale(var(--sign-scale, .1)); }
 .creation.world-score { display: flex; gap: 3px; align-items: flex-end; background: var(--paper); border: 2px solid var(--ink); padding: 4px; }
 .creation.world-score i { display: block; width: 6px; height: 4px; background: var(--ink-soft); }
 .creation.world-score i.world-note-on { height: 14px; background: var(--music); box-shadow: 0 0 0 1px var(--ink); }

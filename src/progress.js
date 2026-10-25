@@ -4,7 +4,7 @@ import { cleanHelpdayCreation } from './helpday.js';
 import { cleanTalesCreation } from './tales.js';
 import { CHARACTERS } from './data.js';
 import { TEMPOS, FORMS } from './audio.js';
-import { normalizeCommunityMap } from './encounters.js';
+import { normalizeCommunityMap, normalizeSign } from './encounters.js';
 
 export const STORAGE_KEY = 'all-aboard-demo-v2';
 const LEGACY_KEY = 'all-aboard-demo-v1';
@@ -29,6 +29,7 @@ export function scopeKey(chapter, grade) {
 // Saved creations contain only the small set of fields each scene understands.
 export function cleanCreation(subjectId, input) {
   if (!IDS.has(subjectId) || !isObject(input) || input.kind !== subjectId) return null;
+  if (Object.hasOwn(input, 'activity') && (input.chapter !== 1 || ![3, 4, 5].includes(input.grade))) return null;
   const base = { kind: subjectId, chapter: input.chapter === 1 ? 1 : 0, grade: input.chapter === 1 ? Math.round(finite(input.grade, 1, 5, 1)) : 0 };
   if (subjectId === 'math' && input.activity === 'pizza') return cleanPizzaCreation({ ...input, ...base });
   if (subjectId === 'science' && input.activity === 'chain') return cleanChainCreation({ ...input, ...base });
@@ -42,7 +43,7 @@ export function cleanCreation(subjectId, input) {
   if (subjectId === 'science') return { ...base, canopy: ['left', 'right', 'none'].includes(input.canopy) ? input.canopy : 'none', time: finite(input.time, 0, 20, 0) };
   if (subjectId === 'art') return { ...base, background: safeColor(input.background), stamps: (Array.isArray(input.stamps) ? input.stamps : []).filter(stamp => isObject(stamp) && ['star', 'flower', 'leaf', 'circle'].includes(stamp.shape) && artColors.includes(stamp.color)).slice(0, 30).map(stamp => ({ shape: shortText(stamp.shape, 24), color: safeColor(stamp.color), x: finite(stamp.x, 5, 95), y: finite(stamp.y, 5, 95), rotation: finite(stamp.rotation, 0, 359) })) };
   if (subjectId === 'reading') return { ...base, found: ['key', 'umbrella', 'book'].filter(value => Array.isArray(input.found) && input.found.includes(value)) };
-  if (subjectId === 'writing') return { ...base, text: typeof input.text === 'string' ? input.text.slice(0, 120) : '' };
+  if (subjectId === 'writing') return { ...base, ...normalizeSign(input, base.grade) };
   if (subjectId === 'community') return { ...base, ...normalizeCommunityMap(input) };
   const trackIds = ['bass', 'voice', 'melody', 'percussion'];
   return { ...base, tempo: TEMPOS.includes(input.tempo) ? input.tempo : 90, form: FORMS.includes(input.form) ? input.form : 'A', masterVolume: finite(input.masterVolume, 0, 1, 0.45), tracks: trackIds.map(id => {

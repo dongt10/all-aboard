@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import sign, { signWords, signHelp, reactionLine, reconcileTiles, SIGN_LINES } from '../src/ui/activities/sign.js';
 import { paginate, PAGE_CHARS } from '../src/ui/dialogue.js';
+import { createState, saveDraft, publishCreation, saveState, loadState, getDraft, getCreations } from '../src/progress.js';
 
 const field = (s, action, grade) => sign.act(s.state, s.ui, { type: 'field', ...action }, grade);
 const command = (s, id, grade) => sign.act(s.state, s.ui, { type: 'command', id }, grade);
@@ -59,9 +60,9 @@ test('typed text removes its last word, and typing over a tile run forgets the t
   assert.equal(s.state.text, 'Come festival!');
   s = command(s, 'remove', 1);
   assert.equal(s.state.text, 'Come');
-  // A saved sign loads with no tile history, so Remove word takes the last word.
+  // A legacy sign recovers a whole trailing grade tile.
   const loaded = sign.start({ kind: 'writing', text: 'Everyone belongs here.' }, { chapter: 1, grade: 5 });
-  assert.equal(command(loaded, 'remove', 5).state.text, 'Everyone belongs');
+  assert.equal(command(loaded, 'remove', 5).state.text, '');
 });
 
 test('Remove word never cuts a typed word in half when a tile is its tail', () => {
@@ -182,7 +183,7 @@ test('tiles join with one space and act stays pure', () => {
   s = field(s, { word: 'there' }, 4);
   assert.equal(s.state.text, 'Hi there');
   assert.equal(before.text, '  Hi  ');
-  assert.deepEqual(before, { kind: 'writing', grade: 4, chapter: 1, text: '  Hi  ' });
+  assert.deepEqual(before, { kind: 'writing', grade: 4, chapter: 1, text: '  Hi  ', tiles: [] });
 });
 
 test('Remove word and Clear sign on an empty sign keep it empty; unknown actions change nothing', () => {
@@ -260,4 +261,50 @@ test('the field marks tiles on the sign with a class and a spoken description, a
   assert.ok(tiles.every(t => !t.classList.contains('sign-tile--used')));
   mounted.destroy();
   assert.equal(host.children.length, 0);
+});
+
+test('reopened drafts and published signs keep whole-tile removal and used marks at every grade', () => {
+  for (const grade of [0, 1, 2, 3, 4, 5]) for (const save of [saveDraft, publishCreation]) {
+    const chapter = grade ? 1 : 0;
+    const words = signWords(grade).slice(0, 3);
+    let s = sign.start(null, { chapter, grade });
+    for (const word of words) s = field(s, { word }, grade);
+    const storage = { value: null, getItem() { return this.value; }, setItem(key, value) { this.value = value; } };
+    saveState(save({ ...createState(), chapter, grade: grade || 1 }, 'writing', s.state), storage);
+    const loaded = loadState(storage);
+    const snapshot = save === publishCreation ? getCreations(loaded).writing : getDraft(loaded, 'writing');
+    s = sign.start(snapshot, { chapter, grade });
+    assert.deepEqual(s.state.tiles, words);
+    assert.deepEqual(s.ui.tiles, words);
+    const host = stubDocument().createElement('div');
+    const mounted = sign.mountField(host, { grade, dispatch() {} });
+    mounted.update(s.state, s.ui);
+    assert.equal(host.querySelectorAll('.sign-tile--used').length, words.length);
+    while (s.ui.tiles.length) {
+      words.pop();
+      s = command(s, 'remove', grade);
+      assert.equal(s.state.text, words.join(' '));
+      assert.deepEqual(s.state.tiles, words);
+      mounted.update(s.state, s.ui);
+      assert.equal(host.querySelectorAll('.sign-tile--used').length, words.length);
+    }
+    mounted.destroy();
+  }
+});
+
+test('legacy sign recovery uses only whole grade tiles; explicit typed runs stay empty on reopen', () => {
+  for (const grade of [0, 1, 2, 3, 4, 5]) {
+    const chapter = grade ? 1 : 0, words = signWords(grade).slice(0, 3);
+    const saved = { kind: 'writing', chapter, grade, text: `My words ${words.join(' ')}` };
+    const s = sign.start(saved, { chapter, grade });
+    assert.deepEqual(s.ui.tiles, words);
+    assert.equal(command(s, 'remove', grade).state.text, `My words ${words.slice(0, -1).join(' ')}`);
+  }
+  let s = sign.start(null, { chapter: 1, grade: 5 });
+  s = field(s, { typed: 'Everyone belongs here.' }, 5);
+  s = sign.start(s.state, { chapter: 1, grade: 5 });
+  assert.deepEqual(s.ui.tiles, []);
+  assert.equal(command(s, 'remove', 5).state.text, 'Everyone belongs');
+  assert.deepEqual(sign.start({ kind: 'writing', text: 'Come bus.' }, { chapter: 1, grade: 1 }).ui.tiles, []);
+  assert.deepEqual(sign.start({ kind: 'writing', text: 'Welcome, neighbors!' }, { chapter: 1, grade: 1 }).ui.tiles, []);
 });

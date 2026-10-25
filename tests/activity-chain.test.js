@@ -308,6 +308,36 @@ function fakeDocument() {
   return doc;
 }
 
+test('chart uses compact visible names with full accessible names and dialogue at grades 3–5', () => {
+  const previous = globalThis.document;
+  globalThis.document = fakeDocument();
+  try {
+    for (const grade of GRADES_CHAIN) {
+      const host = document.createElement('div');
+      host.className = 'large-text';
+      let result = start(grade);
+      const view = activity.mountField(host, { grade, dispatch(action) {
+        result = activity.act(result.state, result.ui, action);
+        view.update(result.state, result.ui);
+      } });
+      view.update(result.state, result.ui);
+      const root = host.children[0], cards = root.querySelectorAll('.chain-card');
+      assert.deepEqual(cards.map(card => card.querySelector('.chain-card-word').textContent), ['Plant', 'Fish', 'Otter', 'Gull']);
+      assert.deepEqual(cards.slice(0, 2).map(card => card.getAttribute('aria-label')), ['Sea plant', 'Little fish']);
+      for (const [i, fullName] of ['Sea plant', 'Little fish'].entries()) {
+        root.listeners.click({ target: cards[i] });
+        const plate = root.querySelectorAll('.chain-plate')[i];
+        assert.equal(plate.querySelector('.chain-word').textContent, ['Plant', 'Fish'][i]);
+        assert.equal(plate.getAttribute('role'), 'group');
+        assert.equal(plate.getAttribute('aria-label'), fullName);
+        assert.equal(cards[i].getAttribute('aria-label'), `${fullName}, placed`);
+        assert.match(result.line.toLowerCase(), new RegExp(fullName.toLowerCase()));
+      }
+      view.destroy();
+    }
+  } finally { globalThis.document = previous; }
+});
+
 test('field mounts once, updates in place, has two keyboard rails and recovers focus', () => {
   const previous = globalThis.document;
   globalThis.document = fakeDocument();

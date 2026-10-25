@@ -50,7 +50,7 @@ export function paradeStatus(phase, reason, band) {
   if (!band) return PARADE_LINES.noBand;
   if (reason === 'unavailable') return 'Sound could not start. The parade is still yours.';
   if (phase === 'starting') return 'Starting your band…';
-  if (phase !== 'playing') return 'Music stopped';
+  if (phase !== 'playing') return 'Music stopped.';
   return bandPlaybackMessage(band)
     .replace('Invite a friend or add a note.', 'Visit Kiko to invite a friend or add a note.')
     .replace('Raise a friend’s volume to listen.', 'Visit Kiko to raise a friend’s volume.')

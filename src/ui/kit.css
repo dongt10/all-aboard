@@ -81,7 +81,7 @@ body.game {
 :focus-visible { outline: 4px solid var(--ink); outline-offset: 3px; box-shadow: 0 0 0 3px var(--paper); }
 
 /* Saving failed: the game keeps going, and says so. */
-.save-off { --fill: var(--lantern); position: absolute; top: 72px; left: 50%; transform: translateX(-50%); z-index: 40; padding: 6px 14px; font-size: var(--text-small); font-weight: 700; white-space: nowrap; }
+.save-off { --fill: var(--lantern); position: absolute; top: 72px; left: 50%; transform: translateX(-50%); z-index: 70; pointer-events: none; padding: 6px 14px; font-size: var(--text-small); font-weight: 700; white-space: nowrap; }
 
 /* Landscape-first: portrait windows get a friendly card, with a way past it. */
 .rotate-card { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: rgba(43, 45, 92, .92); }

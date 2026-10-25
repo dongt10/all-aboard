@@ -81,6 +81,11 @@ export function createCommandMenu(host, { onChoose = () => {} } = {}) {
   let commands = [], cursor = -1;
   const hasFocus = () => grid.contains(document.activeElement);
   const focusCursor = () => { if (cursor >= 0) slots[cursor].button.focus({ preventScroll: true }); };
+  const focusEmpty = () => {
+    const field = host.closest('.enc')?.querySelector('.enc__field');
+    const control = field?.querySelector('textarea:not(:disabled)') ?? field?.querySelector('button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])');
+    (control ?? grid).focus({ preventScroll: true });
+  };
   const indexOf = event => slots.findIndex(slot => slot.button === event.target.closest?.('.cmd-slot'));
 
   function paintSlot(slot, command) {
@@ -135,7 +140,7 @@ export function createCommandMenu(host, { onChoose = () => {} } = {}) {
       commands = [...next];
       slots.forEach((slot, i) => paintSlot(slot, commands[i]));
       markCursor();
-      if (hadFocus) cursor >= 0 ? focusCursor() : grid.focus({ preventScroll: true });   // focus never falls back to the page
+      if (hadFocus) cursor >= 0 ? focusCursor() : focusEmpty();   // an empty encounter menu returns to the activity
     },
     focus: focusCursor,
     // Arrows move the cursor, A chooses it. Anything else (B, say) is left to the scene.

@@ -1,5 +1,6 @@
 // Fumi's sign (writing): a wooden sign built from word tiles; grades 1–5 can also type on it.
-import { encounterReady, encounterOpeningDialogue, normalizeEncounterSnapshot } from '../../encounters.js';
+import { encounterReady, encounterOpeningDialogue, normalizeEncounterSnapshot, signWords, reconcileTiles } from '../../encounters.js';
+export { signWords, reconcileTiles };
 
 const KIND = 'writing';
 const MAX = 120;
@@ -13,13 +14,6 @@ export const SIGN_LINES = Object.freeze({
   empty: 'The sign is empty.',
   typed: 'You wrote it. Add more, or choose Put up sign.',
 });
-
-// Verbatim from the original writing encounter's word lists.
-export function signWords(grade) {
-  return grade === 0 ? ['Hello', 'friend!', 'Welcome', '♡']
-    : grade < 3 ? ['Welcome', 'to', 'our', 'festival!', 'Come', 'play', 'with', 'us.']
-    : ['Welcome, neighbors!', 'Come explore', 'our summer festival.', 'Everyone belongs here.', 'Please keep the path clear.'];
-}
 
 // Help per grade: Kindergarten has no typing box, so its help never mentions typing.
 export function signHelp(grade) {
@@ -39,23 +33,22 @@ export function reactionLine(verb, word) {
   return `${verb}: ${shown}${endsSentence(shown) ? '' : '.'}`;
 }
 
-const withText = (state, text) => ({ ...state, text: text.slice(0, MAX) });
+const withText = (state, text, tiles) => ({ ...state, text: text.slice(0, MAX), tiles });
 const joined = (text, word) => [text.trim(), word].filter(Boolean).join(' ');
 const lastWord = text => text.trimEnd().match(/\S+$/)?.[0] ?? '';
 const wordCount = text => text.trim().split(/\s+/).filter(Boolean).length;
 
-// The tiles added so far, newest last, trimmed to the ones the sign still ends with (typing can break the run).
-// The run must start at a word boundary, so Remove word never cuts a typed word in half ("Come bus." keeps no "us.").
-export function reconcileTiles(tiles, text) {
-  const end = text.trimEnd();
-  let kept = tiles.slice();
-  while (kept.length) {
-    const run = kept.join(' ');
-    const fits = end === run || (end.endsWith(run) && /\s$/.test(end.slice(0, -run.length)));
-    if (fits) break;
-    kept = kept.slice(1);
+// Old saves have only text. Recover whole grade tiles from its end without cutting typed words.
+function legacyTiles(text, grade) {
+  const tiles = [], words = signWords(grade);
+  let rest = text.trimEnd();
+  while (tiles.length < 60) {
+    const word = words.find(word => reconcileTiles([word], rest).length);
+    if (!word) break;
+    tiles.unshift(word);
+    rest = rest.slice(0, -word.length).trimEnd();
   }
-  return kept;
+  return reconcileTiles(tiles, text);
 }
 
 const withTiles = (ui, tiles) => ({ ...ui, tiles });
@@ -68,29 +61,30 @@ function act(state, ui, action) {
     const tile = tiles.at(-1);
     const word = tile ?? lastWord(state.text);
     const trimmed = state.text.trimEnd();
-    const next = withText(state, trimmed.slice(0, trimmed.length - word.length).trimEnd());
+    const next = withText(state, trimmed.slice(0, trimmed.length - word.length).trimEnd(), tile ? tiles.slice(0, -1) : tiles);
     const line = reactionLine('Removed', word) + (next.text.trim() ? '' : ` ${SIGN_LINES.empty}`);
-    return reply(next, withTiles(ui, tile ? tiles.slice(0, -1) : tiles), line);
+    return reply(next, withTiles(ui, next.tiles), line);
   }
   if (action?.type === 'command' && action.id === 'clear') {
     if (!state.text) return { state, ui };
-    return reply(withText(state, ''), withTiles(ui, []), SIGN_LINES.cleared);
+    return reply(withText(state, '', []), withTiles(ui, []), SIGN_LINES.cleared);
   }
   if (action?.type === 'field' && typeof action.word === 'string') {
     const text = joined(state.text, action.word);
     if (text.length > MAX) return reply(state, withTiles(ui, tiles), SIGN_LINES.full);   // refused whole: never cut mid-word
-    const next = withText(state, text);
+    const next = withText(state, text, [...tiles, action.word]);
     const line = reactionLine('Added', action.word) + (!encounterReady(state) && encounterReady(next) ? ` ${SIGN_LINES.readyNow}` : '');
-    return reply(next, withTiles(ui, [...tiles, action.word]), line);
+    return reply(next, withTiles(ui, next.tiles), line);
   }
   if (action?.type === 'field' && typeof action.typed === 'string') {
-    const next = withText(state, action.typed);
+    const text = action.typed.slice(0, MAX);
+    const next = withText(state, text, reconcileTiles(tiles, text));
     if (next.text === state.text) return { state, ui: withTiles(ui, tiles) };
     // One line per typed word (not per keystroke), so the last reaction never goes stale; the frame says the flip to empty.
     // The textarea's maxLength already stops typing at 120, so the overflow line is only a guard for programmatic input.
     const line = action.typed.length > MAX ? SIGN_LINES.full
       : wordCount(next.text) !== wordCount(state.text) && encounterReady(next) ? SIGN_LINES.typed : undefined;
-    return reply(next, withTiles(ui, reconcileTiles(tiles, next.text)), line);
+    return reply(next, withTiles(ui, next.tiles), line);
   }
   return { state, ui };
 }
@@ -166,7 +160,9 @@ export default {
   notReadyLine: SIGN_LINES.empty,
   start(snapshot, { chapter = 0, grade = 1 } = {}) {
     helpGrade = grade;
-    return { state: normalizeEncounterSnapshot(KIND, snapshot ?? {}, grade, chapter), ui: { tiles: [] } };
+    const state = normalizeEncounterSnapshot(KIND, snapshot ?? {}, grade, chapter);
+    const tiles = state.tiles ?? legacyTiles(state.text, grade);
+    return { state: { ...state, tiles }, ui: { tiles: [...tiles] } };
   },
   opening(state) { return encounterReady(state) ? SIGN_LINES.ready : encounterOpeningDialogue(state); },
   commands,

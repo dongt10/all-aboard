@@ -2,9 +2,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createVillageScene } from '../src/ui/screens/village.js';
-import { createState } from '../src/progress.js';
+import { createParadeScene } from '../src/ui/screens/parade.js';
+import { createEncounterScene } from '../src/ui/screens/encounter.js';
+import { createState, publishCreation, loadState, STORAGE_KEY } from '../src/progress.js';
+import { paradeStatus } from '../src/ui/parade-lineup.js';
+import { createDefaultBand } from '../src/audio.js';
 import { HUD_ZONES, VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, clampWalk, hotspotRect, roamRect, talkPoint, nearestNeighbor, stepPlayer, stallState, overlaps, wanderTarget, stepToward, guideArrow } from '../src/ui/village-map.js';
-import { creationMarkup } from '../src/ui/creations.js';
+import { creationMarkup, fitSignPreviews } from '../src/ui/creations.js';
 import { STAGE } from '../src/ui/stage.js';
 import { CHARACTERS } from '../src/data.js';
 
@@ -390,7 +394,7 @@ class Doc extends Target {
 }
 
 
-function villageFixture(t, { calm = false, large = false, ...options } = {}) {
+function villageFixture(t, { calm = false, large = false, state = createState(), ...options } = {}) {
   const doc = new Doc(), frames = new Map(), restore = [];
   let frameId = 0, time = 0;
   for (const [key, value] of Object.entries({
@@ -407,7 +411,7 @@ function villageFixture(t, { calm = false, large = false, ...options } = {}) {
   const stage = doc.createElement('div'), gone = [];
   stage.className = `stage${calm ? ' calm' : ''}${large ? ' large-text' : ''}`;
   doc.body.append(stage);
-  const scene = createVillageScene({ stage, getState: () => createState(), go: (...args) => { gone.push(args); return true; } }, options);
+  const scene = createVillageScene({ stage, getState: () => state, go: (...args) => { gone.push(args); return true; } }, options);
   scene.mount();
   const root = stage.querySelector('.village');
   root.getBoundingClientRect = () => ({ left: 0, top: 0, width: 960, height: 540 });
@@ -544,4 +548,101 @@ for (const id of Object.keys(VILLAGE_SPOTS)) test(`tap-walking to ${id} still ar
   f.root.querySelector(`.village-actor[data-id="${id}"]`).click();
   for (let i = 0; i < 40; i++) { f.tick(100); assertVisiblePlayer(f.pos()); }
   assert.deepEqual(f.gone, id === 'music' ? [['music']] : [['encounter', { id }]]);
+});
+
+for (const grade of [0, 1, 2, 3, 4, 5]) test(`village keyboard guidance uses short sentences in grade ${grade}`, t => {
+  const f = villageFixture(t, { large: true, state: { ...createState(), chapter: grade ? 1 : 0, grade: grade || 1 } });
+  const label = f.root.getAttribute('aria-label');
+  assert.match(label, /Press Enter near a neighbor to talk\. Or choose a neighbor\./);
+  for (const sentence of label.split(/(?<=[.!?…])\s+/)) assert.ok(sentence.length <= 56, sentence);
+});
+
+for (const grade of [0, 1, 2]) test(`a stored Help Day in grade ${grade} cannot crash Hana's mounted stall`, t => {
+  const chapter = grade ? 1 : 0, scope = chapter ? `chapter-1-grade-${grade}` : 'chapter-0';
+  const stored = { ...createState(), chapter, grade: grade || 1,
+    drafts: { [scope]: { community: { kind: 'community', activity: 'helpday', chapter, grade, crew: [{ job: 'lanterns', helper: 'kiko' }] } } } };
+  const state = loadState({ getItem: key => key === STORAGE_KEY ? JSON.stringify(stored) : null });
+  const f = villageFixture(t, { state });
+  f.scene.destroy();
+  const scene = createEncounterScene({ stage: f.stage, getState: () => state, speak() {}, open: { help() {} } }, { id: 'community' });
+  t.after(() => scene.destroy());
+  assert.doesNotThrow(() => scene.mount());
+  assert.equal(f.stage.querySelectorAll('.square-cell').length, 25);
+});
+
+const replacements = { math: ['pizza', 'Pizza party'], science: ['chain', 'Sunbeam chart'], reading: ['tales', 'Tale book'], community: ['helpday', 'Help Day team'] };
+for (const grade of [3, 4, 5]) for (const legacy of [false, true]) test(`village and parade name the published creations (grade ${grade}, legacy=${legacy})`, t => {
+  let state = { ...createState(), chapter: 1, grade, settings: { ...createState().settings, reducedMotion: true } };
+  for (const { id } of CHARACTERS) {
+    const activity = !legacy && replacements[id] ? { activity: replacements[id][0] } : {};
+    state = publishCreation(state, id, { kind: id, chapter: 1, grade, ...activity, text: 'Welcome, neighbors!' });
+  }
+  const f = villageFixture(t, { state, large: true });
+  for (const c of CHARACTERS) {
+    const name = !legacy && replacements[c.id] ? replacements[c.id][1] : c.reward.label;
+    assert.ok(f.root.querySelector(`.village-actor[data-id="${c.id}"]`).getAttribute('aria-label').includes(`Made a ${name.toLowerCase()}.`), name);
+  }
+  f.scene.destroy();
+  const scene = createParadeScene({ stage: f.stage, getState: () => state, speak() {}, open: { help() {} } });
+  t.after(() => scene.destroy());
+  scene.mount();
+  const label = f.stage.querySelector('.parade-street').getAttribute('aria-label');
+  const sentences = label.split(/(?<=[.!?…])\s+/);
+  assert.equal(sentences.length, 8, 'leader plus one sentence per neighbor');
+  assert.ok(sentences.every(sentence => sentence.length <= 56), label);
+  for (const c of CHARACTERS) {
+    const name = !legacy && replacements[c.id] ? replacements[c.id][1] : c.reward.label;
+    assert.ok(sentences.includes(`${c.name} brings the ${name.toLowerCase()}.`), name);
+  }
+});
+
+test('the stopped parade dialogue is a punctuated short sentence', () => {
+  const line = paradeStatus('stopped', 'stopped', createDefaultBand());
+  assert.equal(line, 'Music stopped.');
+  assert.ok(line.length <= 56);
+});
+
+test('sign thumbnails scale the entire measured sign and refit for Bigger words and loaded fonts', async t => {
+  const observers = [];
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'ResizeObserver');
+  globalThis.ResizeObserver = class {
+    constructor(fit) { this.fit = fit; this.observed = []; observers.push(this); }
+    observe(el) { this.observed.push(el); }
+    disconnect() { this.disconnected = true; }
+  };
+  t.after(() => original ? Object.defineProperty(globalThis, 'ResizeObserver', original) : delete globalThis.ResizeObserver);
+  for (const [width, height] of [[64, 40], [88, 60]]) {
+    const sign = { offsetWidth: 240, offsetHeight: 80, style: { setProperty(key, value) { this[key] = value; } } };
+    let loaded;
+    const ready = new Promise(resolve => { loaded = resolve; });
+    const host = { querySelectorAll: () => [sign], ownerDocument: { fonts: { ready } } };
+    const cleanup = fitSignPreviews(host, width, height), observer = observers.at(-1);
+    assert.deepEqual(observer.observed, [sign]);
+    const fits = () => {
+      const scale = Number(sign.style['--sign-scale']);
+      assert.ok(scale > 0 && scale <= 1);
+      assert.ok(sign.offsetWidth * scale <= width + 1e-6);
+      assert.ok(sign.offsetHeight * scale <= height + 1e-6);
+    };
+    fits();
+    sign.offsetHeight = 240; observer.fit(); fits(); // long sign in Bigger words
+    sign.offsetHeight = 300; loaded(); await ready; fits(); // late font load
+    const scale = sign.style['--sign-scale'];
+    cleanup();
+    assert.equal(observer.disconnected, true);
+    sign.offsetHeight = 400; observer.fit();
+    assert.equal(sign.style['--sign-scale'], scale, 'a destroyed preview never updates');
+  }
+});
+
+test('village and parade thumbnail styles expose the full sign before fitting', () => {
+  for (const [path, selector] of [['village', '.village-easel > .world-sign'], ['parade', '.parade-float__art > .world-sign']]) {
+    const css = readFileSync(new URL(`../src/ui/screens/${path}.css`, import.meta.url), 'utf8');
+    const block = cssBlock(css, selector);
+    assert.match(block, /max-height:\s*none/);
+    assert.match(block, /max-width:\s*none/);
+    assert.match(block, /overflow:\s*visible/);
+    assert.match(block, /scale\(var\(--sign-scale/);
+    assert.equal(cssPx(block, 'width'), 240);
+  }
 });

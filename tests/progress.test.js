@@ -272,3 +272,58 @@ test('drafts and progress reject snapshots from another chapter or grade', async
   assert.equal(getDraft(mixed, 'science'), null);
   assert.equal(chainReady(getCreations({ ...mixed, grade: 3 }).science), true, 'valid grade remains intact');
 });
+
+test('tagged upper-grade activities are rejected in K–2 through every save path', () => {
+  for (const [kind, activity] of [['math', 'pizza'], ['science', 'chain'], ['reading', 'tales'], ['community', 'helpday']]) {
+    for (const [chapter, grade] of [[0, 0], [1, 1], [1, 2]]) {
+      const creation = { kind, activity, chapter, grade, crew: [{ job: 'lanterns', helper: 'kiko' }] };
+      const state = { ...createState(), chapter, grade: grade || 1 }, scope = scopeKey(chapter, grade);
+      assert.equal(cleanCreation(kind, creation), null, `${activity} in ${scope}`);
+      assert.deepEqual(saveDraft(state, kind, creation), state);
+      assert.deepEqual(publishCreation(state, kind, creation), state);
+      const storage = memoryStorage();
+      storage.setItem(STORAGE_KEY, JSON.stringify({ ...state, drafts: { [scope]: { [kind]: creation } },
+        progress: { [scope]: { [kind]: { creation, completedAt: '2026-10-24T10:00:00Z' } } } }));
+      const loaded = loadState(storage);
+      assert.equal(getDraft(loaded, kind), null);
+      assert.deepEqual(getCreations(loaded), {});
+      const legacy = { ...creation }; delete legacy.activity;
+      assert.ok(cleanCreation(kind, legacy), 'untagged legacy saves remain accepted');
+    }
+  }
+});
+
+test('writing tile runs are grade-validated, bounded, independent and preserved across save paths', () => {
+  const phrase = 'Welcome, neighbors!';
+  const snapshot = { kind: 'writing', chapter: 1, grade: 5, text: `Hi ${phrase} Come explore`, tiles: [phrase, 'Come explore'] };
+  const original = { ...createState(), chapter: 1, grade: 5 };
+  const storage = memoryStorage();
+  const saved = publishCreation(saveDraft(original, 'writing', snapshot), 'writing', snapshot);
+  saveState(saved, storage);
+  const loaded = loadState(storage);
+  assert.deepEqual(getDraft(loaded, 'writing'), snapshot);
+  assert.deepEqual(getCreations(loaded).writing, snapshot);
+  assert.deepEqual(normalizeEncounterSnapshot('writing', snapshot, 5, 1), snapshot);
+  getDraft(loaded, 'writing').tiles.pop();
+  assert.deepEqual(getDraft(loaded, 'writing').tiles, snapshot.tiles);
+  const cases = [
+    [{ ...snapshot, tiles: ['<img>', 'Come explore'] }, []],
+    [{ ...snapshot, tiles: [null, {}] }, []],
+    [{ ...snapshot, tiles: 'Come explore' }, []],
+    [{ ...snapshot, tiles: ['Welcome'] }, []],
+    [{ ...snapshot, text: 'Hi Welcome, neighbors! now' }, []],
+    [{ ...snapshot, text: 'Hi Come explore' }, ['Come explore']],
+    [{ ...snapshot, grade: 2 }, []],
+    [{ ...snapshot, text: 'HelloCome explore', tiles: ['Come explore'] }, []],
+    [{ kind: 'writing', chapter: 0, grade: 0, text: Array(60).fill('♡').join(' '), tiles: Array(500).fill('♡') }, Array(60).fill('♡')],
+  ];
+  for (const [input, tiles] of cases) {
+    const clean = cleanCreation('writing', input);
+    assert.deepEqual(clean.tiles, tiles);
+    assert.deepEqual(normalizeEncounterSnapshot('writing', input, input.grade, input.chapter), clean);
+    assert.deepEqual(cleanCreation('writing', clean), clean, 'validation is idempotent');
+  }
+  assert.deepEqual(cleanCreation('writing', { ...snapshot, tiles: [] }).tiles, [], 'typed text keeps an explicitly empty run');
+  const legacy = { ...snapshot }; delete legacy.tiles;
+  assert.equal(Object.hasOwn(cleanCreation('writing', legacy), 'tiles'), false, 'missing history stays distinct from typed text');
+});

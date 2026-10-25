@@ -1,6 +1,6 @@
 import { createBandEngine, sanitizeBandSnapshot, applyBeatChanges, notesForBeat, phraseLength } from '../../audio.js';
 import { createPlaybackController, bandPlaybackMessage, CAST } from '../../music.js';
-import { getDraft, saveDraft, publishCreation } from '../../progress.js';
+import { getDraft, getCreations, saveDraft, publishCreation } from '../../progress.js';
 import {
   MUSICIAN_COLORS, toggleMusician, toggleBeat, cycleNote, noteLabel, setTrackNotes, musicCommands,
   leadTrack, TEMPO_NAMES, cycleTempo, setTempo, formLabel, cycleForm, setForm, defaultBandFor, isEdited,
@@ -163,7 +163,12 @@ export function createMusicScene(ctx) {
     root?.querySelectorAll('.is-lit, .is-performing').forEach(el => el.classList.remove('is-lit', 'is-performing'));
   }
   function showBeat({ beat, notes, phraseIndex }) {
-    if (destroyed || echo?.phase === 'demo') return;   // the echo demo lights the lanterns from its own clock
+    if (destroyed) return;
+    if (echo?.phase === 'demo') {
+      // The engine wraps to beat 0 after the eight-beat demonstration.
+      showEchoBeat(beat === 0 && echo.beat > 0 ? 8 : beat);
+      return;
+    }
     clearBeats();
     lanterns()[beat % 8]?.classList.add('is-lit');
     for (const note of notes) $(`.music-musician[data-id="${note.id}"]`)?.classList.add('is-performing');
@@ -271,25 +276,32 @@ export function createMusicScene(ctx) {
     echo = { mask, phase: 'demo', beat: 0, timer: null };
     $('[data-sign="echo"]')?.classList.add('is-busy');
     say('Kiko', ECHO_LINES.listen);
-    // One-off band: only Cricket sounds, and only on the picked beats. The engine's own lights are ignored.
+    // One-off band: only Cricket sounds, and only on the picked beats.
     const demo = {
       ...sanitizeBandSnapshot(band), form: 'A',
       tracks: band.tracks.map(t => (t.id === 'percussion'
         ? { ...t, enabled: true, volume: Math.max(t.volume, .6), notes: mask.map(on => (on ? 0 : null)) }
         : { ...t, enabled: false, notes: [...t.notes] })),
     };
-    try { await engine.start(demo); } catch { /* lights still run without sound */ }
+    let audible = false;
+    try { audible = await engine.start(demo); } catch { /* lights still run without sound */ }
     if (destroyed || token !== echoToken || echo?.phase !== 'demo') return;
-    const cricket = $('.music-musician[data-id="percussion"]');
-    const tick = () => {
-      if (!echo || echo.phase !== 'demo') return;
-      if (echo.beat >= 8) { finishDemo(); return; }
-      clearBeats();
-      if (mask[echo.beat]) { lanterns()[echo.beat]?.classList.add('is-lit'); cricket?.classList.add('is-performing'); }
-      echo.beat++;
-    };
+    if (audible) return;   // onBeat drives the lights and completion from the audio clock
+    const started = performance.now(), beatMs = 60000 / demo.tempo;
+    // A delayed callback catches up to the elapsed beat instead of stretching the rhythm.
+    const tick = () => showEchoBeat(Math.floor((performance.now() - started) / beatMs + 1e-9));
     tick();
-    echo.timer = setInterval(tick, 60000 / band.tempo);
+    echo.timer = setInterval(tick, beatMs);
+  }
+  function showEchoBeat(beat) {
+    if (echo?.phase !== 'demo') return;
+    if (beat >= 8) { finishDemo(); return; }
+    clearBeats();
+    if (echo.mask[beat]) {
+      lanterns()[beat]?.classList.add('is-lit');
+      $('.music-musician[data-id="percussion"]')?.classList.add('is-performing');
+    }
+    echo.beat = beat + 1;
   }
   function finishDemo() {
     clearInterval(echo.timer); echo.timer = null;
@@ -359,6 +371,8 @@ export function createMusicScene(ctx) {
       grade = gradeOf(state);
       lead = leadTrack(grade);
       band = sanitizeBandSnapshot(getDraft(state, 'music') ?? defaultBandFor(grade));
+      // A published band already passed the finish gate, even when its score is still the default.
+      playedOnce = Boolean(getCreations(state).music);
       selected = lead ?? 'melody';
       build();
       dialogue = createDialogue($('.music-dialogue'), {
@@ -373,7 +387,7 @@ export function createMusicScene(ctx) {
         onStatus: status => {
           if (destroyed) return;
           if (status === 'stopped') { playback?.engineStopped(); if (!quiet) { clearBeats(); paintPhrase(null); } }
-          if (status === 'interrupted') say('Kiko', 'Sound was interrupted. Press Play to start again.');
+          if (status === 'interrupted') { stopEchoTimers(); say('Kiko', 'Sound was interrupted. Press Play to start again.'); }
         },
       });
       playback = createPlaybackController(engine, {

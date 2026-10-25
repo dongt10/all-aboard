@@ -135,7 +135,7 @@ export function restsLine(notes) {
 
 // Kiko's words by grade. Every sentence fits one 56-character Bigger-words page.
 const OPENING = {
-  0: 'Tap a friend to join. Who sings low? Who whistles high? Try Slow and Fast!',
+  0: 'Tap a friend to rest or join. Who sings low? Who whistles high? Try Slow and Fast!',
   1: 'Tap a lantern: sound or rest. Rests are part of the rhythm too!',
   2: 'Press Echo. I play a rhythm, then you copy it on the lanterns!',
   3: 'Tap a lantern to climb: Do, Re, Mi, Sol, La. Does your tune go up or down?',

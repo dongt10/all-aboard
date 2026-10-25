@@ -36,8 +36,9 @@ export function normalizeCommunityMap(input) {
   return { placements, tried: input.tried === true && !changed };
 }
 export function normalizeEncounterSnapshot(kind, input = {}, grade = 1, chapter = 0) {
-  const s = input && typeof input === 'object' && input.kind === kind ? input : {};
+  let s = input && typeof input === 'object' && input.kind === kind ? input : {};
   const base = {kind, grade:clamp(grade,0,5), chapter:clamp(chapter,0,99)};
+  if (Object.hasOwn(s, 'activity') && (chapter !== 1 || ![3, 4, 5].includes(grade))) s = {};
   if (kind === 'math' && s.activity === 'pizza') return normalizePizza(s, base.grade, base.chapter);
   if (kind === 'science' && s.activity === 'chain') return normalizeChain(s, base.grade, base.chapter);
   if (kind === 'community' && s.activity === 'helpday') return normalizeHelpday(s, base.grade, base.chapter);
@@ -47,8 +48,35 @@ export function normalizeEncounterSnapshot(kind, input = {}, grade = 1, chapter 
   if (kind === 'science') return {...base, canopy:['left','right'].includes(s.canopy)?s.canopy:'none',time:clamp(s.time,0,20)};
   if (kind === 'art') return {...base,background:ENCOUNTER_COLORS.includes(s.background)?s.background:'#fff1cf',stamps:(Array.isArray(s.stamps)?s.stamps:[]).filter(x=>x&&SHAPES.includes(x.shape)&&ENCOUNTER_COLORS.includes(x.color)).slice(0,30).map(x=>({shape:x.shape,color:x.color,x:clamp(x.x,5,95),y:clamp(x.y,5,95),rotation:clamp(x.rotation,0,359)}))};
   if (kind === 'reading') return {...base,found:normalizeReadingFound(s.found)};
-  if (kind === 'writing') return {...base,text:typeof s.text==='string'?s.text.slice(0,120):''};
+  if (kind === 'writing') return {...base,...normalizeSign(s, base.grade)};
   return {...base,...normalizeCommunityMap(s)};
+}
+
+// Shared by the writing activity and save validation. A 120-character sign fits at most 60 tiles.
+export function signWords(grade) {
+  return grade === 0 ? ['Hello', 'friend!', 'Welcome', '♡']
+    : grade < 3 ? ['Welcome', 'to', 'our', 'festival!', 'Come', 'play', 'with', 'us.']
+    : ['Welcome, neighbors!', 'Come explore', 'our summer festival.', 'Everyone belongs here.', 'Please keep the path clear.'];
+}
+
+// Keep the newest whole tiles that still form a suffix at a word boundary.
+export function reconcileTiles(tiles, text) {
+  const end = text.trimEnd();
+  let kept = tiles.slice(-60);
+  while (kept.length) {
+    const run = kept.join(' ');
+    if (end === run || (end.endsWith(run) && /\s$/.test(end.slice(0, -run.length)))) break;
+    kept = kept.slice(1);
+  }
+  return kept;
+}
+
+export function normalizeSign(input, grade) {
+  const text = typeof input.text === 'string' ? input.text.slice(0, 120) : '';
+  if (!Object.hasOwn(input, 'tiles')) return { text }; // legacy: the activity can infer a trailing tile run
+  const tiles = Array.isArray(input.tiles) ? input.tiles.slice(-60) : [];
+  const words = signWords(grade);
+  return { text, tiles: tiles.every(tile => words.includes(tile)) ? reconcileTiles(tiles, text) : [] };
 }
 // Taro's cart starts with crates on the left so the child has something to match. The right side is always empty.
 export function startingCargo(grade) {

@@ -13,6 +13,7 @@ const VERMILION = '#d9412e', LANTERN = '#ffc94a', GRASS_DARK = '#4f9a50';
 const KIND = 'community';
 const ACTIVITY = 'helpday';
 const MAX_CREW = 4;
+const MAX_HISTORY = 40;
 
 export const GRADES_HELPDAY = [3, 4, 5];
 export const STAMP_HELPDAY = 'Different strengths get every job done together.';
@@ -20,7 +21,7 @@ export const STAMP_HELPDAY = 'Different strengths get every job done together.';
 // Board order. `need` is the chip on the card, `needSays` the same need inside a screen-reader sentence,
 // `glyph` the 24×24 picture the activity draws, `at` the bench caption word.
 export const HELP_JOBS = [
-  { id: 'lanterns', name: 'Lanterns', description: 'Hang lanterns', need: 'Up high', needSays: 'needs up high', glyph: 'lantern', at: 'lanterns' },
+  { id: 'lanterns', name: 'Lanterns', description: 'Hang lanterns', need: 'Up high', needSays: 'a helper must reach up high', glyph: 'lantern', at: 'lanterns' },
   { id: 'drum', name: 'Carry drum', description: 'Carry the drum', need: 'Heavy', needSays: 'it is heavy', glyph: 'drum', at: 'drum' },
   { id: 'gate', name: 'Greet guests', description: 'Greet at the gate', need: 'All day', needSays: 'needs a helper all day', glyph: 'gate', at: 'gate' },
   { id: 'mail', name: 'Deliver mail', description: 'Deliver invitations', need: 'Around town', needSays: 'goes all over town', glyph: 'envelope', at: 'mail' },
@@ -53,7 +54,7 @@ const nameOf = id => helperById(id)?.name ?? 'A helper';
 const isPlainObject = v => v !== null && typeof v === 'object' && !Array.isArray(v);
 const clampInt = (n, a, b) => Math.round(Math.min(b, Math.max(a, Number.isFinite(n) ? n : a)));
 
-// Crew entries keep their order (it is the Undo order); bad jobs or helpers are dropped; a repeated job or
+// Crew entries keep their order (the legacy Undo order); bad jobs or helpers are dropped; a repeated job or
 // helper keeps its first entry; anything past four entries is cut. Only { job, helper } is kept.
 export function normalizeCrew(input) {
   const crew = [];
@@ -69,11 +70,16 @@ export function normalizeCrew(input) {
   return crew;
 }
 
-// The one validator, for the activity and (through the wiring) encounters.js: { kind, activity, grade,
-// chapter, crew }. Nothing else is kept, and normalizing twice changes nothing.
+const historyOf = state => Array.isArray(state?.history)
+  ? state.history.slice(-MAX_HISTORY).filter(Array.isArray).map(normalizeCrew) : [];
+
+// The one validator, for the activity and (through the wiring) encounters.js. Optional history keeps
+// the crew before each move so Undo also restores displaced helpers after reopening a draft.
 export function normalizeHelpday(input, grade = input?.grade ?? 3, chapter = input?.chapter ?? 1) {
   const s = isPlainObject(input) ? input : {};
-  return { kind: KIND, activity: ACTIVITY, grade: clampInt(grade, 0, 5), chapter: chapter === 1 ? 1 : 0, crew: normalizeCrew(s.crew) };
+  const history = historyOf(s);
+  return { kind: KIND, activity: ACTIVITY, grade: clampInt(grade, 0, 5), chapter: chapter === 1 ? 1 : 0,
+    crew: normalizeCrew(s.crew), ...(history.length ? { history } : {}) };
 }
 
 // For progress.js cleanCreation: the saved object, or null for anything that is not a Help Day. The chapter
@@ -101,17 +107,23 @@ export const helpDayFitCount = state => crewOf(state).filter(p => fits(p.job, p.
 export const helpDayNextJob = state => JOB_IDS.find(job => helperAt(state, job) !== HELP_FITS[job]) ?? null;
 
 // Send a helper to a job. Someone already on that job goes back to the bench; a helper leaving another job
-// empties it. The new pair goes last, so Undo pops it first. A mismatch is still placed: the work is kept.
+// empties it. Remember the crew before moving either helper. A mismatch is still placed: the work is kept.
 export function assignHelper(state, job, helper) {
   if (!JOB_IDS.includes(job) || !HELPER_IDS.includes(helper)) return { state, status: 'invalid' };
   if (helperAt(state, job) === helper) return { state, status: 'same' };
-  const crew = [...crewOf(state).filter(p => p.job !== job && p.helper !== helper), { job, helper }];
-  return { state: { ...state, crew }, status: fits(job, helper) ? 'fits' : 'mismatch' };
+  const before = crewOf(state);
+  const crew = [...before.filter(p => p.job !== job && p.helper !== helper), { job, helper }];
+  const history = [...historyOf(state), before].slice(-MAX_HISTORY);
+  return { state: { ...state, crew, history }, status: fits(job, helper) ? 'fits' : 'mismatch' };
 }
 export function undoAssignment(state) {
   const crew = crewOf(state);
   if (!crew.length) return { state, helper: null };
-  return { state: { ...state, crew: crew.slice(0, -1) }, helper: crew.at(-1).helper };
+  const history = historyOf(state);
+  const next = { ...state, crew: history.length ? history.at(-1) : crew.slice(0, -1) };
+  if (history.length > 1) next.history = history.slice(0, -1);
+  else delete next.history;
+  return { state: next, helper: crew.at(-1).helper };
 }
 
 const FIT = {
@@ -140,7 +152,7 @@ const PICK = {
 };
 export const HELPDAY_LINES = {
   opening: 'Help Day! Four jobs, four helpers. Who fits each job?',
-  openingPartial: 'Your team is half set. Who fits the open jobs?',
+  openingPartial: 'Let’s check your team. Who fits each job?',
   openingReady: 'Your team is set. Start day, or move a helper.',
   notReady: 'A job is open again. Fill every job to start.',
   allSet: 'Every job fits. Choose Start day!',
@@ -148,7 +160,7 @@ export const HELPDAY_LINES = {
   // Never "cannot": the job's need, then what this helper is better at.
   mismatch: (job, helper) => `${NEED[job]} ${nameOf(helper)} is better at ${BETTER_AT[helper]}.`,
   same: (job, helper) => `${nameOf(helper)} is already on ${JOB_SHORT[job]}.`,
-  undo: helper => `${nameOf(helper)} is back on the bench. One job is open.`,
+  undo: (helper, state) => `${nameOf(helper)} is back on ${JOB_SHORT[jobOfHelper(state, helper)] ?? 'the bench'}.`,
   next: job => NEXT[job] ?? 'Every job fits. Choose Start day!',
   ask: helper => ASK[helper],
   pick: helper => PICK[helper],

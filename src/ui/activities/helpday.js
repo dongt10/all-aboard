@@ -49,7 +49,9 @@ function act(state, ui, action) {
     if (action.id === 'next') return { state, ui, line: HELPDAY_LINES.next(helpDayNextJob(state)) };
     if (action.id === 'undo') {
       const result = undoAssignment(state);
-      return result.helper ? { state: result.state, ui, line: HELPDAY_LINES.undo(result.helper) } : { state, ui };
+      return result.helper ? { state: result.state, ui,
+        line: HELPDAY_LINES.undo(result.helper, result.state) + (helpdayReady(result.state) ? ` ${HELPDAY_LINES.allSet}` : ''),
+      } : { state, ui };
     }
   }
   return { state, ui };
@@ -153,7 +155,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
         button.tabIndex = on ? 0 : -1;
         button.dataset.assigned = String(Boolean(job));
         at.hidden = !job;
-        at.textContent = job ? `At: ${HELP_JOBS.find(item => item.id === job).at}` : '';
+        at.textContent = job ? HELP_JOBS.find(item => item.id === job).at : '';
       });
     },
     destroy() {

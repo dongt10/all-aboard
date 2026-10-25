@@ -3,7 +3,7 @@ import { getCreations } from '../../progress.js';
 import { createBandEngine } from '../../audio.js';
 import { createPlaybackController } from '../../music.js';
 import { figureMarkup, playerFigureId } from '../figures/index.js';
-import { creationMarkup } from '../creations.js';
+import { creationMarkup, creationLabel, fitSignPreviews } from '../creations.js';
 import { createCommandMenu } from '../menu.js';
 import { createDialogue } from '../dialogue.js';
 import { onceAtATime } from '../scenes.js';
@@ -26,7 +26,7 @@ export const HELP_STEPS = [
 const figureSlot = html => `<span class="parade-figure" style="left:${SPACING / 2 - 32}px;top:${FEET_Y - 57}px">${html}</span>`;
 
 export function createParadeScene(ctx) {
-  let root, menu, dialogue, engine, playback, ticker = null, tick = 0, marchers = [], destroyed = false;
+  let root, menu, dialogue, engine, playback, previews, ticker = null, tick = 0, marchers = [], destroyed = false;
   let laps = 0, over = false;   // finished crossings of the stage; the march has stopped in a line-up
   const creations = getCreations(ctx.getState());
   const lineup = paradeLineup(creations);
@@ -113,9 +113,11 @@ export function createParadeScene(ctx) {
         ${figureSlot('')}
       </div>`).join('');
     const lanterns = Array.from({ length: BUNTING }, (_, i) => `<span class="parade-lantern" style="left:${24 + i * 52}px"></span>`).join('');
-    const names = lineup.map(({ id }) => CHARACTERS.find(c => c.id === id)).filter(Boolean)
-      .map(c => `${c.name} with the ${c.reward.label.replace(/^Your /, '').toLowerCase()}`);
-    const label = names.length ? `You lead the parade. Behind you: ${names.join(', ')}.` : 'You lead the parade.';
+    const names = lineup.map(({ id, creation }) => {
+      const c = CHARACTERS.find(c => c.id === id);
+      return `${c.name} brings the ${creationLabel(id, creation).replace(/^Your /, '').toLowerCase()}.`;
+    });
+    const label = ['You lead the parade.', ...names].join(' ');
     return `<div class="parade-street" role="img" aria-label="${label}">
         ${paradeBackdropMarkup()}${lanterns}
         <div class="parade-line is-marching" style="--line-w:${width}px;--line-x:${(STAGE_WIDTH - width) / 2}px;width:${width}px">${player}${neighbors}</div>
@@ -140,6 +142,7 @@ export function createParadeScene(ctx) {
         <h2 class="px-chip px-name parade-title" id="parade-title" tabindex="-1">Festival parade</h2>
         <div class="parade-dialogue"></div><div class="parade-menu"></div>`;
       ctx.stage.append(root);
+      previews = fitSignPreviews(root, 88, 60);
       const slots = root.querySelectorAll('.parade-marcher:not(.parade-marcher--leader) .parade-figure');
       marchers = lineup.map(({ id }, i) => ({ id, key: '', el: slots[i] }));
 
@@ -175,6 +178,7 @@ export function createParadeScene(ctx) {
       destroyed = true;   // no status lines or menu updates while tearing down
       playback?.stop();
       engine?.destroy();
+      previews?.();
       clearInterval(ticker); ticker = null;
       menu?.destroy(); dialogue?.destroy();
       root?.remove();

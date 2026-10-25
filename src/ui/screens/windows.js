@@ -181,7 +181,7 @@ function createRecorder(getBand, { host, status, isOpen }) {
   return {
     get busy() { return busy; },
     async record() {
-      if (busy) return;
+      if (busy || !isOpen()) return;
       busy = true;
       const mine = ++token;
       say(RECORDING_LINES.making);
@@ -225,7 +225,7 @@ export function openGuideWindow(ctx, { id } = {}) {
   }
   let handle = null, closed = false;
   const recorder = createRecorder(() => getCreations(ctx.getState()).music, {
-    host: body, status: () => page.querySelector('.guide-record__status'), isOpen: () => !closed,
+    host: body, status: () => page.querySelector('.guide-record__status'), isOpen: () => !closed && body.isConnected,
   });
   rove(body.querySelector('.guide__tiles'), () => tiles, 2, show);
   body.addEventListener('click', event => {

@@ -157,7 +157,7 @@ test('pattern glyphs and rest counts use kid words', () => {
   assert.ok(sentences(restsLine([null, null, null, null, null, null, null, null])).every(s => s.length <= 56));
 });
 test('Kiko opens each grade with the planned line and four help steps that fit a Bigger-words page', () => {
-  assert.equal(openingLine(0), 'Tap a friend to join. Who sings low? Who whistles high? Try Slow and Fast!');
+  assert.equal(openingLine(0), 'Tap a friend to rest or join. Who sings low? Who whistles high? Try Slow and Fast!');
   assert.equal(openingLine('k'), openingLine(0));
   assert.equal(openingLine(1), 'Tap a lantern: sound or rest. Rests are part of the rhythm too!');
   assert.equal(openingLine(2), 'Press Echo. I play a rhythm, then you copy it on the lanterns!');

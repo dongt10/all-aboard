@@ -141,11 +141,11 @@ export function giveLine(s, i, wasTried) {
   if (r.remaining === 0) return PIZZA_LINES.gaveLast(name, s.halves);
   return s.halves ? PIZZA_LINES.gaveHalf(name, r.remaining) : PIZZA_LINES.gave(name, r.remainingWhole);
 }
-export function takeLine(s, wasTried) {
+export function takeLine(s, wasTried, units = pieceUnits(s)) {
   const nudge = nudgeLine(s);
   if (nudge) return nudge;
   if (wasTried) return PIZZA_LINES.changed;
-  return s.halves ? PIZZA_LINES.takeHalf : PIZZA_LINES.takeSlice;
+  return units === 1 ? PIZZA_LINES.takeHalf : PIZZA_LINES.takeSlice;
 }
 // What Dig in! says about this state (s.tried is true by the time this runs).
 export function tryLine(s) {

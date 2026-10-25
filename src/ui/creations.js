@@ -2,6 +2,11 @@ import { pizzaCreationMarkup } from '../pizza.js';
 import { chainCreationMarkup } from '../chain.js';
 import { helpdayCreationMarkup } from '../helpday.js';
 import { talesCreationMarkup, solvedCount } from '../tales.js';
+import { CHARACTERS } from '../data.js';
+import pizza from './activities/pizza.js';
+import chain from './activities/chain.js';
+import tales from './activities/tales.js';
+import helpday from './activities/helpday.js';
 // A saved creation drawn small for its stall, the parade, and the item-get card.
 // Every saved value is either validated (colors, numbers, shapes) or escaped (text) before it is written.
 import { INK, PAPER, PAPER_SHADE, WOOD, LANTERN, FINISH, SKY, GRASS, GRASS_DARK, PATH, SUBJECT_THEME } from './palette.js';
@@ -9,6 +14,32 @@ import { INK, PAPER, PAPER_SHADE, WOOD, LANTERN, FINISH, SKY, GRASS, GRASS_DARK,
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const color = (v, fallback) => /^#[0-9a-f]{3,8}$/i.test(v) ? v : fallback;
 const MAP_ITEMS = { bench: LANTERN, sign: SKY, quiet: GRASS };   // the same tile colors as Hana's square
+const ACTIVITIES = { pizza, chain, tales, helpday };
+
+export function creationLabel(id, creation) {
+  const activity = ACTIVITIES[creation?.activity];
+  return activity?.kind === id ? activity.rewardLabel : CHARACTERS.find(c => c.id === id)?.reward.label ?? '';
+}
+
+// Measure the whole sign before shrinking it into a fixed thumbnail. ResizeObserver also handles
+// Bigger words and font loading; transforms never change the observed layout size.
+export function fitSignPreviews(host, width, height) {
+  const signs = [...host.querySelectorAll('.world-sign')];
+  let active = true;
+  const fit = () => {
+    if (!active) return;
+    for (const sign of signs) {
+      if (sign.offsetWidth && sign.offsetHeight) {
+        sign.style.setProperty('--sign-scale', String(Math.min(1, width / sign.offsetWidth, height / sign.offsetHeight)));
+      }
+    }
+  };
+  const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
+  for (const sign of signs) observer?.observe(sign);
+  fit();
+  host.ownerDocument.fonts?.ready?.then(fit);
+  return () => { active = false; observer?.disconnect(); };
+}
 
 function stampShape(shape) {
   if (shape === 'circle') return '<circle r="6"/>';

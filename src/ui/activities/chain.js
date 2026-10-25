@@ -15,6 +15,7 @@ export const HELP = [
   'Choose Pin chart.',
 ];
 const glyph = (id, size = 24) => `<svg class="chain-glyph" viewBox="0 0 24 24" width="${size}" height="${size}" fill="currentColor" aria-hidden="true"><path d="${CARD_GLYPHS[id]}"/></svg>`;
+const fieldWord = id => ({ plant: 'Plant', fish: 'Fish' }[id] ?? CARD_WORDS[id]?.word ?? '?');
 
 function act(state, ui, action) {
   if (action?.type === 'field') {
@@ -61,6 +62,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
       arrow.setAttribute('aria-hidden', 'true');
     }
     const plate = node('div', i ? 'chain-plate chain-plate--empty' : 'chain-sun-card', row);
+    plate.setAttribute('role', 'group');
     if (i) plate.dataset.plate = String(i - 1);
     const picture = node('div', 'chain-picture', plate);
     const pictures = {};
@@ -96,7 +98,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
     const pic = node('span', 'chain-card-pic', b);
     pic.innerHTML = glyph(card.id);
     const label = node('span', 'chain-card-word', b);
-    label.textContent = card.word;
+    label.textContent = fieldWord(card.id);
     const check = node('span', 'chain-card-check', b);
     check.innerHTML = icon('check', { size: 12 });
     check.hidden = true;
@@ -166,7 +168,8 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
       plates.forEach((parts, i) => {
         const card = i ? state.chain[i - 1] : null;
         const value = i ? state.energy[i - 1] : sunEnergy(state.grade);
-        parts.word.textContent = i ? (CARD_WORDS[card]?.word ?? '?') : 'Sun';
+        parts.word.textContent = i ? fieldWord(card) : 'Sun';
+        parts.plate.setAttribute('aria-label', i ? (CARD_WORDS[card]?.word ?? 'Empty plate') : 'Sun');
         parts.energy.textContent = ENERGY_TILES.includes(value) ? String(value) : '—';
         if (i) {
           parts.plate.classList.toggle('chain-plate--empty', !card);

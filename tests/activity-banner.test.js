@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import banner, { stampPosition, stampAt, BANNER_SHAPES, BANNER_LINES } from '../src/ui/activities/banner.js';
+import { cleanCreation } from '../src/progress.js';
 
 const field = (s, action, grade) => banner.act(s.state, s.ui, { type: 'field', ...action }, grade);
 const cmd = (s, id, grade = 1) => banner.act(s.state, s.ui, { type: 'command', id }, grade);
@@ -26,7 +27,7 @@ test('the cloth holds thirty stamps', () => {
   s = field(s, { color: '#6dbea0' }, 0);
   s = field(s, { cell: 5 }, 0);
   assert.equal(s.state.stamps.length, 30);
-  assert.equal(s.state.stamps[5].color, '#6dbea0');
+  assert.equal(s.state.stamps[stampAt(s.state, 5)].color, '#6dbea0');
 });
 test('turning cycles in 45° steps, fill paints the cloth, and undo needs something to undo', () => {
   let s = banner.start(null, { chapter: 1, grade: 5 });
@@ -96,8 +97,8 @@ test('tapping an occupied cell swaps the stamp instead of stacking', () => {
   s = field(s, { color: '#559fc7' }, 0); s = field(s, { shape: 'circle' }, 0);
   s = field(s, { cell: 8 }, 0);
   assert.equal(s.state.stamps.length, 2);
-  assert.deepEqual([s.state.stamps[0].shape, s.state.stamps[0].color, s.state.stamps[1].shape], ['circle', '#559fc7', 'star']);
-  assert.equal(stampAt(s.state, 8), 0); assert.equal(stampAt(s.state, 9), 1); assert.equal(stampAt(s.state, 10), -1);
+  assert.deepEqual([s.state.stamps[1].shape, s.state.stamps[1].color, s.state.stamps[0].shape], ['circle', '#559fc7', 'star']);
+  assert.equal(stampAt(s.state, 8), 1); assert.equal(stampAt(s.state, 9), 0); assert.equal(stampAt(s.state, 10), -1);
   // Undo brings the old stamp back.
   s = cmd(s, 'undo', 0);
   assert.deepEqual([s.state.stamps.length, s.state.stamps[0].shape, s.state.stamps[0].color], [2, 'star', '#e96163']);
@@ -155,6 +156,24 @@ test('a saved banner comes back as it was, and Undo still lifts its last stamp',
   const swapped = field(s, { cell: 0 }, 4);
   assert.equal(swapped.state.stamps.length, 2); assert.equal(swapped.state.stamps[1].color, '#e96163');
 });
+
+test('resumed Undo lifts the last replacement and keeps the untouched cell at grades K–2', () => {
+  for (const grade of [0, 1, 2]) {
+    const scope = { grade, chapter: grade === 0 ? 0 : 1 };
+    let s = banner.start(null, scope);
+    s = field(s, { cell: 0 }, grade);
+    s = field(s, { cell: 1 }, grade);
+    const before = s;
+    s = field(field(s, { shape: 'flower' }, grade), { cell: 0 }, grade);
+    assert.equal(s.state.stamps[stampAt(s.state, 0)].shape, 'flower');
+    assert.deepEqual(cmd(s, 'undo', grade).state, before.state, 'live history restores the replaced stamp');
+    s = banner.start(JSON.parse(JSON.stringify(cleanCreation('art', s.state))), scope);
+    assert.deepEqual(s.ui.history, []);
+    s = cmd(s, 'undo', grade);
+    assert.equal(stampAt(s.state, 0), -1, 'the most recently edited cell is undone');
+    assert.equal(s.state.stamps[stampAt(s.state, 1)].shape, 'star', 'the older untouched cell remains');
+  }
+});
 test('a stacked save from earlier today: a tap swaps the stamp on top, the one the kid can see', () => {
   const under = { shape: 'leaf', color: '#6dbea0', rotation: 0, ...stampPosition(0) };
   const over = { shape: 'circle', color: '#9d7fbd', rotation: 90, ...stampPosition(0) };
@@ -164,7 +183,8 @@ test('a stacked save from earlier today: a tap swaps the stamp on top, the one t
   const next = field(s, { cell: 0 }, 2);
   assert.equal(next.line, BANNER_LINES.stamped);
   assert.deepEqual(next.state.stamps[0], under, 'the hidden stamp stays where it was');
-  assert.deepEqual([next.state.stamps[1].shape, next.state.stamps[1].color, next.state.stamps[1].rotation], ['star', '#e96163', 0]);
+  assert.equal(stampAt(next.state, 0), 2);
+  assert.deepEqual([next.state.stamps[2].shape, next.state.stamps[2].color, next.state.stamps[2].rotation], ['star', '#e96163', 0]);
   assert.equal(next.ui.history.length, 1);
 });
 test('the very same stamp on the same cell changes nothing and leaves Undo nothing to take back', () => {
@@ -190,7 +210,7 @@ test('a full cloth from a stacked save refuses a 31st stamp and says why', () =>
   // A tap on a taken cell still swaps, so the kid is never stuck.
   const swapped = field(field(s, { shape: 'leaf' }, 0), { cell: 1 }, 0);
   assert.equal(swapped.state.stamps.length, 30);
-  assert.equal(swapped.state.stamps[stampAt(s.state, 1)].shape, 'leaf');
+  assert.equal(swapped.state.stamps[stampAt(swapped.state, 1)].shape, 'leaf');
 });
 test('field stamps wear the ink outline and the turn chip holds no number', () => {
   const css = readFileSync(new URL('../src/ui/activities/banner.css', import.meta.url), 'utf8');

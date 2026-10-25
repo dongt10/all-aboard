@@ -11,6 +11,7 @@ import {
 } from '../src/helpday.js';
 import { ICON_NAMES } from '../src/ui/icons.js';
 import { arrangeCommands, nextCursorIndex } from '../src/ui/menu.js';
+import { createState, saveDraft, saveState, loadState, getDraft } from '../src/progress.js';
 
 const pairs = Object.entries(HELP_FITS).map(([job, helper]) => ({ job, helper }));
 
@@ -146,7 +147,7 @@ test('assignment replaces and moves helpers, keeps immutable work, and Undo foll
   const next = assignHelper(moved.state, 'lanterns', 'taro').state;
   const undone = undoAssignment(next);
   assert.equal(undone.helper, 'taro'); assert.deepEqual(undone.state, moved.state);
-  assert.deepEqual(undoAssignment(undone.state).state.crew, []);
+  assert.deepEqual(undoAssignment(undone.state).state, initial);
   const empty = fresh(3).state;
   assert.deepEqual(undoAssignment(empty), { state: empty, helper: null });
   for (const [job, helper] of [['bad', 'kiko'], ['drum', 'bad']]) assert.equal(assignHelper(initial, job, helper).state, initial);
@@ -207,6 +208,62 @@ test('Next job follows board order, Ask follows selection, partial wrong teams r
   assert.equal(activity.opening(wrong), HELPDAY_LINES.openingPartial);
   for (const action of [null, {}, { type: 'command', id: 'finish' }, { type: 'command', id: 'undo' }, { type: 'field', job: 'bad' }]) {
     const result = activity.act(state, ui, action); assert.equal(result.state, state); assert.equal(result.ui, ui);
+  }
+});
+
+test('Undo restores both displaced helpers, including after saving and reopening a draft', () => {
+  for (const grade of GRADES_HELPDAY) {
+    let result = fresh(grade);
+    for (const { job, helper } of pairs) result = { ...result, state: assignHelper(result.state, job, helper).state };
+    const complete = freeze(result.state);
+    const moved = assignHelper(complete, 'drum', 'kiko').state;
+    assert.equal(moved.crew.length, 3);
+    const values = new Map();
+    const storage = { setItem: (key, value) => values.set(key, value), getItem: key => values.get(key) ?? null };
+    assert.equal(saveState(saveDraft({ ...createState(), chapter: 1, grade }, 'community', moved), storage), true);
+    const reopened = activity.start(getDraft(loadState(storage), 'community'), { grade, chapter: 1 });
+    for (const state of [moved, reopened.state]) {
+      const undone = activity.act(freeze(state), { helper: 'kiko' }, { type: 'command', id: 'undo' });
+      assert.deepEqual(undone.state, complete);
+      assert.equal(helpdayReady(undone.state), true);
+      assert.equal(activity.commands(undone.state, undone.ui).at(-1).disabled, false);
+      assert.match(undone.line, /Kiko is back on the lanterns/);
+      assert.doesNotMatch(undone.line, /bench|open/);
+      short(undone.line);
+      assert.equal(undoAssignment(undone.state).state.crew.length, 3);
+    }
+  }
+});
+
+test('assignment history is bounded, sanitized, immutable and reversible through repeated moves', () => {
+  let state = normalizeHelpday(fixture);
+  const previous = [];
+  for (let i = 0; i < 45; i++) {
+    previous.push(state.crew);
+    state = assignHelper(freeze(state), i % 2 ? 'lanterns' : 'drum', 'kiko').state;
+  }
+  assert.equal(state.history.length, 40);
+  const cleaned = normalizeHelpday(freeze({ ...state, history: [...state.history, null, 'bad', [{ ...pairs[0], extra: true }, pairs[0], { job: 'bad', helper: 'pip' }]] }));
+  assert.ok(cleaned.history.length <= 40);
+  assert.deepEqual(cleaned.history.at(-1), [pairs[0]]);
+  assert.deepEqual(normalizeHelpday(cleaned), cleaned);
+  for (let i = 44; i >= 5; i--) {
+    state = undoAssignment(freeze(state)).state;
+    assert.deepEqual(state.crew, previous[i]);
+  }
+  assert.ok(!state.history?.length);
+  // Older saves have no history; Undo can still remove their most recent pair.
+  assert.deepEqual(undoAssignment(fixture).state.crew, pairs.slice(0, -1));
+});
+
+test('a fully occupied wrong team resumes with a prompt to check each job', () => {
+  for (const grade of GRADES_HELPDAY) {
+    const crew = JOB_IDS.map((job, i) => ({ job, helper: HELPER_IDS[(i + 1) % 4] }));
+    const resumed = activity.start({ ...fixture, crew }, { grade, chapter: 1 });
+    assert.equal(resumed.state.crew.length, 4);
+    assert.equal(helpDayFitCount(resumed.state), 0);
+    assert.equal(activity.opening(resumed.state), 'Let’s check your team. Who fits each job?');
+    assert.equal(activity.commands(resumed.state, resumed.ui).at(-1).disabled, true);
   }
 });
 
@@ -329,7 +386,7 @@ test('field keeps nodes and focus, supports grid/radio arrows and native clicks,
       jobs[0].fire('click');
       assert.equal(jobs[0].dataset.fit, 'no'); assert.match(jobs[0].getAttribute('aria-label'), /Nori is here, try again/);
       assert.equal(jobs[0].querySelector('.helpday-badge').innerHTML, '?');
-      assert.equal(radios[2].querySelector('.helpday-at').textContent, 'At: lanterns');
+      assert.equal(radios[2].querySelector('.helpday-at').textContent, 'lanterns');
       for (let i = 0; i < 4; i++) { radios[i].fire('click'); jobs[i].fire('click'); }
       assert.equal(helpdayReady(result.state), true);
       assert.equal(root.querySelector('.helpday-count').textContent, 'Help Day · 4 of 4');
@@ -345,4 +402,26 @@ test('field keeps nodes and focus, supports grid/radio arrows and native clicks,
       assert.ok(Object.values(root.events).every(set => set.size === 0));
     }
   } finally { if (previous === undefined) delete globalThis.document; else globalThis.document = previous; }
+});
+
+test('lanterns describe reaching up high and use a compact helper caption with a full accessible location', () => {
+  const previous = globalThis.document;
+  globalThis.document = { createElement(tag) { return new Element(tag, this); }, activeElement: null };
+  try {
+    for (const grade of GRADES_HELPDAY) {
+      const host = document.createElement('section');
+      host.className = 'large-text';
+      const view = activity.mountField(host, { grade });
+      const result = fresh(grade);
+      view.update(result.state, result.ui);
+      const lanterns = host.querySelector('.helpday-job');
+      assert.equal(lanterns.getAttribute('aria-label'), 'Hang lanterns, a helper must reach up high, empty. Send Kiko here.');
+      view.update(assignHelper(result.state, 'lanterns', 'kiko').state, result.ui);
+      const helper = host.querySelector('.helpday-helper');
+      assert.equal(helper.querySelector('.helpday-at').textContent, 'lanterns');
+      assert.match(helper.getAttribute('aria-label'), /On the lanterns\./);
+      assert.match(lanterns.getAttribute('aria-label'), /a helper must reach up high\. Kiko is here, it fits\./);
+      view.destroy();
+    }
+  } finally { globalThis.document = previous; }
 });

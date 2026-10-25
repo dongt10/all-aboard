@@ -6,7 +6,7 @@ import { icon } from '../icons.js';
 import { figureMarkup, playerFigureId } from '../figures/index.js';
 import { createDialogue } from '../dialogue.js';
 import { onceAtATime } from '../scenes.js';
-import { creationMarkup } from '../creations.js';
+import { creationMarkup, creationLabel, fitSignPreviews } from '../creations.js';
 import {
   VILLAGE_SPOTS, SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, talkPoint, nearestNeighbor,
   clampWalk, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, villageMapSVG, stallSVG, easelRect,
@@ -75,7 +75,7 @@ export function neighborMarkup(c, made = {}) {
   const badge = stallBadge(status);
   const mark = status === 'made' ? `<span class="village-badge__mark village-badge__mark--made">${icon('check', { size: 16 })}</span>`
     : `<span class="village-badge__mark village-badge__mark--${status}">${esc(badge.mark)}</span>`;
-  const said = status === 'made' ? madeLabel(c.reward.label) : badge.said;
+  const said = status === 'made' ? madeLabel(creationLabel(c.id, made.creations?.[c.id])) : badge.said;
   return `<button type="button" class="village-actor village-npc village-npc--${status}" data-id="${c.id}" aria-label="${esc(`${c.name}, ${theme.label}. ${said}`)}">
         <span class="village-badge" style="--subject:${theme.color}" aria-hidden="true">${icon(theme.icon)}${mark}</span>
         <span class="village-actor__fig" aria-hidden="true"></span>
@@ -84,7 +84,7 @@ export function neighborMarkup(c, made = {}) {
 }
 
 export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
-  let root = null, dialogue = null, frame = 0, last = 0, paused = false, alive = false, leaving = false;
+  let root = null, dialogue = null, previews = null, frame = 0, last = 0, paused = false, alive = false, leaving = false;
   let findTarget = homeSpot(guide) ? guide : null;
   const actors = new Map();          // id → { id, el, fig, pos, target, facing, step, clock, waitUntil, render }
   const player = { pos: { ...PLAYER_START }, target: null, tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
@@ -156,7 +156,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     root.className = 'village';
     root.tabIndex = 0;
     root.setAttribute('role', 'region');
-    root.setAttribute('aria-label', 'Willow Bay. Walk with the arrow keys. Press Enter near a neighbor to talk, or choose a neighbor.');
+    root.setAttribute('aria-label', 'Willow Bay. Walk with the arrow keys. Press Enter near a neighbor to talk. Or choose a neighbor.');
     root.innerHTML = `${villageMapSVG()}
       <div class="village-stalls">${CHARACTERS.map(c => stallMarkup(c, made)).join('')}</div>
       <div class="village-actors">
@@ -395,6 +395,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     mount() {
       build();
       ctx.stage.append(root);
+      previews = fitSignPreviews(root, 64, 40);
       root.addEventListener('click', onClick);
       root.addEventListener('keydown', onKey);
       root.addEventListener('keyup', onKey);
@@ -426,6 +427,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     destroy() {
       alive = false;
       cancelFrame(frame);
+      previews?.();
       dialogue?.destroy();
       root?.removeEventListener('click', onClick);
       root?.removeEventListener('keydown', onKey);

@@ -40,7 +40,7 @@
 .chain-tile { width: 72px; height: 38px; }
 .chain-card:hover:enabled, .chain-tile:hover { background: var(--white); }
 .chain-card:focus-visible, .chain-tile:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
-/* Stack the small glyph above the full name at both field text sizes. */
+/* Stack the small glyph above the compact name at both field text sizes. */
 .chain-card-pic .chain-glyph { width: 16px; height: 16px; }
 .chain-sun { position: relative; width: 40px; height: 40px; pointer-events: none; }
 .chain-sun::before, .chain-sun::after { content: ''; position: absolute; background: var(--lantern); }

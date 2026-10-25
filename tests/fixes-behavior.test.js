@@ -65,10 +65,10 @@ class Event {
 }
 class Target {
   constructor() { this.listeners = {}; }
-  addEventListener(type, fn, options) { (this.listeners[type] ??= []).push({ fn, once: options?.once }); }
+  addEventListener(type, fn, options) { (this.listeners[type] ??= []).push({ fn, once: options?.once, capture: options === true || Boolean(options?.capture) }); }
   removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] ?? []).filter(l => l.fn !== fn); }
-  fire(event) {
-    for (const l of [...(this.listeners[event.type] ?? [])]) { if (l.once) this.removeEventListener(event.type, l.fn); l.fn(event); }
+  fire(event, capture = false) {
+    for (const l of [...(this.listeners[event.type] ?? [])]) { if (l.capture !== capture) continue; if (l.once) this.removeEventListener(event.type, l.fn); l.fn(event); }
   }
 }
 class El extends Target {
@@ -83,6 +83,8 @@ class El extends Target {
   set className(v) { this._classes.clear(); String(v).split(/\s+/).filter(Boolean).forEach(c => this._classes.add(c)); }
   get tabIndex() { return this._tabIndex ?? (FOCUSABLE_TAGS.has(this.tagName) ? 0 : -1); }
   set tabIndex(v) { this._tabIndex = v; }
+  get type() { return this.getAttribute('type'); }
+  set type(v) { this.setAttribute('type', v); }
   get innerHTML() { return this._html; }
   set innerHTML(v) { this.children.forEach(c => { c.parentElement = null; }); this.children = []; this._html = String(v); parseInto(this, this._html); }
   get firstElementChild() { return this.children[0] ?? null; }
@@ -109,11 +111,15 @@ class El extends Target {
     for (let at = this; at; at = at.parentElement) if (at.hidden || at.inert) return false;
     return this.isConnected;
   }
-  focus() { if (this.focusable()) this.ownerDocument._active = this; }
+  focus() { if (this.focusable()) { this.ownerDocument._active = this; this.dispatchEvent(new Event('focusin')); } }
   blur() { if (this.ownerDocument._active === this) this.ownerDocument._active = null; }
   click() { if (!this.disabled) this.dispatchEvent(new Event('click')); }
   dispatchEvent(event) {
     event.target ??= this;
+    const path = [];
+    for (let at = this; at; at = at.parentElement) path.push(at);
+    if (this.isConnected) path.push(this.ownerDocument);
+    for (const at of path.reverse()) { if (event.stopped) break; at.fire(event, true); }
     for (let at = this; at && !event.stopped; at = at.parentElement) at.fire(event);
     if (!event.stopped && this.isConnected) this.ownerDocument.fire(event);
     return !event.defaultPrevented;
@@ -126,7 +132,7 @@ class Doc extends Target {
   createElement(tag) { return new El(tag, this); }
   // Like a browser: a removed, hidden or inert element can't hold focus, so it falls back to <body>.
   get activeElement() { return this._active?.focusable() ? this._active : this.body; }
-  dispatchEvent(event) { event.target ??= this; this.fire(event); }
+  dispatchEvent(event) { event.target ??= this; this.fire(event, true); if (!event.stopped) this.fire(event); }
 }
 
 const doc = new Doc();
@@ -148,7 +154,7 @@ Object.assign(globalThis, {
   cancelAnimationFrame: () => {},
 });
 
-const { createState, getCreations } = await import('../src/progress.js');
+const { createState, getCreations, loadState, STORAGE_KEY } = await import('../src/progress.js');
 const { figureMarkup } = await import('../src/ui/figures/index.js');
 const { createMusicScene } = await import('../src/ui/screens/music.js');
 const { createEncounterScene } = await import('../src/ui/screens/encounter.js');
@@ -578,4 +584,209 @@ test('dialogue: a loaded font repaginates overflowing text without repeating rea
   try { dialogue.destroy(); }
   finally { globalThis.document = doc; }
   assert.equal(doc.fonts.listeners.loadingdone.length, 0, 'the font listener is removed even after the document global is released');
+});
+
+const press = (key, target = doc.activeElement) => {
+  const event = new Event('keydown', { key });
+  target.dispatchEvent(event);
+  if (!event.defaultPrevented && target.tagName === 'BUTTON' && ['Enter', ' '].includes(key)) target.click();
+  return event;
+};
+const memoryStorage = (state = createState()) => {
+  const values = new Map([[STORAGE_KEY, JSON.stringify(state)]]);
+  return { getItem: key => values.get(key) ?? null, setItem: (key, value) => values.set(key, value), removeItem: key => values.delete(key) };
+};
+function realApp(state = createState(), storage = memoryStorage(state)) {
+  doc.body.children = []; doc._active = null; doc.listeners = {};
+  const host = doc.createElement('div');
+  doc.body.append(host);
+  return createApp(host, { storage, scenes: { encounter: createEncounterScene, music: createMusicScene, village: createVillageScene } });
+}
+function deferredAnimations() {
+  const pending = [];
+  El.prototype.animate = () => ({ finished: new Promise(resolve => pending.push(resolve)) });
+  return {
+    async phase() { pending.splice(0).forEach(resolve => resolve()); await tick(); },
+    async restore() { El.prototype.animate = () => ({ finished: Promise.resolve() }); pending.splice(0).forEach(resolve => resolve()); await tick(); delete El.prototype.animate; },
+  };
+}
+
+test('app: Escape then A cannot activate Finish or its target handlers during either wipe phase', async () => {
+  const app = realApp();
+  let animation;
+  try {
+    await app.go('encounter', { id: 'writing' });
+    press('Enter'); // Hello
+    const finish = slot(app.stage, 'finish');
+    assert.equal(finish.disabled, false);
+    finish.focus();
+    animation = deferredAnimations();
+    press('Escape');
+    assert.equal(app.scenes.busy, true);
+    let targetKeys = 0;
+    finish.addEventListener('keydown', () => targetKeys++);
+    for (const key of ['z', 'Z', 'Enter', ' ']) assert.equal(press(key, finish).defaultPrevented, true, key);
+    assert.equal(targetKeys, 0, 'capture lock stops the target handler too');
+    assert.equal(app.stage.querySelector('.item-get'), null);
+    await animation.phase();
+    assert.equal(app.scenes.current, 'village');
+    const control = app.stage.querySelector('button:not(:disabled)');
+    let clicks = 0;
+    control.addEventListener('click', () => clicks++);
+    for (const key of ['z', 'Enter', ' ']) assert.equal(press(key, control).defaultPrevented, true);
+    assert.equal(clicks, 0, 'the incoming scene is locked through reveal');
+    await animation.phase();
+    assert.equal(app.scenes.busy, false);
+    assert.equal(app.stage.querySelector('.item-get'), null);
+    assert.deepEqual(getCreations(app.getState()), {});
+  } finally { app.destroy(); await animation?.restore(); }
+});
+
+test('app: stale tabs refuse saves even after a storage event, preserving the newer sign and completion', async () => {
+  const storage = memoryStorage();
+  const appA = realApp(createState(), storage);
+  const secondHost = doc.createElement('div'); doc.body.append(secondHost);
+  const appB = createApp(secondHost, { storage });
+  let reloaded;
+  try {
+    await appA.go('encounter', { id: 'writing' });
+    press('Enter');
+    slot(appA.stage, 'finish').click();
+    appA.stage.querySelector('.item-get__go').click();
+    await tick();
+    assert.equal(appA.saveOk, true);
+    const saved = storage.getItem(STORAGE_KEY);
+    assert.equal(getCreations(loadState(storage)).writing.text, 'Hello');
+    window.fire(new Event('storage', { key: STORAGE_KEY, newValue: saved, storageArea: storage }));
+    appB.commit({ ...appB.getState(), settings: { ...appB.getState().settings, largeText: true } });
+    assert.equal(appB.saveOk, false, 'the stale snapshot is not reported as saved');
+    assert.equal(appB.stage.querySelector('.save-off').hidden, false);
+    assert.equal(appB.getState().settings.largeText, true, 'local play remains usable');
+    assert.equal(storage.getItem(STORAGE_KEY), saved, 'all newer saved progress is untouched');
+    appB.commit({ ...appB.getState(), avatar: 'girl' });
+    assert.equal(appB.saveOk, false, 'a retry cannot silently accept the stale baseline');
+    assert.equal(storage.getItem(STORAGE_KEY), saved);
+    const reloadHost = doc.createElement('div'); doc.body.append(reloadHost);
+    reloaded = createApp(reloadHost, { storage });
+    reloaded.commit({ ...reloaded.getState(), settings: { ...reloaded.getState().settings, largeText: true } });
+    assert.equal(reloaded.saveOk, true);
+    assert.deepEqual(getCreations(loadState(storage)), getCreations(appA.getState()));
+    assert.deepEqual(loadState(storage).progress, appA.getState().progress);
+  } finally { appA.destroy(); appB.destroy(); reloaded?.destroy(); }
+});
+
+test('app: clearing a save elsewhere cannot be undone by a stale tab', () => {
+  const storage = memoryStorage();
+  const app = realApp(createState(), storage);
+  try {
+    storage.removeItem(STORAGE_KEY);
+    app.commit({ ...app.getState(), avatar: 'girl' });
+    assert.equal(app.saveOk, false);
+    assert.equal(storage.getItem(STORAGE_KEY), null);
+  } finally { app.destroy(); }
+});
+
+test('app: hidden Music pauses before speech cancellation and cannot restart narration', async () => {
+  const state = createState(); state.settings.autoRead = true;
+  const app = realApp(state);
+  const events = [], oldSpeak = speech.speak, oldCancel = speech.cancel;
+  speech.speak = utterance => events.push(['speak', utterance.text]);
+  speech.cancel = () => events.push(['cancel']);
+  try {
+    await app.go('music');
+    slot(app.stage, 'play').click();
+    assert.ok(events.some(([type]) => type === 'speak'), 'Read to me is active');
+    events.length = 0;
+    const pause = app.scenes.scene.pause;
+    app.scenes.scene.pause = () => { events.push(['pause']); pause(); };
+    doc.hidden = true;
+    doc.dispatchEvent(new Event('visibilitychange'));
+    app.speak('A late spoken line.');
+    app.announce('A late announcement.');
+    await tick();
+    assert.equal(events[0][0], 'pause');
+    assert.ok(events.some(([type]) => type === 'cancel'));
+    assert.equal(events.some(([type]) => type === 'speak'), false, 'no narration while hidden');
+    assert.equal(slot(app.stage, 'play').getAttribute('aria-pressed'), 'false');
+  } finally { app.destroy(); doc.hidden = false; speech.speak = oldSpeak; speech.cancel = oldCancel; }
+});
+
+test('Sounds: X and Backspace close from a volume slider, while arrows stay native', async () => {
+  const app = realApp({ ...createState(), chapter: 1, grade: 3 });
+  try {
+    await app.go('music');
+    for (const key of ['x', 'X', 'Backspace']) {
+      const sounds = slot(app.stage, 'tunes');
+      sounds.focus(); press('z');
+      const slider = app.stage.querySelector('[data-volume="melody"]');
+      slider.focus();
+      for (const arrow of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown']) assert.equal(press(arrow).defaultPrevented, false);
+      assert.ok(doc.activeElement === slider);
+      assert.equal(press(key).defaultPrevented, true, key);
+      assert.equal(app.stage.querySelector('.win-backdrop'), null);
+      assert.ok(doc.activeElement === sounds, 'focus returns to Sounds');
+    }
+  } finally { app.destroy(); }
+});
+
+test('Sounds: an edited La with Bigger words keeps a failed-save banner visible', async () => {
+  const state = { ...createState(), chapter: 1, grade: 3, settings: { largeText: true } };
+  const storage = memoryStorage(state); storage.setItem = () => { throw new Error('full'); };
+  const app = realApp(state, storage);
+  try {
+    await app.go('music');
+    slot(app.stage, 'tunes').click();
+    app.stage.querySelector('[data-tab="voice"]').click();
+    for (let i = 0; i < 6 && !app.stage.querySelector('.sounds-beat[data-beat="0"]').getAttribute('aria-label').includes('La'); i++) {
+      app.stage.querySelector('.sounds-beat[data-beat="0"]').click();
+    }
+    assert.match(app.stage.querySelector('.sounds-beat[data-beat="0"]').getAttribute('aria-label'), /La/);
+    assert.equal(app.saveOk, false);
+    assert.equal(app.stage.querySelector('.save-off').hidden, false);
+    assert.ok(app.stage.querySelector('.win-backdrop'));
+    assert.ok(app.stage.classList.contains('large-text'));
+  } finally { app.destroy(); }
+});
+
+test('sign: removing the last word returns focus to a usable field control', async () => {
+  for (const state of [createState(), grade2()]) {
+    const app = realApp(state);
+    try {
+      await app.go('encounter', { id: 'writing' });
+      const tile = app.stage.querySelector('.sign-tile');
+      tile.focus(); press('Enter'); press('ArrowDown');
+      assert.ok(doc.activeElement === slot(app.stage, 'remove'));
+      press('Enter');
+      const field = app.stage.querySelector('.enc__field');
+      assert.ok(field.contains(doc.activeElement), 'empty menu hands focus back to the field');
+      assert.equal(slot(app.stage, 'finish').disabled, true);
+      assert.ok(doc.activeElement === (field.querySelector('textarea') ?? field.querySelector('button:not(:disabled)')));
+      if (state.chapter === 0) {
+        press('ArrowRight'); press('z');
+        assert.equal(slot(app.stage, 'finish').disabled, false, 'the child can add another word without Tab');
+      } else {
+        doc.activeElement.value = 'Hello'; doc.activeElement.dispatchEvent(new Event('input'));
+        assert.equal(slot(app.stage, 'finish').disabled, false);
+      }
+    } finally { app.destroy(); }
+  }
+});
+
+test('app: destruction during cover never mounts Music or leaves its global listeners', async () => {
+  const app = realApp();
+  let animation;
+  try {
+    await app.go('title');
+    const counts = () => [doc.listeners.visibilitychange?.length ?? 0, window.listeners.pagehide?.length ?? 0, doc.fonts.listeners.loadingdone?.length ?? 0];
+    const before = counts();
+    animation = deferredAnimations();
+    const changing = app.go('music');
+    app.destroy();
+    await animation.phase(); await animation.phase();
+    assert.equal(await changing, false);
+    assert.equal(app.stage.isConnected, false);
+    assert.equal(app.stage.querySelector('.music'), null);
+    assert.deepEqual(counts(), [before[0] - 1, before[1], before[2]]);
+    assert.equal(await app.go('music'), false);
+  } finally { app.destroy(); await animation?.restore(); }
 });

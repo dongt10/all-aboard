@@ -87,8 +87,8 @@ function act(state, ui, action) {
     if (index >= 0) {
       // The very same stamp again changes nothing, so there is nothing for Undo to take back.
       if (sameStamp(state.stamps[index], stamp)) return { state, ui, line: BANNER_LINES.stamped };
-      const stamps = state.stamps.slice();
-      stamps[index] = stamp;
+      // Keep saved stamps in edit order for Undo after reopening without live history.
+      const stamps = [...state.stamps.filter((_, i) => i !== index), stamp];
       return { state: { ...state, stamps }, ui: remember(ui, state), line: BANNER_LINES.stamped };
     }
     if (state.stamps.length >= MAX_STAMPS) return { state, ui, line: FULL_LINE };

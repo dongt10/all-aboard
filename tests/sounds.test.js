@@ -20,6 +20,23 @@ test('K sets a friend loud or soft with two buttons; 0.7 is the line between the
   assert.equal(levelOf(undefined), 'soft');
 });
 
+test('selected Loud and Soft keep their musician color on hover', () => {
+  const css = read('src/ui/screens/sounds.css');
+  const kit = read('src/ui/kit.css');
+  const index = read('index.html');
+  // The override ties the global hover rule at specificity (0,3,0) and loads later.
+  assert.match(kit, /\.px-button:hover:not\(:disabled\)\s*\{\s*--fill:\s*var\(--white\)/);
+  assert.ok(index.indexOf('ui/kit.css') < index.indexOf('screens/sounds.css'));
+  assert.match(css, /\.sounds-level\[aria-pressed="true"\]:hover\s*\{\s*--fill:\s*var\(--musician\)/);
+  for (const level of ['loud', 'soft']) {
+    const band = levelEdit(createDefaultBand(), 'bass', level);
+    assert.equal(band.tracks[0].volume, LEVELS[level]);
+    const html = soundsPanelMarkup(band, 0, 'bass');
+    assert.match(html, new RegExp(`data-level="${level}" aria-pressed="true"`));
+    assert.match(html, new RegExp(`data-level="${level === 'soft' ? 'loud' : 'soft'}" aria-pressed="false"`));
+  }
+});
+
 test('Loud / Soft edits one friend’s volume to 1.0 / 0.45 and leaves every other track alone', () => {
   const band = createDefaultBand();
   const soft = levelEdit(band, 'bass', 'soft');

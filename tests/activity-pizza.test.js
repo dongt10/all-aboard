@@ -275,6 +275,42 @@ function fakeDoc() {
   return doc;
 }
 
+test('clicking a displayed whole or half returns exactly that piece and describes its size', () => {
+  for (const takeUnits of [2, 1]) for (const checked of [false, true]) {
+    const doc = fakeDoc(), host = doc.createElement('section');
+    let s = fresh(5);
+    for (let i = 0; i < 4; i++) s = step(s, field({ give: i }));
+    s = step(s, field({ pizza: true }));
+    for (let i = 0; i < 4; i++) s = step(s, field({ give: i }));
+    if (checked) s = step(s, cmd('try'));
+    const view = pizza.mountField(host, { dispatch(action) { s = step(s, action); view.update(s.state); } });
+    view.update(s.state);
+    const root = host.children[0], pieces = root.querySelectorAll('.pizza-piece');
+    assert.deepEqual(s.state.plates, [3, 3, 3, 3]);
+    assert.equal(pieces[0].getAttribute('aria-label'), 'Take a slice back from Sora');
+    assert.equal(pieces[1].getAttribute('aria-label'), 'Take a half back from Sora');
+    root.listeners.click({ target: pieces[takeUnits === 2 ? 0 : 1] });
+    assert.deepEqual(s.state.plates, [3 - takeUnits, 3, 3, 3]);
+    assert.equal(remainingUnits(s.state), takeUnits);
+    assert.equal(s.state.tried, false);
+    assert.equal(pizza.commands(s.state).at(-1).disabled, true);
+    assert.equal(s.line, checked ? LINES.changed : takeUnits === 2 ? LINES.takeSlice : LINES.takeHalf);
+    assert.equal(pieces[0].classList.contains('pizza-piece--half'), takeUnits === 2);
+    assert.equal(pieces[1].hidden, true);
+    view.destroy();
+  }
+});
+
+test('explicit take sizes reject invalid pieces and keep the Take back command behavior', () => {
+  const whole = { state: snapshot({ plates: [2, 2, 2, 2] }), ui: {} };
+  for (const units of [0, -1, 1, 3, 1.5, '2', null, NaN]) {
+    assert.equal(step(whole, field({ take: 0, units })).state, whole.state);
+  }
+  const half = { state: snapshot({ slices: 6, halves: true, plates: [1, 0, 0, 0] }, 5), ui: {} };
+  assert.equal(step(half, field({ take: 0, units: 2 })).state, half.state);
+  assert.deepEqual(step(half, cmd('take')).state.plates, [0, 0, 0, 0]);
+});
+
 test('field pools buttons, shows reactions, has sibling give/pieces and recovers focus', () => {
   const doc = fakeDoc(), host = doc.createElement('section'), actions = [];
   const fieldView = pizza.mountField(host, { grade: 5, dispatch: a => actions.push(a) });
@@ -295,7 +331,7 @@ test('field pools buttons, shows reactions, has sibling give/pieces and recovers
   assert.match(gives[0].getAttribute('aria-label'), /Sora has 1/);
   fieldView.update(step(s, cmd('try')).state);
   assert.equal(gives[1].querySelector('.pizza-worry').hidden, false);
-  root.listeners.click({ target: pieces[0] }); assert.deepEqual(actions.pop(), field({ take: 0 }));
+  root.listeners.click({ target: pieces[0] }); assert.deepEqual(actions.pop(), field({ take: 0, units: 2 }));
   pieces[0].focus(); s = step(s, field({ take: 0 })); fieldView.update(s.state);
   assert.equal(doc.activeElement, gives[0]);
   root.listeners.click({ target: board }); assert.deepEqual(actions.pop(), field({ pizza: true }));

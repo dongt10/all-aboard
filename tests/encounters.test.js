@@ -345,3 +345,19 @@ test('banded snapshots delegate normalization, readiness and opening by activity
     }
   }
 });
+
+test('lower-grade controllers never restore upper-grade activity shapes', async () => {
+  const { activityFor } = await import('../src/ui/registry.js');
+  for (const [kind, activity, field] of [['math', 'pizza', 'left'], ['science', 'chain', 'canopy'], ['reading', 'tales', 'found'], ['community', 'helpday', 'placements']]) {
+    for (const [chapter, grade] of [[0, 0], [1, 1], [1, 2]]) {
+      const input = { kind, activity, chapter, grade, crew: [{ job: 'lanterns', helper: 'kiko' }] };
+      const state = normalizeEncounterSnapshot(kind, input, grade, chapter);
+      assert.equal(Object.hasOwn(state, 'activity'), false);
+      assert.ok(Object.hasOwn(state, field));
+      const controller = activityFor(kind, grade), opened = controller.start(input, { chapter, grade });
+      assert.ok(Object.hasOwn(opened.state, field));
+      assert.doesNotThrow(() => controller.commands(opened.state, opened.ui, grade));
+      assert.doesNotThrow(() => controller.opening(opened.state, opened.ui, grade));
+    }
+  }
+});

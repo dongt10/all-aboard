@@ -19,6 +19,11 @@ test('text fields hand only Escape to the game', () => {
   for (const tag of ['INPUT', 'TEXTAREA', 'SELECT']) for (const k of ['z', 'x', 'Backspace', ' ', 'a', 'Enter', 'ArrowLeft']) assert.equal(keyIntent(key(k, tag)), null, `${tag} ${k}`);
   assert.equal(keyIntent(key('Escape', 'TEXTAREA')), 'b');
 });
+test('range sliders hand B to the game and retain their native arrows', () => {
+  const rangeKey = k => ({ ...key(k, 'INPUT'), target: { tagName: 'INPUT', type: 'range' } });
+  for (const k of ['Escape', 'x', 'X', 'Backspace']) assert.equal(keyIntent(rangeKey(k)), 'b', k);
+  for (const k of ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End', ' ', 'z']) assert.equal(routeIntent(rangeKey(k)), null, k);
+});
 test('A on a focused button is left to the browser, except Z which clicks it', () => {   // Review Focus 1
   assert.equal(routeIntent(key('Enter', 'BUTTON')), 'native');
   assert.equal(routeIntent(key(' ', 'BUTTON')), 'native');
@@ -130,6 +135,35 @@ test('pausing reaches only the current scene', async () => {   // Review Focus 4
   const scenes = createSceneManager({ create: name => ({ mount() {}, destroy() {}, pause: () => paused.push(name) }) });
   scenes.pause(); await scenes.go('music'); scenes.pause();
   assert.deepEqual(paused, ['music']);
+});
+test('destroying a manager invalidates a pending swap and all future scene changes', async () => {
+  const log = [];
+  let swap, finish;
+  const manager = createSceneManager({
+    create: name => ({ mount: () => log.push(`mount ${name}`), destroy: () => log.push(`destroy ${name}`) }),
+    transition: next => { swap = next; return new Promise(resolve => { finish = resolve; }); },
+  });
+  const pending = manager.go('music');
+  assert.equal(typeof manager.destroy, 'function');
+  manager.destroy(); manager.destroy();
+  await swap(); finish();
+  assert.equal(await pending, false);
+  assert.equal(await manager.go('title'), false);
+  assert.equal(manager.current, null);
+  assert.equal(manager.scene, null);
+  assert.equal(manager.busy, false);
+  assert.deepEqual(log, []);
+});
+
+test('the save warning stays above windows and rewards without intercepting clicks', () => {
+  const rule = (path, selector) => {
+    const css = readFileSync(new URL(path, import.meta.url), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+    return [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)].find(([, selectors]) => selectors.trim() === selector)?.[2];
+  };
+  const banner = rule('../src/ui/kit.css', '.save-off');
+  const level = body => Number(body.match(/z-index:\s*(\d+)/)?.[1]);
+  for (const [path, selector] of [['../src/ui/interaction.css', '.win-backdrop'], ['../src/ui/screens/encounter.css', '.item-get']]) assert.ok(level(banner) > level(rule(path, selector)), selector);
+  assert.match(banner, /pointer-events:\s*none/);
 });
 test('onceAtATime ignores repeat calls until the first settles', async () => {   // Review Focus 1
   let calls = 0, release;

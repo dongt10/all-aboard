@@ -176,7 +176,7 @@ export function createBandEngine({onBeat=()=>{},onStatus=()=>{}}={}) {
   function paint() {
     if(!running)return;
     while(visuals.length&&visuals[0].time<=context.currentTime)onBeat(visuals.shift());
-    frame=requestAnimationFrame(paint);
+    if(running)frame=requestAnimationFrame(paint);   // onBeat may stop a finished demonstration
   }
   const hidden=()=>{if(document.hidden)stop();};
   if(typeof document!=='undefined')document.addEventListener('visibilitychange',hidden);

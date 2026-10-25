@@ -48,5 +48,6 @@
 .sounds-level { min-height: 48px; gap: 8px; }
 .sounds-level .icon { flex: none; width: 20px; height: 20px; }
 .sounds-level[aria-pressed="true"] { --fill: var(--musician); --light: var(--white); }
+.sounds-level[aria-pressed="true"]:hover { --fill: var(--musician); }
 .sounds-slider { display: grid; grid-template-columns: 9em 1fr; align-items: center; gap: 12px; font-size: var(--text-field); }
 .sounds-slider input { width: 100%; min-height: 32px; margin: 0; accent-color: var(--ink); }

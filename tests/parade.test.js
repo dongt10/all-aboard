@@ -34,7 +34,7 @@ test('band status lines point back to Kiko instead of to controls the parade doe
   const band = createDefaultBand();
   assert.equal(paradeStatus('starting', 'starting', band), 'Starting your band…');
   assert.equal(paradeStatus('playing', 'playing', band), 'Your band is playing.');
-  assert.equal(paradeStatus('stopped', 'stopped', band), 'Music stopped');
+  assert.equal(paradeStatus('stopped', 'stopped', band), 'Music stopped.');
   assert.equal(paradeStatus('stopped', 'unavailable', band), 'Sound could not start. The parade is still yours.');
   const resting = { ...band, tracks: band.tracks.map(track => ({ ...track, enabled: false })) };
   assert.equal(paradeStatus('playing', 'playing', resting), 'Everyone is resting. Visit Kiko to invite a friend or add a note.');
@@ -224,7 +224,8 @@ Object.assign(globalThis, {
   cancelAnimationFrame: () => {},
 });
 
-const { createState, publishCreation, getCreations } = await import('../src/progress.js');
+const { createState, publishCreation, getCreations, STORAGE_KEY } = await import('../src/progress.js');
+const { createApp } = await import('../src/ui/app.js');
 const { createParadeScene, HELP_STEPS } = await import('../src/ui/screens/parade.js');
 const { openPauseWindow, openGuideWindow, RECORDING_LINES } = await import('../src/ui/screens/windows.js');
 const { guideEntries } = await import('../src/ui/guide.js');
@@ -400,4 +401,76 @@ test('recording lines fit a dialogue page and avoid grown-up words', () => {
     assert.ok(!/phrase|sound file|WAV/i.test(line), line);
   }
   assert.equal(RECORDING_LINES.idle, 'Save your band to listen to later.');
+});
+
+function recordingApp() {
+  doc.body.children = []; doc._active = null;
+  const host = doc.createElement('div'); doc.body.append(host);
+  const band = createDefaultBand();
+  band.tracks.forEach(track => { track.enabled = false; }); // no notes, but a real offline render and WAV
+  const state = publishCreation(createState(), 'music', band);
+  return createApp(host, { storage: { getItem: key => key === STORAGE_KEY ? JSON.stringify(state) : null } });
+}
+function deferredRecording() {
+  const originals = { OfflineAudioContext: globalThis.OfflineAudioContext, create: URL.createObjectURL, revoke: URL.revokeObjectURL, click: El.prototype.click, setTimeout, clearTimeout };
+  const urls = [], revoked = [], timers = new Set();
+  let render, downloads = 0;
+  const node = () => ({ connect() {}, disconnect() {} });
+  globalThis.OfflineAudioContext = class {
+    destination = {};
+    createGain() { return { ...node(), gain: {} }; }
+    createDynamicsCompressor() { return { ...node(), threshold: {}, knee: {}, ratio: {}, attack: {}, release: {} }; }
+    startRendering() { return new Promise(resolve => { render = resolve; }); }
+  };
+  URL.createObjectURL = () => { const url = `blob:recording-${urls.length}`; urls.push(url); return url; };
+  URL.revokeObjectURL = url => revoked.push(url);
+  El.prototype.click = function () { if (this.tagName === 'A') downloads++; return originals.click.call(this); };
+  globalThis.setTimeout = (fn, ms, ...args) => { const timer = originals.setTimeout(fn, ms, ...args); if (ms === 30000) timers.add(timer); return timer; };
+  globalThis.clearTimeout = timer => { timers.delete(timer); originals.clearTimeout(timer); };
+  return {
+    urls, revoked, timers,
+    get downloads() { return downloads; },
+    async finish() {
+      assert.equal(typeof render, 'function', 'the offline render actually started');
+      render({ numberOfChannels: 2, length: 0, sampleRate: 44100, getChannelData: () => new Float32Array(0) });
+      await tick();
+    },
+    restore() {
+      for (const timer of timers) originals.clearTimeout(timer);
+      Object.assign(globalThis, { OfflineAudioContext: originals.OfflineAudioContext, setTimeout: originals.setTimeout, clearTimeout: originals.clearTimeout });
+      URL.createObjectURL = originals.create; URL.revokeObjectURL = originals.revoke; El.prototype.click = originals.click;
+    },
+  };
+}
+
+test('Guide: a recording finishing after app destruction or detachment never downloads', async () => {
+  for (const teardown of ['destroy', 'detach']) {
+    const app = recordingApp(), recording = deferredRecording();
+    try {
+      app.open.guide('music');
+      app.stage.querySelector('[data-action="record"]').click();
+      if (teardown === 'destroy') app.destroy(); else app.stage.remove();
+      assert.equal(app.stage.isConnected, false);
+      await recording.finish();
+      assert.equal(recording.downloads, 0, teardown);
+      assert.equal(recording.urls.length, 0, teardown);
+      assert.equal(recording.timers.size, 0, teardown);
+    } finally { app.destroy(); recording.restore(); }
+  }
+});
+
+test('Guide: app teardown disposes an existing recording URL and its timer exactly once', async () => {
+  const app = recordingApp(), recording = deferredRecording();
+  try {
+    app.open.guide('music');
+    app.stage.querySelector('[data-action="record"]').click();
+    await recording.finish();
+    assert.equal(recording.downloads, 1);
+    assert.equal(recording.urls.length, 1);
+    assert.equal(recording.timers.size, 1);
+    app.destroy(); app.destroy();
+    assert.deepEqual(recording.revoked, recording.urls);
+    assert.equal(recording.timers.size, 0);
+    assert.equal(app.stage.querySelector('.win-backdrop'), null);
+  } finally { app.destroy(); recording.restore(); }
 });
