@@ -223,9 +223,10 @@ function assertFrontPatch(sheet, reference, patches, col) {
     const [destination, source] = patch;
     assert.ok(Number.isInteger(destination) && destination >= 0 && destination < size * size,
       `${label}: patch destination must be a valid frame pixel. ${rule}`);
-    assert.ok(Number.isInteger(source) && source >= 0 && source < size * size,
-      `${label}: patch source must be a front stand pixel. ${rule}`);
-    expected.rgba.set(pixel(front, source % size, Math.floor(source / size)), destination * 4);
+    // -1 clears the pixel: a lifted paw leaves a transparent gap. Any other source is a front stand pixel.
+    assert.ok(Number.isInteger(source) && source >= -1 && source < size * size,
+      `${label}: patch source must be a front stand pixel or -1. ${rule}`);
+    expected.rgba.set(source === -1 ? [0, 0, 0, 0] : pixel(front, source % size, Math.floor(source / size)), destination * 4);
   }
   for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
     expectPixel(pixel(sheet, col * size + x, y), pixel(expected, x, y), label, x, y);
