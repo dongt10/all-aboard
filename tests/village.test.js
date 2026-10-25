@@ -216,25 +216,29 @@ test('Pip\'s welcome and the village Help use short sentences a page can hold', 
   for (const step of HELP_STEPS) assert.ok(step.length <= 56, `${step} fits a Bigger-words page`);
 });
 
-test('while the Talk chip names a neighbor, A talks to them from any neighbor button, but the HUD and Parade keep their keys', async () => {
+test('A owns actor and root focus regardless of range, but leaves other controls alone', async () => {
   const { talkKeyWins, aAction } = await import('../src/ui/screens/village.js');
   // `button` is what village.js passes: true only for an actor button (a neighbor, Pip, Nori) or the Talk chip itself.
   const onActorButton = { button: true, inVillage: true, inDialogue: false };
   const onHudButton = { button: false, inVillage: true, inDialogue: false };   // Guide, Comfort, Pause, the grade chip, Parade
-  assert.equal(talkKeyWins('math', onActorButton), true, 'another neighbor\'s button has focus: the chip wins');
-  assert.equal(talkKeyWins(null, onActorButton), false, 'no chip: the focused button keeps its click');
-  assert.equal(talkKeyWins('math', onHudButton), false, 'Guide, Pause and Parade still open with Enter, Space or Z');
+  for (const near of [null, 'math', 'pip']) {
+    assert.equal(talkKeyWins(near, onActorButton), true, 'actor focus never permits an A-key click');
+    assert.equal(talkKeyWins(near, { onRoot: true, inVillage: true }), true, 'root focus follows the same rule');
+    assert.equal(talkKeyWins(near, onHudButton), false, 'Guide, Pause and Parade keep their keys');
+  }
   assert.equal(talkKeyWins('math', { button: true, inVillage: false, inDialogue: false }), false, 'a button outside the village (a window) keeps its keys');
   assert.equal(talkKeyWins('math', { button: true, inVillage: true, inDialogue: true }), false, 'More and Hear keep their keys');
-  assert.equal(talkKeyWins('pip', onActorButton), true, 'the side cast too');
-  // A itself: the chip's neighbor comes before whoever is nearest, a page turn comes first, and nothing near closes the box.
+  assert.equal(talkKeyWins(null), false);
+  // A turns unread pages first, then talks only to the chip's neighbor, else gives a walking hint.
   assert.deepEqual(aAction({ near: 'math', nearest: 'math' }), { act: 'talk', id: 'math' });
   assert.deepEqual(aAction({ near: 'science', nearest: 'math' }), { act: 'talk', id: 'science' });
-  assert.deepEqual(aAction({ near: null, nearest: 'math' }), { act: 'talk', id: 'math' }, 'mid-walk the chip is hidden, so the nearest neighbor answers');
+  assert.deepEqual(aAction({ near: null, nearest: 'math' }), { act: 'hint' }, 'a hidden Talk chip never falls back to another neighbor');
   assert.deepEqual(aAction({ near: 'math', dialogueOpen: true, hasMore: true }), { act: 'next' });
+  assert.deepEqual(aAction({ dialogueOpen: true, hasMore: true }), { act: 'next' }, 'unread pages win even when nobody is near');
   assert.deepEqual(aAction({ near: 'math', dialogueOpen: true, hasMore: false }), { act: 'talk', id: 'math' });
-  assert.deepEqual(aAction({ near: null, nearest: null, dialogueOpen: true }), { act: 'hush' });
-  assert.deepEqual(aAction(), { act: 'hush' });
+  assert.deepEqual(aAction({ dialogueOpen: true }), { act: 'hint' });
+  assert.deepEqual(aAction({ dialogueOpen: false, hasMore: true }), { act: 'hint' }, 'hidden pages do not reopen');
+  assert.deepEqual(aAction(), { act: 'hint' });
 });
 
 test('a saved draft in this grade marks its stall started, and switching grade clears it', async () => {
@@ -306,7 +310,7 @@ test('banded creations use their own safe drawings and preserve legacy fallbacks
 
 // Scene regressions use the same small fake DOM as fixes-behavior.test.js.
 // It models the browser's focus loss when a focused control becomes hidden.
-import { Doc, Event } from './helpers/dom.js';
+import { Doc, Event, pressKey } from './helpers/dom.js';
 
 
 function villageFixture(t, { calm = false, large = false, state = createState(), ...options } = {}) {
@@ -323,10 +327,15 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
     Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
     restore.push(() => original ? Object.defineProperty(globalThis, key, original) : delete globalThis[key]);
   }
-  const stage = doc.createElement('div'), gone = [];
+  const stage = doc.createElement('div'), gone = [], opened = [], spoken = [];
   stage.className = `stage${calm ? ' calm' : ''}${large ? ' large-text' : ''}`;
   doc.body.append(stage);
-  const scene = createVillageScene({ stage, getState: () => state, go: (...args) => { gone.push(args); return true; } }, options);
+  const scene = createVillageScene({
+    stage, getState: () => state,
+    go: (...args) => { gone.push(args); return true; },
+    speak: text => spoken.push(text),
+    open: Object.fromEntries(['grade', 'guide', 'comfort', 'pause', 'help'].map(act => [act, () => opened.push(act)])),
+  }, options);
   scene.mount();
   const root = stage.querySelector('.village');
   root.getBoundingClientRect = () => ({ left: 0, top: 0, width: 960, height: 540 });
@@ -341,8 +350,169 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
   };
   const tap = (x, y) => root.querySelector('.village-map').dispatchEvent(new Event('click', { clientX: x, clientY: y }));
   t.after(() => { scene.destroy(); restore.forEach(reset => reset()); });
-  return { doc, scene, root, stage, gone, tick, pos, tap };
+  return { doc, scene, root, stage, gone, opened, spoken, tick, pos, tap };
 }
+
+const A_KEY_CASES = [['Enter', 'Enter'], [' ', 'Space'], ['z', 'Z'], ['Z', 'Shift+Z']];
+const WALK_HINT = 'Walk up to a neighbor, then press Enter.';
+const readAloudState = () => {
+  const state = createState();
+  return { ...state, settings: { ...state.settings, autoRead: true } };
+};
+
+for (const calm of [false, true]) for (const focus of ['actor', 'root']) for (const [key, label] of A_KEY_CASES) {
+  test(`${label} with ${focus} focus and nobody near gives one hint without clicking or walking (calm=${calm})`, t => {
+    const f = villageFixture(t, { calm, focus: focus === 'actor' ? 'writing' : undefined, state: readAloudState() });
+    const target = f.doc.activeElement, before = f.pos();
+    assert.equal(target, focus === 'actor' ? f.root.querySelector('.village-actor[data-id="writing"]') : f.root);
+    assert.equal(f.root.querySelector('.village-talk').hidden, true);
+    f.scene.handleIntent('b');
+    f.spoken.length = 0;
+    let clicks = 0;
+    target.addEventListener('click', () => clicks++);
+    for (let press = 1; press <= 2; press++) {
+      assert.equal(pressKey(target, 'keydown', key).defaultPrevented, true);
+      for (let i = 0; i < 3; i++) assert.equal(pressKey(target, 'keydown', key, { repeat: true }).defaultPrevented, true);
+      const up = pressKey(target, 'keyup', key);
+      if (key === ' ') assert.equal(up.defaultPrevented, true, 'the claimed Space release cannot click');
+      assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+      assert.equal(f.root.querySelector('.dlg__text').textContent, WALK_HINT);
+      assert.ok(WALK_HINT.length < 56);
+      assert.equal(f.root.querySelector('.dlg__more').hidden, true, 'the hint fits one page');
+      assert.deepEqual(f.spoken, Array(press).fill(WALK_HINT), 'held keys never repeat the hint');
+      for (let i = 0; i < 12; i++) f.tick(100);
+      assert.deepEqual(f.pos(), before, 'no instant jump or delayed tap-walk');
+      assert.deepEqual(f.gone, []);
+      assert.equal(clicks, 0);
+      assert.equal(f.doc.activeElement, target, 'the hint leaves focus where it was');
+    }
+  });
+}
+
+for (const focus of ['actor', 'root', 'chip']) for (const [key, label] of A_KEY_CASES) {
+  test(`${label} with ${focus} focus talks to the Talk-chip neighbor without a click or walk`, t => {
+    const f = villageFixture(t, { calm: true });
+    const goal = talkPoint('community');
+    f.tap(goal.x, goal.y); f.tick();
+    const chip = f.root.querySelector('.village-talk');
+    assert.equal(chip.getAttribute('aria-label'), 'Talk to Hana');
+    const target = focus === 'actor' ? f.root.querySelector('.village-actor[data-id="writing"]') : focus === 'chip' ? chip : f.root;
+    target.focus();
+    let clicks = 0;
+    target.addEventListener('click', () => clicks++);
+    assert.equal(pressKey(target, 'keydown', key).defaultPrevented, true);
+    pressKey(target, 'keyup', key);
+    assert.deepEqual(f.gone, [['encounter', { id: 'community' }]], 'Hana answers even when Sora has focus');
+    assert.deepEqual(f.pos(), goal);
+    assert.equal(clicks, 0);
+  });
+}
+
+for (const focus of ['actor', 'root']) for (const [key, label] of A_KEY_CASES) {
+  test(`${label} with ${focus} focus reads the next page before showing the walking hint`, t => {
+    const f = villageFixture(t, { calm: true, large: true, focus: focus === 'actor' ? 'writing' : undefined, state: readAloudState() });
+    const target = f.doc.activeElement, text = f.root.querySelector('.dlg__text'), more = f.root.querySelector('.dlg__more');
+    assert.equal(text.textContent, 'Welcome to Willow Bay!');
+    assert.equal(more.hidden, false);
+    pressKey(target, 'keydown', key);
+    pressKey(target, 'keydown', key, { repeat: true });
+    pressKey(target, 'keyup', key);
+    assert.equal(text.textContent, 'Tap a neighbor to help them make something.', 'the current box advances instead of restarting');
+    assert.equal(more.hidden, true);
+    assert.equal(f.spoken.length, 2, 'one opening page and one page turn');
+    pressKey(target, 'keydown', key); pressKey(target, 'keyup', key);
+    assert.equal(text.textContent, WALK_HINT);
+    assert.equal(f.spoken.length, 3);
+    assert.deepEqual(f.gone, []);
+    assert.deepEqual(f.pos(), PLAYER_START);
+  });
+}
+
+test('direct A intents use the same hint, page and Talk-chip rules', t => {
+  const f = villageFixture(t, { calm: true, large: true });
+  const text = f.root.querySelector('.dlg__text');
+  f.scene.handleIntent('a');
+  assert.equal(text.textContent, 'Tap a neighbor to help them make something.');
+  f.scene.handleIntent('a');
+  assert.equal(text.textContent, WALK_HINT);
+  assert.deepEqual(f.pos(), PLAYER_START);
+  f.tap(...Object.values(talkPoint('community'))); f.tick();
+  f.scene.handleIntent('a');
+  assert.deepEqual(f.gone, [['encounter', { id: 'community' }]]);
+});
+
+test('A never falls back to a nearby neighbor while the Talk chip is hidden mid-walk', t => {
+  const f = villageFixture(t, { calm: true });
+  f.tap(...Object.values(talkPoint('community'))); f.tick();
+  f.stage.classList.remove('calm');
+  f.scene.handleIntent('right'); f.tick();
+  assert.equal(nearestNeighbor(f.pos()), 'community', 'Hana is still within range');
+  assert.equal(f.root.querySelector('.village-talk').hidden, true, 'walking hides the chip');
+  f.scene.handleIntent('a');
+  assert.equal(f.root.querySelector('.dlg__text').textContent, WALK_HINT);
+  assert.deepEqual(f.gone, []);
+});
+
+test('a claimed Space release stays swallowed after focus or another A key changes', t => {
+  const f = villageFixture(t, { calm: true, focus: 'writing' });
+  const actor = f.doc.activeElement;
+  pressKey(actor, 'keydown', ' ');
+  pressKey(actor, 'keydown', 'Enter');
+  const guide = f.root.querySelector('[data-act="guide"]');
+  guide.focus();
+  assert.equal(pressKey(guide, 'keyup', ' ').defaultPrevented, true);
+  assert.deepEqual(f.opened, []);
+  assert.equal(pressKey(guide, 'keyup', ' ').defaultPrevented, false, 'only the paired release is claimed');
+});
+
+for (const [key, label] of A_KEY_CASES.slice(0, 2)) for (const act of ['grade', 'guide', 'comfort', 'pause', 'parade', 'hear', 'help', 'more']) {
+  test(`${act} keeps native ${label} activation`, t => {
+    const state = publishCreation(readAloudState(), 'art', { kind: 'art' });
+    const f = villageFixture(t, { calm: true, large: true, state });
+    f.tap(...Object.values(talkPoint('pip'))); f.tick();
+    f.scene.handleIntent('a');
+    const text = f.root.querySelector('.dlg__text'), before = text.textContent;
+    assert.equal(f.root.querySelector('.dlg__more').hidden, false);
+    const target = f.root.querySelector(act === 'parade' ? '.village-parade' : act === 'more' ? '.dlg__more' : `[data-act="${act}"]`);
+    target.focus();
+    assert.equal(f.doc.activeElement, target);
+    let clicks = 0;
+    target.addEventListener('click', () => clicks++);
+    assert.equal(pressKey(target, 'keydown', key).defaultPrevented, false);
+    assert.equal(pressKey(target, 'keyup', key).defaultPrevented, false);
+    assert.equal(clicks, 1);
+    if (act === 'parade') assert.deepEqual(f.gone, [['parade']]);
+    else if (act === 'hear') assert.equal(f.spoken.at(-1), before);
+    else if (act === 'more') assert.notEqual(text.textContent, before);
+    else assert.deepEqual(f.opened, [act]);
+  });
+}
+
+test('an open window leaves A keydowns and keyups untouched, even after a claimed Space', t => {
+  const f = villageFixture(t, { calm: true, focus: 'writing' });
+  const actor = f.doc.activeElement;
+  pressKey(actor, 'keydown', ' ');
+  const before = f.root.querySelector('.dlg__text').textContent;
+  const backdrop = f.doc.createElement('div');
+  backdrop.className = 'win-backdrop';
+  f.stage.append(backdrop);
+  for (const target of [actor, f.root]) for (const [key] of A_KEY_CASES) for (const type of ['keydown', 'keyup']) {
+    const event = new Event(type, { key });
+    target.dispatchEvent(event);
+    assert.equal(event.defaultPrevented, false);
+    assert.equal(Boolean(event.stopped), false);
+  }
+  assert.equal(f.root.querySelector('.dlg__text').textContent, before);
+  assert.deepEqual(f.gone, []);
+  assert.deepEqual(f.pos(), PLAYER_START);
+});
+
+test('clicking a far stall still moves there immediately in Calm motion', t => {
+  const f = villageFixture(t, { calm: true });
+  f.root.querySelector('.village-actor[data-id="writing"]').click();
+  assert.deepEqual(f.pos(), talkPoint('writing'));
+  assert.deepEqual(f.gone, [['encounter', { id: 'writing' }]]);
+});
 
 const cssBlock = (css, selector) => {
   const start = css.indexOf(`\n${selector} {`) + 1;

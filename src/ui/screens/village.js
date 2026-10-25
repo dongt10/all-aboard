@@ -26,12 +26,13 @@ export const HELP_STEPS = [
 ];
 export const CELEBRATE_LINE = 'That’s going straight into the festival!';
 const A_KEYS = new Set(['Enter', ' ', 'z', 'Z']);
+const WALK_HINT = 'Walk up to a neighbor, then press Enter.';
 
-// While the Talk chip names a neighbor, the A key talks to them even if another neighbor's button (or the chip
-// itself) has focus; the browser would otherwise click that button. `button` is true only for those actor buttons:
-// the HUD, the grade chip, the Parade button and the dialogue's own tabs keep their native Enter, Space and Z.
-export function talkKeyWins(near, { button = false, inVillage = false, inDialogue = false } = {}) {
-  return Boolean(near) && button && inVillage && !inDialogue;
+// A belongs to the village when its root, an actor button or the Talk chip has focus, even with nobody near.
+// `near` is kept in the call signature but never gates key ownership; aAction decides what the press does.
+// `button` means an actor or Talk button only. HUD, Parade and dialogue controls keep their own keys.
+export function talkKeyWins(near, { button = false, onRoot = false, inVillage = false, inDialogue = false } = {}) {
+  return (button || onRoot) && inVillage && !inDialogue;
 }
 
 // Who speaks when the village opens: the neighbor whose creation was just made, else Pip's welcome while this
@@ -42,12 +43,11 @@ export function openingLine({ creations = {}, celebrate = null } = {}) {
   return null;
 }
 
-// What A does: turn the page when the box has more to say, else talk to the neighbor the chip names
-// (or whoever is nearest), else close the box.
-export function aAction({ near = null, nearest = null, dialogueOpen = false, hasMore = false } = {}) {
+// What A does: turn an unread page first, else talk only to the neighbor the Talk chip names, else give a hint.
+// A hidden chip has no talk target, even if a neighbor is within range during a walk.
+export function aAction({ near = null, dialogueOpen = false, hasMore = false } = {}) {
   if (dialogueOpen && hasMore) return { act: 'next' };
-  const id = near ?? nearest;
-  return id ? { act: 'talk', id } : { act: 'hush' };
+  return near ? { act: 'talk', id: near } : { act: 'hint' };
 }
 const STEP_CYCLE = [1, 0, 2, 0];
 const STEP_MS = 80;             // ms per walk frame at the base speed; faster walks step faster
@@ -344,30 +344,30 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (calm()) { player.pos = next; player.target = null; player.step = 0; drawPlayer(); drawTalk(); drawFind(); return; }
     player.target = next;
   }
-  // The A button: the neighbor the Talk chip names comes first, so the chip always tells the truth.
+  // The A button: finish unread pages, then follow the Talk chip without starting a walk.
   function pressA() {
     const box = root.querySelector('.village-dialogue');
-    const next = aAction({ near, nearest: nearestNeighbor(player.pos, positions()), dialogueOpen: !box.hidden, hasMore: dialogue.hasMore() });
+    const next = aAction({ near, dialogueOpen: !box.hidden, hasMore: dialogue.hasMore() });
     if (next.act === 'next') dialogue.next();
     else if (next.act === 'talk') { player.facing = 'back'; visit(next.id); }
-    else hush();
+    else say(null, WALK_HINT);
   }
   // Keys reach the document after the village, so claiming A here stops the browser (and app.js) from clicking
   // whichever button happens to hold focus. Space clicks on keyup, so that keyup is swallowed too.
   let swallowSpaceUp = false;
   function onKey(event) {
+    if (ctx.stage?.querySelector('.win-backdrop')) { swallowSpaceUp = false; return; }   // a window owns the keys
     if (event.type === 'keyup') {
       if (swallowSpaceUp && event.key === ' ') { swallowSpaceUp = false; event.preventDefault(); }
       return;
     }
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !A_KEYS.has(event.key)) return;
-    if (ctx.stage?.querySelector('.win-backdrop')) return;   // a window owns the keys
     const target = event.target;
     const actorButton = Boolean(target?.closest?.('.village-actor, .village-talk'));   // never the HUD, the board or a window
-    const focus = { button: actorButton, inVillage: Boolean(root?.contains(target)), inDialogue: Boolean(target?.closest?.('.village-dialogue')) };
+    const focus = { button: actorButton, onRoot: target === root, inVillage: Boolean(root?.contains(target)), inDialogue: Boolean(target?.closest?.('.village-dialogue')) };
     if (!talkKeyWins(near, focus)) return;
     event.preventDefault();
-    swallowSpaceUp = event.key === ' ';
+    if (event.key === ' ') swallowSpaceUp = true;
     if (!event.repeat) pressA();
   }
 
