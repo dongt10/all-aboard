@@ -29,7 +29,7 @@
 /* The name falls back onto the card once the proof is found. */
 .tales-named { display: flex; flex: none; align-items: center; gap: 10px; animation: tales-drop 320ms ease-out; }
 .tales-named[hidden] { display: none; }
-.tales-named__pic { display: block; flex: none; width: 64px; height: 64px; }
+.tales-named__pic { display: block; flex: none; width: 32px; height: 32px; }
 .tales-named__name { font-family: var(--font-pixel); font-size: var(--text-body); line-height: 1.1; color: var(--ink); }
 @keyframes tales-drop { from { transform: translateY(-14px); opacity: 0; } to { transform: none; opacity: 1; } }
 
@@ -69,7 +69,7 @@
 .tales-line--proof, .tales-line--proof:hover { --line-light: var(--finish-light); --line-shade: var(--finish-shade); background: var(--finish); border-color: transparent; color: var(--paper); }
 .tales-line--proof .tales-line__tag::after { content: '✓'; }
 
-/* All three named: the message centered, then one row per tale with its neighbor (tap to hear the clue). */
+/* All three named: the message centered, then one row per tale with its neighbor (tap to reread). */
 .tales-card--ready { background: var(--paper-shade); background-clip: padding-box; justify-content: center; }
 .tales-card--ready .tales-head { font-size: calc(var(--text-body) * 1.1); color: var(--ink); text-align: center; }
 .tales-line--named { align-items: center; }
@@ -98,7 +98,7 @@
   content: ''; position: absolute; inset: -2px; pointer-events: none; border: 1px solid var(--ink);
   box-shadow: inset 1px 1px 0 var(--white), inset -1px -2px 0 var(--paper-shade);
 }
-.tales-slot { position: relative; isolation: isolate; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 3px; background: var(--paper-shade); border: 2px dashed transparent; transition: background-color 200ms; }
+.tales-slot { position: relative; isolation: isolate; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 3px; margin: 0; padding: 0; font: inherit; color: inherit; background: var(--paper-shade); border: 2px dashed transparent; border-radius: 0; cursor: default; transition: background-color 200ms; }
 .tales-slot::before {
   content: ''; position: absolute; inset: -2px; pointer-events: none;
   border: 1px solid var(--ink); box-shadow: inset 1px 1px 0 var(--paper), inset -1px -2px 0 #d5bd91, inset 0 -3px 0 var(--paper), inset 0 -4px 0 #d5bd91;
@@ -111,7 +111,10 @@
 .tales-slot__pic { display: block; width: 48px; height: 48px; }
 .tales-slot__pic:empty { display: none; }
 .tales-slot__name { font-size: var(--text-small); line-height: 1.1; color: var(--ink-soft); }
-.tales-slot--filled { background: var(--paper); border-style: solid; border-color: transparent; }
+.tales-slot--filled { background: var(--paper); border-style: solid; border-color: transparent; cursor: pointer; }
+.tales-slot--filled:hover { background: var(--white); }
+.tales-slot[aria-pressed="true"] { outline: 2px solid var(--reading); outline-offset: -5px; }
+.tales-slot:focus-visible { outline: 3px solid var(--ink); outline-offset: 1px; }
 .tales-slot--filled::after { background: var(--reading); box-shadow: inset 1px 1px 0 #acd9ff, inset -1px -3px 0 #3977b8, 1px 0 0 var(--ink); }
 .tales-slot--filled .tales-slot__name { color: var(--ink); font-weight: 700; }
 

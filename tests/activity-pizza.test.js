@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import pizza, { LINES, PIZZA_GLYPH } from '../src/ui/activities/pizza.js';
+import pizza, { LINES, PIZZA_GLYPH, helpFor } from '../src/ui/activities/pizza.js';
 import {
-  FRIENDS, PIZZA_PLATES, GRADES_PIZZA, STAMP_PIZZA, STAMP_PIZZA_HALVES,
+  FRIENDS, PIZZA_PLATES, GRADES_PIZZA, ALL_CUTS, STAMP_PIZZA, STAMP_PIZZA_TWELVE, STAMP_PIZZA_HALVES,
   PIZZA_CUTS, startingSlices, normalizePizza, cleanPizzaCreation, pizzaReady, pizzaOpening,
   pizzaReport, remainingUnits, pieceUnits, shareText, shareWords, tryLine, giveLine, takeLine,
   newLine, cutLine, nudgeLine, pizzaCreationMarkup, sectorPath,
@@ -31,7 +31,7 @@ const short = line => {
 test('starts and cycles at raw grades 3, 4, 5; legacy snapshots start fresh', () => {
   assert.equal(PIZZA_PLATES, 4);
   assert.deepEqual(GRADES_PIZZA, [3, 4, 5]);
-  const expected = [[8, 12, 4], [12, 8, 4], [6, 10, 8, 12, 4]];
+  const expected = [[8, 12, 4], [12, 8, 4], [6, 10]];
   for (const [i, grade] of GRADES_PIZZA.entries()) {
     assert.deepEqual(PIZZA_CUTS(grade), expected[i]);
     assert.equal(startingSlices(grade), expected[i][0]);
@@ -77,6 +77,66 @@ test('four valid commands at every grade; finish last from the start and gated b
   assert.match(PIZZA_GLYPH, /viewBox="0 0 24 24"/);
   assert.match(PIZZA_GLYPH, /currentColor/);
   assert.equal(pizza.help.length, 4); assert.match(pizza.help.at(-1), /Serve pizza/);
+});
+
+test('help per grade asks for every slice, and grade 5 asks for a cut', () => {
+  assert.equal(pizza.helpFor, helpFor);
+  assert.deepEqual(pizza.help, helpFor(3));
+  for (const grade of GRADES_PIZZA) {
+    assert.deepEqual(helpFor(grade), [
+      'New pizza picks the slices. Tap a friend to give one.',
+      grade === 5 ? 'Cut a half when slices are left. Hand out every piece.' : 'Hand out every slice. Tap one to take it back.',
+      'Choose Dig in! to check the shares.',
+      'When all four match, choose Serve pizza.',
+    ]);
+    helpFor(grade).forEach(short);
+  }
+  assert.equal(STAMP_PIZZA_TWELVE, 'Sharing equally is dividing: 12 ÷ 4 = 3 each.');
+});
+
+test('grade 5 serves only after a cut; grades 3–4 never need one', () => {
+  for (const grade of GRADES_PIZZA) for (const slices of PIZZA_CUTS(grade)) {
+    let s = { state: snapshot({ slices }, grade), ui: {} }, i = 0;
+    while (remainingUnits(s.state)) s = step(s, field({ give: i++ % 4 }));
+    s = step(s, cmd('try'));
+    assert.equal(s.state.halves, false);
+    assert.equal(pizzaReady(s.state), grade < 5);
+    assert.equal(pizza.commands(s.state).at(-1).disabled, grade === 5);
+    if (grade < 5) continue;
+    s = step(s, cmd('new'));
+    s = step(s, field({ pizza: true }));
+    i = 0;
+    while (remainingUnits(s.state)) s = step(s, field({ give: i++ % 4 }));
+    assert.equal(pizzaReady(s.state), false, 'still needs Dig in!');
+    s = step(s, cmd('try'));
+    assert.equal(pizzaReady(s.state), true);
+    assert.equal(pizza.commands(s.state).at(-1).disabled, false);
+  }
+  for (const slices of [4, 8, 12]) {
+    const s = snapshot({ slices, plates: Array(4).fill(slices / 2), tried: true }, 5);
+    for (const halves of [false, undefined, 1, 'true']) assert.equal(pizzaReady({ ...s, halves }), false);
+    assert.equal(pizzaReady({ ...s, halves: true }), true);
+    const checked = step({ state: s, ui: {} }, cmd('try'));
+    assert.equal(checked.state, s, 'checking a saved fair pizza does not erase it');
+    assert.equal(checked.line, 'Fair! New pizza brings one with leftovers to cut.');
+    assert.equal(pizza.commands(s).at(-1).disabled, true);
+    assert.equal(step(checked, cmd('new')).state.slices, 6);
+  }
+});
+
+test('legacy grade-5 slice counts still load and draw the saved shares', () => {
+  for (const slices of ALL_CUTS) for (const grade of GRADES_PIZZA) {
+    const halves = slices % 4 !== 0;
+    const saved = { kind: 'math', activity: 'pizza', grade, chapter: 1, slices,
+      halves, plates: Object.freeze(Array(4).fill(slices / 2)), tried: true };
+    Object.freeze(saved);
+    const loaded = pizza.start(saved, { grade, chapter: 1 });
+    assert.deepEqual(loaded.state, saved);
+    assert.deepEqual(cleanPizzaCreation(loaded.state), saved);
+    assert.deepEqual(normalizePizza(loaded.state, grade, 1), saved);
+    assert.match(pizzaCreationMarkup(saved), new RegExp(`Your pizza party, ${shareText(slices / 2)} slices? each`));
+    assert.equal((pizzaCreationMarkup(saved).match(/A6 6/g) ?? []).length, 4, 'four identical quarter-pizza pictures survive');
+  }
 });
 
 test('normalization repairs junk, bounds numbers and is idempotent without mutating its input', () => {
@@ -202,8 +262,8 @@ test('grade 5: leftover nudge, cut once, return halves, then 6/4 and 10/4 mixed 
 });
 
 test('every possible saved distribution has dialogue lines <=56, including both kinds of halves', () => {
-  for (const line of [...Object.values(LINES).filter(v => typeof v === 'string'), ...pizza.help, pizza.notReadyLine, STAMP_PIZZA, STAMP_PIZZA_HALVES]) short(line);
-  for (const grade of GRADES_PIZZA) for (const slices of PIZZA_CUTS(grade)) for (const halves of [false, true]) {
+  for (const line of [...Object.values(LINES).filter(v => typeof v === 'string'), ...GRADES_PIZZA.flatMap(helpFor), pizza.notReadyLine, STAMP_PIZZA, STAMP_PIZZA_TWELVE, STAMP_PIZZA_HALVES]) short(line);
+  for (const grade of GRADES_PIZZA) for (const slices of ALL_CUTS) for (const halves of [false, true]) {
     const unit = halves ? 1 : 2, total = slices * 2;
     for (let a = 0; a <= total; a += unit) for (let b = 0; b <= total - a; b += unit)
       for (let c = 0; c <= total - a - b; c += unit) for (let d = 0; d <= total - a - b - c; d += unit) {

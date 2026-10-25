@@ -13,8 +13,9 @@ export const FRIENDS = [
   { id: 'pip', name: 'Pip' },
 ];
 export const GRADES_PIZZA = [3, 4, 5];
-// Guide stamps: grades 3–4 read the first, grade 5 the second.
+// Guide stamps for grades 3, 4 and 5.
 export const STAMP_PIZZA = 'Sharing equally is dividing: 8 ÷ 4 = 2 each.';
+export const STAMP_PIZZA_TWELVE = 'Sharing equally is dividing: 12 ÷ 4 = 3 each.';
 export const STAMP_PIZZA_HALVES = 'A leftover can be split: 6 ÷ 4 = 1 and a half.';
 export const ALL_CUTS = [4, 6, 8, 10, 12];
 const MAX_UNITS = 24;   // 12 slices, every one on a single plate
@@ -28,7 +29,7 @@ const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 // a pizza that only shares out once the leftovers are cut in half.
 export function PIZZA_CUTS(grade) {
   const g = num(grade);
-  if (g >= 5) return [6, 10, 8, 12, 4];
+  if (g >= 5) return [6, 10];
   if (g === 4) return [12, 8, 4];
   return [8, 12, 4];
 }
@@ -40,8 +41,8 @@ const cutsHalves = grade => num(grade) >= 5;
 export function normalizePizza(input, grade = 3, chapter = 1) {
   const s = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const base = { kind: 'math', activity: 'pizza', grade: Math.round(clamp(grade, 0, 5)), chapter: chapter === 1 ? 1 : 0 };
-  const cuts = PIZZA_CUTS(base.grade);
-  const slices = cuts.includes(s.slices) ? s.slices : cuts[0];
+  // Older saves keep their pizza even when New pizza now offers a different cycle.
+  const slices = ALL_CUTS.includes(s.slices) ? s.slices : startingSlices(base.grade);
   const halves = s.halves === true;
   const validPlates = Array.isArray(s.plates) && s.plates.length === PIZZA_PLATES && Array.from(s.plates).every(n => Number.isInteger(n));
   let plates = validPlates
@@ -85,13 +86,14 @@ export function pizzaReport(s) {
   };
 }
 
-// Ready exactly when the child checked (Dig in!), the pizza is empty, and every plate holds the same, non-zero share.
+// Checked, empty, equal non-zero shares; grade 5 also needs a cut.
 export function pizzaReady(s) {
   if (!s || s.kind !== 'math' || s.activity !== 'pizza' || !ALL_CUTS.includes(s.slices)
     || !Array.isArray(s.plates) || s.plates.length !== PIZZA_PLATES
     || !Array.from(s.plates).every(n => Number.isInteger(n) && n >= 0 && n <= MAX_UNITS)
     || (!s.halves && s.plates.some(n => n % 2))) return false;
-  return s.tried === true && remainingUnits(s) === 0 && s.plates.every(n => n === s.plates[0]) && s.plates[0] > 0;
+  return s.tried === true && remainingUnits(s) === 0 && s.plates.every(n => n === s.plates[0]) && s.plates[0] > 0
+    && (s.grade < 5 || s.halves === true);
 }
 
 export const PIZZA_LINES = {
@@ -103,6 +105,7 @@ export const PIZZA_LINES = {
   cutEmpty: 'The pizza is empty. Nothing to cut.',
   cutAlready: 'The slices are already halves.',
   readyOpening: 'Fair shares! Choose Serve pizza, or make a new pizza.',
+  fairNeedsCut: 'Fair! New pizza brings one with leftovers to cut.',
   takeSlice: 'One slice back on the pizza.',
   takeHalf: 'One half back on the pizza.',
   opening: s => `Share Momo’s ${s.slices} slices equally among 4 friends.`,
@@ -157,6 +160,7 @@ export function tryLine(s) {
     if (nudge) return nudge;
     return s.halves ? PIZZA_LINES.leftoverHalves(r.share, r.remaining) : PIZZA_LINES.leftover(r.share, r.remainingWhole);
   }
+  if (s.grade >= 5 && s.halves !== true) return PIZZA_LINES.fairNeedsCut;
   return r.share % 2 === 0 ? PIZZA_LINES.fair(s.slices, r.share) : PIZZA_LINES.fairMixed(s.slices, r.share);
 }
 export const newLine = s => PIZZA_LINES.fresh(s.slices);
