@@ -5,7 +5,8 @@
     "ref-03.png": "7e782f5d73a6bcfa0110ca67d373ac848e90b2aa6cc3f8ad307ae66631b38e15",
     "ref-08.png": "3463e112e33c806ba1fe23eecfde52caa5ff5c9df8354781a6e114de6ca82e3b",
     "ref-21.png": "0edae8b269af0ac2f27994a6de2c6c96a1d54b982902077083699433f6481565",
-    "ref-22.png": "d6cff08375b8d119f187c34ae559c6051ac198dc8c54f2adc3aa662d77ec8b0e"
+    "ref-22.png": "d6cff08375b8d119f187c34ae559c6051ac198dc8c54f2adc3aa662d77ec8b0e",
+    "ref-26.png": "20f068c5bfd3671bc37b9991750d0b913a42cdef670ca011399fc90b917738bd"
   },
   "frameSize": 64,
   "alphaThreshold": 128,
@@ -225,6 +226,59 @@
         "right": "d431cf7c68bf3f661171fbbd78ef3128816dc40bc2075a337171409cb24fac7a"
       },
       "backStandSha256": "2a92830f672f22dd1622fc837e5dcc17e41e01ad3d489d3b0868ae2ad822a017"
+    },
+    "music": {
+      "name": "Kiko",
+      "composite": "ref-26.png",
+      "grid": {
+        "blockSize": 4,
+        "offset": [
+          0,
+          0
+        ]
+      },
+      "swatchBox": [
+        63,
+        63,
+        63,
+        63
+      ],
+      "background": {
+        "color": "#ffffff",
+        "removal": "exterior"
+      },
+      "dropRows": [],
+      "shift": [
+        0,
+        -1
+      ],
+      "feetRow": 56,
+      "joyEyeBox": [
+        21,
+        27,
+        42,
+        30
+      ],
+      "frontStepColumns": [
+        [
+          17,
+          27
+        ],
+        [
+          36,
+          46
+        ]
+      ],
+      "rightMirrorColumns": [
+        0,
+        1,
+        2
+      ],
+      "sideStandSha256": {
+        "left": "ea0819749d77c9071a7e5506a5ce6aa5997ea582895f1d4efc1958dea6bf378f",
+        "right": "a6095a823018e6cf29f58cb510dba06c8c41108f86ffa3648392db6f371a12d9"
+      },
+      "backStandSha256": "9a73eb97d5a99195911b1f93f448f32ad804d4682cc0df986ce96b2109eb0cdd"
     }
   }
 }
