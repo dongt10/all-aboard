@@ -7,6 +7,12 @@ Changes to All Aboard, grouped by release.
 ### Art
 
 - Yuki and Fumi now come from the team's drawings, with side and back views, and the reference drawings are pinned so they can never be swapped silently.
+- Yuki's and Fumi's right-facing profiles are drawn as their own view, not a mirror, so the calico patch and the pocket tag stay on the correct side.
+
+### Fixed
+
+- Enter, Space and Z in the village talk only to the neighbor you are standing next to. They never jump you to a far stall any more; with nobody near, Pip says "Walk up to a neighbor, then press Enter."
+- The welcome and the celebration box close by themselves a few seconds after their last page, so Pip, Nori and Sora's stall are not hidden behind them when you come back from an activity.
 
 ## 2026-10-25 · Cal Hacks build
 
