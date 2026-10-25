@@ -50,7 +50,8 @@ function deriveStand(reference) {
     }
   }
 
-  const from = rgb(reference.colorSwap.from), to = rgb(reference.colorSwap.to);
+  // colorSwap is optional: a reference whose colors already fit the game keeps every color.
+  const swap = reference.colorSwap ? { from: rgb(reference.colorSwap.from), to: rgb(reference.colorSwap.to) } : null;
   const expected = { width: size, height: size, rgba: new Uint8Array(size * size * 4) };
   const [dx, dy] = reference.shift;
   let keptRow = 0;
@@ -63,7 +64,7 @@ function deriveStand(reference) {
       if (removed.has(i) || rgba[3] < manifest.alphaThreshold) continue;
       assert.ok(tx >= 0 && tx < size && ty >= 0 && ty < size,
         `${reference.name}: source pixel (${x}, ${y}) would be clipped. ${rule}`);
-      const color = equal(rgba.slice(0, 3), from) ? to : rgba.slice(0, 3);
+      const color = swap && equal(rgba.slice(0, 3), swap.from) ? swap.to : rgba.slice(0, 3);
       expected.rgba.set([...color, 255], (ty * size + tx) * 4);
     }
   }
