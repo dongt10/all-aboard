@@ -3,11 +3,11 @@ import { getCreations } from '../../progress.js';
 import { createBandEngine } from '../../audio.js';
 import { createPlaybackController } from '../../music.js';
 import { figureMarkup, playerFigureId } from '../figures/index.js';
-import { creationMarkup } from '../creations.js';
+import { creationMarkup, creationLabel, fitSignPreviews } from '../creations.js';
 import { createCommandMenu } from '../menu.js';
 import { createDialogue } from '../dialogue.js';
 import { onceAtATime } from '../scenes.js';
-import { paradeLineup, paradeCommands, paradeStatus, paradeBackdropMarkup } from '../parade-lineup.js';
+import { paradeLineup, paradeCommands, paradeStatus, paradeOpening, paradeEnding, paradeBackdropMarkup, PARADE_LAPS } from '../parade-lineup.js';
 
 const STAGE_WIDTH = 960;
 const SPACING = 112;          // one marcher per slot; eight slots fill the stage for the still line-up
@@ -15,10 +15,10 @@ const FEET_Y = 360;           // feet on the street, clear of the dialogue's Hea
 const WALK = [1, 0, 2, 0];    // walk frames, one every 160 ms
 const STEP_MS = 160;
 const BUNTING = 18;
-const HELP_STEPS = [
+export const HELP_STEPS = [
   'Watch your friends march with what you made.',
-  'Play band plays the band you saved with Kiko.',
-  'March again starts the parade from the beginning.',
+  'Your friends march across the street two times. Then they stop. March again starts it over.',
+  'Play band plays the band you made with Kiko. No band yet? Visit Kiko first.',
   'Village takes you back to the village.',
 ];
 
@@ -26,20 +26,23 @@ const HELP_STEPS = [
 const figureSlot = html => `<span class="parade-figure" style="left:${SPACING / 2 - 32}px;top:${FEET_Y - 57}px">${html}</span>`;
 
 export function createParadeScene(ctx) {
-  let root, menu, dialogue, engine, playback, ticker = null, tick = 0, marchers = [], destroyed = false;
+  let root, menu, dialogue, engine, playback, previews, ticker = null, tick = 0, marchers = [], destroyed = false;
+  let laps = 0, over = false;   // finished crossings of the stage; the march has stopped in a line-up
   const creations = getCreations(ctx.getState());
   const lineup = paradeLineup(creations);
   const band = creations.music ?? null;
+  const hasBand = Boolean(band);
   const settings = () => ctx.getState().settings ?? {};
   const calm = () => Boolean(settings().reducedMotion) || Boolean(root?.closest('.calm'))
     || Boolean(globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
 
   const playing = () => Boolean(playback?.active);
-  const refreshCommands = () => menu.set(paradeCommands({ hasBand: Boolean(band), playing: playing() }));
+  const refreshCommands = () => menu.set(paradeCommands({ hasBand, playing: playing() }));
+  const ending = () => paradeEnding({ laps, calm: calm(), made: lineup.length, hasBand });
 
-  // Marchers face right and walk; with Calm motion they stand still facing front, step 0.
+  // Marchers face right and walk; with Calm motion, or once the parade is over, they stand still facing front, step 0.
   function paintMarchers() {
-    const still = calm();
+    const still = calm() || over;
     const step = still ? 0 : WALK[tick % WALK.length];
     const facing = still ? 'front' : 'right';
     root.classList.toggle('is-still', still);
@@ -52,16 +55,50 @@ export function createParadeScene(ctx) {
   }
   function startTicker() {
     clearInterval(ticker);
-    ticker = setInterval(() => { tick++; paintMarchers(); }, STEP_MS);
+    ticker = setInterval(() => {
+      tick++;
+      const end = ending();   // Calm motion turned on mid-march: the line-up shows at once
+      if (end.over) finish(end.line);
+      else paintMarchers();
+    }, STEP_MS);
   }
-  // Restarts the CSS march from the left edge.
-  function marchAgain() {
+  // The march stops where the line-up stands (the line's resting transform, where the last lap ends), and the closing line shows.
+  function finish(line) {
+    over = true;
+    clearInterval(ticker); ticker = null;
+    root.classList.add('is-over');
+    root.querySelector('.parade-line').classList.remove('is-marching', 'is-last-lap');
+    paintMarchers();
+    dialogue.say(null, line);
+  }
+  // Starts (or restarts) the march from the left edge, or shows the line-up at once with Calm motion.
+  function beginMarch() {
+    laps = 0; tick = 0; over = false;
+    root.classList.remove('is-over');
     const line = root.querySelector('.parade-line');
-    line.classList.remove('is-marching');
+    line.classList.remove('is-marching', 'is-last-lap');
     void line.offsetWidth;   // reflow, so the animation starts over
     line.classList.add('is-marching');
-    tick = 0;
+    const end = ending();
+    if (end.over) { finish(end.line); return; }
+    dialogue.say(null, paradeOpening({ hasBand }));
     paintMarchers();
+    startTicker();
+  }
+  // One lap is one run of a CSS march animation. The full laps repeat (animationiteration); the last lap is
+  // its own animation that halts in the line-up (animationend), so the marchers stop instead of popping in.
+  function onLap(event) {
+    if (over) return;
+    const name = event.animationName;
+    if (event.type === 'animationiteration' ? name !== 'parade-march' : name !== 'parade-last-lap') return;
+    laps++;
+    const end = ending();
+    if (end.over) { finish(end.line); return; }
+    if (laps === PARADE_LAPS - 1) {
+      const line = root.querySelector('.parade-line');
+      line.classList.remove('is-marching');
+      line.classList.add('is-last-lap');
+    }
   }
 
   function streetMarkup() {
@@ -76,9 +113,11 @@ export function createParadeScene(ctx) {
         ${figureSlot('')}
       </div>`).join('');
     const lanterns = Array.from({ length: BUNTING }, (_, i) => `<span class="parade-lantern" style="left:${24 + i * 52}px"></span>`).join('');
-    const names = lineup.map(({ id }) => CHARACTERS.find(c => c.id === id)).filter(Boolean)
-      .map(c => `${c.name} with the ${c.reward.label.replace(/^Your /, '').toLowerCase()}`);
-    const label = names.length ? `You lead the parade. Behind you: ${names.join(', ')}.` : 'You lead the parade.';
+    const names = lineup.map(({ id, creation }) => {
+      const c = CHARACTERS.find(c => c.id === id);
+      return `${c.name} brings the ${creationLabel(id, creation).replace(/^Your /, '').toLowerCase()}.`;
+    });
+    const label = ['You lead the parade.', ...names].join(' ');
     return `<div class="parade-street" role="img" aria-label="${label}">
         ${paradeBackdropMarkup()}${lanterns}
         <div class="parade-line is-marching" style="--line-w:${width}px;--line-x:${(STAGE_WIDTH - width) / 2}px;width:${width}px">${player}${neighbors}</div>
@@ -88,7 +127,7 @@ export function createParadeScene(ctx) {
   function choose(id) {
     if (id === 'play' && band && !playing()) playback.toggle(band);
     else if (id === 'stop') playback.stop();
-    else if (id === 'march') marchAgain();
+    else if (id === 'march') beginMarch();
     else if (id === 'village') leave();
   }
   const silence = () => { if (playing()) playback.stop(); };
@@ -103,6 +142,7 @@ export function createParadeScene(ctx) {
         <h2 class="px-chip px-name parade-title" id="parade-title" tabindex="-1">Festival parade</h2>
         <div class="parade-dialogue"></div><div class="parade-menu"></div>`;
       ctx.stage.append(root);
+      previews = fitSignPreviews(root, 88, 60);
       const slots = root.querySelectorAll('.parade-marcher:not(.parade-marcher--leader) .parade-figure');
       marchers = lineup.map(({ id }, i) => ({ id, key: '', el: slots[i] }));
 
@@ -122,9 +162,9 @@ export function createParadeScene(ctx) {
       } });
 
       refreshCommands();
-      dialogue.say(null, 'Your parade! Every idea belongs here.');
-      paintMarchers();
-      startTicker();
+      root.addEventListener('animationiteration', onLap);
+      root.addEventListener('animationend', onLap);
+      beginMarch();
       menu.focus();
     },
     handleIntent(intent) {
@@ -138,6 +178,7 @@ export function createParadeScene(ctx) {
       destroyed = true;   // no status lines or menu updates while tearing down
       playback?.stop();
       engine?.destroy();
+      previews?.();
       clearInterval(ticker); ticker = null;
       menu?.destroy(); dialogue?.destroy();
       root?.remove();

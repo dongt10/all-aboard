@@ -7,7 +7,17 @@ import { toggleSetting, chooseGrade, gradeChoices, isChosenGrade } from '../save
 import { guideEntries, stampCount } from '../guide.js';
 import { creationMarkup } from '../creations.js';
 import { getCreations } from '../../progress.js';
+import { renderBandPreview, encodeWav } from '../../audio.js';
 import { stopSpeaking } from '../voice.js';
+
+export const RECORDING_LINES = {
+  idle: 'Save your band to listen to later.',
+  making: 'Making a recording…',
+  ready: 'Recording ready. Check your downloads.',
+  failed: 'This browser could not make a recording.',
+};
+const RECORDING_FILE = 'my-festival-band.wav';
+const RECORDING_URL_TTL = 30000;
 
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);
 const ARROWS = new Set(['up', 'down', 'left', 'right']);
@@ -97,10 +107,18 @@ export function openPauseWindow(ctx) {
   body.className = 'pause-window';
   const note = ctx.saveOk === false ? 'Take your time. Keep this tab open.' : 'Take your time. Your work is saved.';
   body.innerHTML = `<span class="pause-window__nori">${figureMarkup('nori', { scale: 2 })}</span><p>${note}</p>
-    <button type="button" class="px-button px-button--finish">${icon('play')}<span>Keep playing</span></button>`;
+    <div class="pause-window__actions">
+      <button type="button" class="px-button px-button--finish" data-action="resume">${icon('play')}<span>Keep playing</span></button>
+      <button type="button" class="px-button" data-action="title">${icon('home')}<span>Title screen</span></button>
+    </div>`;
   let handle = null;
-  body.querySelector('button').addEventListener('click', () => handle?.close());
-  handle = open(ctx, 'pause', { title: 'Paused', body, initialFocus: 'button' });
+  body.addEventListener('click', event => {
+    const action = event.target.closest('[data-action]')?.dataset.action;
+    if (!action) return;
+    handle?.close();
+    if (action === 'title') ctx.go('title');   // Boy/Girl and the grade live there
+  });
+  handle = open(ctx, 'pause', { title: 'Paused', body, initialFocus: '[data-action="resume"]' });
   return handle;
 }
 
@@ -139,13 +157,52 @@ function guidePage(entry, state) {
     entry.canFind ? `<button type="button" class="px-button" data-action="find">${icon('map')}<span>Find</span></button>` : '',
     entry.canVisit ? `<button type="button" class="px-button px-button--finish" data-action="visit">${icon('next')}<span>Visit</span></button>` : '',
   ].join('');
+  // Kiko's page, once a band is made: a grown-up's download of the band, kept out of the kid's music window.
+  const record = entry.id === 'music' && getCreations(state).music
+    ? `<div class="guide-record"><button type="button" class="px-button" data-action="record">${icon('download')}<span>Save song</span></button>
+        <p class="guide-record__status" role="status">${RECORDING_LINES.idle}</p></div>`
+    : '';
   return `<div class="guide-page__who">
       <span class="guide-page__figure">${figureMarkup(entry.id, { scale: 2, pose: earned ? 'joy' : 'idle' })}</span>
       <div><h3 class="px-name">${esc(entry.name)}</h3><p class="guide-page__meta">${esc(entry.species)} · ${esc(entry.role)}</p></div>
       ${made ? `<div class="guide-creation" data-id="${entry.id}">${made}</div>` : ''}
     </div>
-    <p class="guide-page__bio">${esc(entry.bio)}</p>${stamp}
+    <p class="guide-page__bio">${esc(entry.bio)}</p>${stamp}${record}
     ${buttons ? `<div class="guide-page__actions">${buttons}</div>` : ''}`;
+}
+
+// Renders about ten seconds of the band (two runs of form A, one run of AB or ABA) to a WAV file and hands it to the browser's downloads. The object URL
+// is revoked after 30 seconds or when the window closes, whichever comes first.
+function createRecorder(getBand, { host, status, isOpen }) {
+  let token = 0, busy = false;
+  const urls = new Map();
+  const say = text => { const el = status(); if (el) el.textContent = text; };
+  const forget = url => { clearTimeout(urls.get(url)); urls.delete(url); URL.revokeObjectURL(url); };
+  return {
+    get busy() { return busy; },
+    async record() {
+      if (busy || !isOpen()) return;
+      busy = true;
+      const mine = ++token;
+      say(RECORDING_LINES.making);
+      try {
+        const band = getBand();
+        const buffer = await renderBandPreview(band, { phrases: (band?.form ?? 'A').length > 1 ? 1 : 2 });   // AB and ABA already run 16-24 beats
+        if (!isOpen() || mine !== token) return;
+        const url = URL.createObjectURL(new Blob([encodeWav(buffer)], { type: 'audio/wav' }));
+        const anchor = document.createElement('a');
+        anchor.href = url; anchor.download = RECORDING_FILE; anchor.hidden = true;
+        host.append(anchor); anchor.click(); anchor.remove();
+        urls.set(url, setTimeout(() => forget(url), RECORDING_URL_TTL));
+        say(RECORDING_LINES.ready);
+      } catch {
+        if (isOpen() && mine === token) say(RECORDING_LINES.failed);
+      } finally {
+        if (mine === token) busy = false;
+      }
+    },
+    dispose() { token++; busy = false; for (const url of [...urls.keys()]) forget(url); },
+  };
 }
 
 // The Matsuri Guide: ten character tiles on the left, the chosen character's page on the right.
@@ -166,26 +223,39 @@ export function openGuideWindow(ctx, { id } = {}) {
     setRoving(tiles, i);
     page.innerHTML = guidePage(entries[i], state);
   }
-  let handle = null;
+  let handle = null, closed = false;
+  const recorder = createRecorder(() => getCreations(ctx.getState()).music, {
+    host: body, status: () => page.querySelector('.guide-record__status'), isOpen: () => !closed && body.isConnected,
+  });
   rove(body.querySelector('.guide__tiles'), () => tiles, 2, show);
   body.addEventListener('click', event => {
     const tile = event.target.closest('.guide-tile');
     if (tile) { show(Number(tile.dataset.index)); return; }
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (!action) return;
+    if (action === 'record') { recorder.record(); return; }
     const target = entries[index].id;
     handle?.close();
     if (action === 'find') ctx.go('village', { guide: target });
     else ctx.go(target === 'music' ? 'music' : 'encounter', { id: target });
   });
   show(index);
-  handle = open(ctx, 'guide', { title: 'Matsuri Guide', body, initialFocus: () => tiles[index] });
+  handle = open(ctx, 'guide', { title: 'Matsuri Guide', body, initialFocus: () => tiles[index], onClose: () => { closed = true; recorder.dispose(); } });
   const head = handle && body.closest('.win')?.querySelector('.win__head');
-  if (head) {   // the stamp count sits in the header, beside the title
+  if (head) {   // the subtitle and the stamp count sit in the header, beside the title
+    const title = head.querySelector('.win__title');
+    const heading = document.createElement('div');
+    heading.className = 'guide__heading';
+    title.replaceWith(heading);
+    heading.append(title);   // the title keeps its id, so the dialog's label still points at it
+    const subtitle = document.createElement('p');
+    subtitle.className = 'guide__subtitle';
+    subtitle.textContent = 'the town’s character book';
+    heading.append(subtitle);
     const count = document.createElement('p');
     count.className = 'px-chip guide__count';
     count.innerHTML = `${icon('star')}<span>${earned} of ${total} stamps</span>`;
-    head.querySelector('.win__title').after(count);
+    heading.after(count);
   }
   return handle;
 }
@@ -200,5 +270,5 @@ export function openHelpWindow(ctx, title, steps = []) {
     const button = event.target.closest('[data-step]');
     if (button) ctx.speak(steps[Number(button.dataset.step)]);
   });
-  return open(ctx, 'help', { title: title || 'Help', body });
+  return open(ctx, 'help', { title: title || 'Help', body, onClose: stopSpeaking });
 }

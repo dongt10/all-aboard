@@ -21,6 +21,20 @@
 .banner-pot { flex: none; width: 22px; height: 22px; border: 2px solid var(--ink); box-sizing: border-box; }
 .banner-shape-pic { flex: none; display: block; width: 32px; height: 32px; }
 .banner-shape-pic .banner-stamp { width: 32px; height: 32px; }
+/* The chosen stamp wears a small turn arrow on the picture's lower-right corner, turned the way the stamp is.
+   It holds no words or numbers, sits inside the 40px the picture takes (so it never touches the name, even with
+   Bigger words), and is empty until Turn is pressed. */
+.banner-shapes .banner-option { position: relative; }
+.banner-option__turn {
+  position: absolute; left: 24px; bottom: 4px; display: grid; place-items: center; width: 16px; height: 16px;
+  box-sizing: border-box; border: 2px solid var(--ink); background: var(--paper); color: var(--ink); pointer-events: none;
+}
+.banner-option__turn .icon { display: block; }
+.banner-option__turn:empty { display: none; }
+.large-text .banner-option__turn { left: 22px; }
+
+/* Every stamp carries the ink outline the finished banner has, so a Cream star still shows on a Cream cloth. */
+.banner-stamp { stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
 
 /* The cloth hangs from a wooden pole; stamps sit under a transparent 6×5 button grid. */
 .banner-middle { display: flex; flex-direction: column; align-items: center; }

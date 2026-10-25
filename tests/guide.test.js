@@ -1,18 +1,37 @@
+import { STAMP_CHAIN } from '../src/chain.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { guideEntries, stampCount, LEARNED, SIDE_BIOS } from '../src/ui/guide.js';
-import { createState, publishCreation } from '../src/progress.js';
+import { guideEntries, stampCount, learnedText, stampGrade, SIDE_BIOS } from '../src/ui/guide.js';
+import { createState, publishCreation, saveDraft, normalizeState } from '../src/progress.js';
 import { CHARACTERS } from '../src/data.js';
 
 const sign = { kind: 'writing', text: 'Welcome!', chapter: 0, grade: 0 };
+const SUBJECTS = CHARACTERS.map(c => c.id);
+
+test('earned statements follow the published activity, including legacy grade 3–5 work', () => {
+  const old = {
+    math: { left: [1], right: [1], rolled: true }, science: { canopy: 'left', time: 10 },
+    reading: { found: ['key', 'umbrella', 'book'] },
+    community: { placements: [{ item: 'bench', x: 10, y: 90 }, { item: 'quiet', x: 10, y: 10 }, { item: 'sign', x: 90, y: 10 }], tried: true },
+  };
+  const activities = { math: 'pizza', science: 'chain', reading: 'tales', community: 'helpday' };
+  for (const grade of [3, 4, 5]) for (const [kind, values] of Object.entries(old)) {
+    let state = publishCreation({ ...createState(), chapter: 1, grade }, kind, { kind, chapter: 1, grade, ...values });
+    state = saveDraft(state, kind, { kind, chapter: 1, grade, activity: activities[kind] });
+    const stamp = guideEntries(normalizeState(state)).find(e => e.id === kind).stamp;
+    assert.deepEqual(stamp, { earned: true, learned: learnedText(kind, 2) }, `${kind} grade ${grade} legacy stamp ignores new draft`);
+    state = publishCreation(state, kind, { kind, chapter: 1, grade, activity: activities[kind] });
+    assert.equal(guideEntries(state).find(e => e.id === kind).stamp.learned, learnedText(kind, grade));
+  }
+});
 
 test('the guide lists the seven neighbors, then Pip, Nori and Cricket', () => {
   const entries = guideEntries(createState());
   assert.equal(entries.length, 10);
-  assert.deepEqual(entries.map(e => e.id), [...CHARACTERS.map(c => c.id), 'pip', 'nori', 'cricket']);
+  assert.deepEqual(entries.map(e => e.id), [...SUBJECTS, 'pip', 'nori', 'cricket']);
   const taro = entries[0];
-  assert.deepEqual(taro, { id: 'math', name: 'Taro', species: 'tanuki', role: 'Math · Workshop', bio: CHARACTERS[0].description, subject: 'math', stamp: { earned: false, learned: LEARNED.math }, canFind: true, canVisit: true });
-  assert.ok(entries.slice(0, 7).every(e => e.stamp && e.subject === e.id && e.canFind && e.canVisit));
+  assert.deepEqual(taro, { id: 'math', name: 'Taro', species: 'tanuki', role: 'Math · Workshop', bio: CHARACTERS[0].description, subject: 'math', stamp: { earned: false, learned: learnedText('math', 0) }, canFind: true, canVisit: true });
+  assert.ok(entries.slice(0, 7).every(e => e.stamp && e.subject === e.id && e.canFind && e.canVisit && typeof e.stamp.learned === 'string'));
 });
 test('a published creation earns exactly its stamp, in its own grade only', () => {
   const state = publishCreation(createState(), 'writing', sign);
@@ -37,4 +56,54 @@ test('an earned guide page shows what the child made there', async () => {
   const state = publishCreation(createState(), 'writing', sign);
   assert.match(guideCreation('writing', state), /creation--writing[^>]*>Welcome!</);
   assert.equal(guideCreation('math', state), '');
+});
+
+// --- Stamps per band (plan 1C and Part 2) ---
+test('learnedText gives one sentence per band for every subject', () => {
+  const expect = {
+    math: ['Same number on both sides is equal.', 'Different crates can weigh the same.', 'Different crates can weigh the same.', 'Sharing equally is dividing: 8 ÷ 4 = 2 each.', 'Sharing equally is dividing: 8 ÷ 4 = 2 each.', 'A leftover can be split: 6 ÷ 4 = 1 and a half.'],
+    science: ['Shade keeps the sun off the ice.', 'Shade keeps the sun off the ice.', 'Shade makes ice melt slower.', STAMP_CHAIN, STAMP_CHAIN, STAMP_CHAIN],
+    reading: ['Letters make a word you can read.', 'The story tells you what to pack.', 'The story tells you what to pack.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.'],
+    writing: Array(6).fill('Words welcome your neighbors.'),
+    art: Array(6).fill('Shapes and colors make a design.'),
+    community: ['A bench gives a tired neighbor a rest.', 'A good plan works for everyone.', 'A good plan works for everyone.', 'Different strengths get every job done together.', 'Different strengths get every job done together.', 'Different strengths get every job done together.'],
+    music: ['Music can be fast or slow, high or low.', 'Rests are part of a rhythm.', 'Rests are part of a rhythm.', 'A tune can go up, down, or stay the same.', 'A steady part holds up a changing tune.', 'A steady part holds up a changing tune.'],
+  };
+  for (const subject of SUBJECTS) assert.deepEqual([0, 1, 2, 3, 4, 5].map(grade => learnedText(subject, grade)), expect[subject], subject);
+  assert.equal(learnedText('nope', 3), '');
+  assert.equal(learnedText('math'), learnedText('math', 0), 'no grade reads as Kindergarten');
+  assert.equal(learnedText('math', 'x'), learnedText('math', 0));
+  for (const subject of SUBJECTS) for (const grade of [0, 1, 2, 3, 4, 5]) assert.ok(learnedText(subject, grade).length <= 56, `${subject} ${grade} fits one Bigger-words page`);
+});
+test('the guide reads stamps with the current grade: chapter 0 is Kindergarten even though the state keeps grade 1', () => {
+  const k = createState();
+  assert.equal(k.chapter, 0); assert.equal(k.grade, 1);
+  assert.equal(stampGrade(k), 0);
+  assert.equal(stampGrade({ ...k, chapter: 1, grade: 4 }), 4);
+  const learnedAt = state => Object.fromEntries(guideEntries(state).filter(e => e.stamp).map(e => [e.id, e.stamp.learned]));
+  assert.equal(learnedAt(k).math, 'Same number on both sides is equal.');
+  assert.equal(learnedAt(k).music, 'Music can be fast or slow, high or low.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 2 }).math, 'Different crates can weigh the same.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 2 }).science, 'Shade makes ice melt slower.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 1 }).science, 'Shade keeps the sun off the ice.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 3 }).music, 'A tune can go up, down, or stay the same.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 5 }).music, 'A steady part holds up a changing tune.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 5 }).community, 'Different strengths get every job done together.');
+});
+test('the music reward reads like the others on the item-get card', () => {
+  const music = CHARACTERS.find(c => c.id === 'music');
+  assert.equal(music.reward.label, 'Festival band');
+  assert.ok(CHARACTERS.every(c => !/^your /i.test(c.reward.label)), 'no reward starts with "Your"');
+  assert.deepEqual(CHARACTERS.map(c => c.id), SUBJECTS, 'ids unchanged');
+});
+
+test('every Guide biography fits 56 characters per sentence at every grade', () => {
+  for (const grade of [0, 1, 2, 3, 4, 5]) {
+    const entries = guideEntries({ ...createState(), chapter: grade ? 1 : 0, grade: grade || 1 });
+    for (const entry of entries) for (const sentence of entry.bio.split(/(?<=[.!?…])\s+/)) {
+      assert.ok(sentence.length <= 56, `${entry.name}: ${sentence.length} characters`);
+    }
+    assert.equal(entries.find(e => e.id === 'pip').bio, 'Pip brings notes to every home.');
+    assert.equal(entries.find(e => e.id === 'music').bio, 'Kiko makes music you can see and hear.');
+  }
 });

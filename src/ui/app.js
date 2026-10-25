@@ -1,9 +1,10 @@
-import { loadState, saveState } from '../progress.js';
+import { loadState, saveState, normalizeState, STORAGE_KEY } from '../progress.js';
 import { mountStage, applySettings } from './stage.js';
 import { keyIntent, routeIntent } from './input.js';
 import { createSceneManager, wipe } from './scenes.js';
 import { speak, stopSpeaking } from './voice.js';
 import { icon } from './icons.js';
+import { closeWindow } from './window.js';
 import { openComfortWindow, openPauseWindow, openGradeWindow, openGuideWindow, openHelpWindow } from './screens/windows.js';
 
 const FOCUSABLE = 'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
@@ -29,21 +30,29 @@ function createMissingScene(ctx) {
 // AppContext = { stage, getState(), commit(next), go(name, params?), open, speak(text), announce(text), scenes, ... }
 export function createApp(root, { scenes = {}, storage } = {}) {
   const { stage, destroy: unmountStage } = mountStage(root);
+  const readSave = () => (storage === undefined ? globalThis.localStorage : storage)?.getItem(STORAGE_KEY) ?? null;
+  let lastSaved;
+  try { lastSaved = readSave(); } catch { /* unavailable storage must not authorize a later overwrite */ }
   let state = loadState(storage);
   let saveOk = true;
+  let destroyed = false;
   let lastParams;
 
   const banner = document.createElement('p');
   banner.className = 'px-frame save-off';
-  banner.setAttribute('role', 'status');
+  banner.setAttribute('aria-hidden', 'true');
   banner.textContent = 'Saving is off. Keep this tab open.';
   banner.hidden = true;
   // Outside the stage, so an open window (which makes the stage behind it inert) can't silence it.
   const live = document.createElement('div');
   live.className = 'sr-only';
   live.setAttribute('aria-live', 'polite');
+  const saveStatus = document.createElement('div');
+  saveStatus.className = 'sr-only';
+  saveStatus.setAttribute('role', 'status');
+  saveStatus.setAttribute('aria-atomic', 'true');
   stage.append(banner);
-  root.append(live);
+  root.append(live, saveStatus);
   applySettings(stage, state.settings);
 
   const calm = () => Boolean(state.settings.reducedMotion);
@@ -54,14 +63,21 @@ export function createApp(root, { scenes = {}, storage } = {}) {
       return (Object.hasOwn(scenes, name) ? scenes[name] : createMissingScene)(ctx, params);
     },
     transition: swap => curtain(async () => {
+      if (destroyed) return;
       stopSpeaking();
       await swap();
       // Focus never falls back to <body> after a scene change.
-      if (!stage.contains(document.activeElement)) stage.querySelector(`.scene ${FOCUSABLE}, ${FOCUSABLE}`)?.focus();
+      if (!destroyed && !stage.contains(document.activeElement)) stage.querySelector(`.scene ${FOCUSABLE}, ${FOCUSABLE}`)?.focus();
     }),
   });
 
   const windowOpen = () => Boolean(stage.querySelector('.win-backdrop'));
+  function lockTransitionKey(event) {
+    if (manager.busy && stage.contains(event.target) && keyIntent(event)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  }
   function onKey(event) {
     if (event.defaultPrevented) return;
     // A held A or B acts once: the browser would click a focused button on every repeat.
@@ -69,11 +85,12 @@ export function createApp(root, { scenes = {}, storage } = {}) {
     const route = routeIntent(event);
     if (!route || route === 'native') return;
     if (route === 'click-target') { event.preventDefault(); event.target.click(); return; }
-    if (windowOpen() || manager.busy) return;   // windows handle their own B and arrows
+    if (stage.inert || windowOpen() || manager.busy) return;   // windows handle their own B and arrows
     if (manager.scene?.handleIntent?.(keyIntent(event))) event.preventDefault();
   }
+  document.addEventListener('keydown', lockTransitionKey, true);
   document.addEventListener('keydown', onKey);
-  const onVisibility = () => { if (document.hidden) { stopSpeaking(); manager.pause(); } };
+  const onVisibility = () => { if (document.hidden) { manager.pause(); stopSpeaking(); } };
   document.addEventListener('visibilitychange', onVisibility);
 
   const ctx = {
@@ -83,8 +100,17 @@ export function createApp(root, { scenes = {}, storage } = {}) {
     get saveOk() { return saveOk; },
     commit(next) {
       state = next;
-      saveOk = saveState(state, storage);
+      saveOk = false;
+      // Keep local play, but never replace a save written or cleared by another tab.
+      // A reload starts with the newer snapshot and establishes a new baseline.
+      try {
+        if (!destroyed && readSave() === lastSaved && saveState(state, storage)) {
+          lastSaved = JSON.stringify(normalizeState(state));
+          saveOk = true;
+        }
+      } catch { /* keep the local work and show the save warning */ }
       banner.hidden = saveOk;
+      saveStatus.textContent = saveOk ? '' : banner.textContent;
       applySettings(stage, state.settings);
       return state;
     },
@@ -102,19 +128,24 @@ export function createApp(root, { scenes = {}, storage } = {}) {
       guide: id => openGuideWindow(ctx, { id }),
       help: (title, steps) => openHelpWindow(ctx, title, steps),
     },
-    speak: text => speak(text),
+    speak: text => !destroyed && !document.hidden && speak(text),
     // Screen readers always hear it; Read to me says it aloud too.
     announce(text) {
       live.textContent = '';
       setTimeout(() => { live.textContent = text; }, 30);
-      if (state.settings.autoRead) speak(text);
+      if (state.settings.autoRead) ctx.speak(text);
     },
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      document.removeEventListener('keydown', lockTransitionKey, true);
       document.removeEventListener('keydown', onKey);
       document.removeEventListener('visibilitychange', onVisibility);
+      manager.destroy();
+      closeWindow(stage);
       stopSpeaking();
-      manager.scene?.destroy();
       live.remove();
+      saveStatus.remove();
       unmountStage();
     },
   };

@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { gradeChoices, chooseGrade } from '../src/ui/screens/title.js';
+import { gradeChoices, chooseGrade, createTitleScene } from '../src/ui/screens/title.js';
 import { withScope, toggleSetting, chooseAvatar } from '../src/ui/save.js';
-import { createState } from '../src/progress.js';
+import { createState, normalizeState } from '../src/progress.js';
 
 test('grade tiles are Kindergarten then grades 1–5', () => {
   assert.deepEqual(gradeChoices().map(c => c.label), ['K', '1', '2', '3', '4', '5']);
@@ -33,4 +33,64 @@ test('choosing who you are returns a new state and rejects anything else', () =>
   assert.equal(chooseAvatar(state, 'boy').avatar, 'boy');
   assert.equal(state.avatar, 'boy');
   assert.throws(() => chooseAvatar(state, 'player'), RangeError);
+});
+
+// The scene-test fake DOM also exercises the live guide Help window.
+import { Doc, Event } from './helpers/dom.js';
+
+
+function installDocument(t) {
+  const prior = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const doc = new Doc();
+  doc.querySelector = selector => selector === '#guide' ? doc.body : doc.body.querySelector(selector);
+  globalThis.document = doc;
+  t.after(() => { if (prior) Object.defineProperty(globalThis, 'document', prior); else delete globalThis.document; });
+  return doc;
+}
+
+test('choosing a title grade immediately shows the label saved for reload', t => {
+  const doc = installDocument(t);
+  for (let tile = 0; tile < gradeChoices().length; tile++) {
+    let state = createState();
+    const visits = [];
+    const ctx = { stage: doc.body, getState: () => state, commit: next => { state = normalizeState(next); }, go: name => visits.push(name), announce() {} };
+    let scene = createTitleScene(ctx);
+    scene.mount();
+    assert.equal(doc.body.querySelector('.title-start span').textContent, 'Start');
+    doc.body.querySelectorAll('.grade-tile')[tile].click();
+    assert.equal(state.hasStarted, true);
+    assert.equal(doc.body.querySelector('.title-start span').textContent, 'Continue');
+    assert.deepEqual(visits, [], 'choosing a grade does not navigate');
+    scene.destroy();
+    state = normalizeState(JSON.parse(JSON.stringify(state)));
+    scene = createTitleScene(ctx);
+    scene.mount();
+    assert.equal(doc.body.querySelector('.title-start span').textContent, 'Continue');
+    scene.destroy();
+  }
+});
+
+test('the live style guide Help action closes with Got it and restores focus', async t => {
+  const doc = installDocument(t);
+  const prior = Object.getOwnPropertyDescriptor(globalThis, 'MutationObserver');
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  t.after(() => { if (prior) Object.defineProperty(globalThis, 'MutationObserver', prior); else delete globalThis.MutationObserver; });
+  await import('../src/styleguide-kit.js');
+  const help = doc.body.querySelector('[data-act="help"]');
+  for (const key of [null, 'Enter', 'z']) {
+    help.focus();
+    help.click();
+    const gotIt = doc.body.querySelector('[data-help-done]');
+    assert.ok(gotIt);
+    assert.equal(doc.activeElement, gotIt, 'the first presented action has focus');
+    if (key) {
+      const event = new Event('keydown', { key });
+      gotIt.dispatchEvent(event);
+      // The browser's native Enter action clicks a focused button.
+      if (key === 'Enter' && !event.defaultPrevented) gotIt.click();
+    } else gotIt.click();
+    assert.equal(Boolean(doc.body.querySelector('.win-backdrop')), false);
+    assert.equal(doc.activeElement, help);
+    assert.equal(help.closest('.kit-demo__dlg').inert, false);
+  }
 });

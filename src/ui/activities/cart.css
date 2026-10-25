@@ -1,8 +1,25 @@
 /* Taro's cart, inside the 520×268 field. */
 .cart { position: absolute; inset: 0; }
-.cart__badges { position: absolute; z-index: 2; left: 40px; top: 4px; width: 440px; display: flex; justify-content: space-between; }
+.cart__badges { position: absolute; z-index: 2; left: 8px; right: 8px; top: 8px; display: flex; justify-content: space-between; pointer-events: none; }
 .cart__total { --chip: var(--math); min-width: 112px; justify-content: space-between; white-space: nowrap; font-size: var(--text-field); line-height: 1.2; }
 .cart__total-num { font-family: var(--font-pixel); font-size: var(--text-name); line-height: 1.2; }
+
+/* Crate sizes: a small rail of crates between the totals. The picked one is lifted inside an ink ring,
+   and a bigger number comes in a wider crate, so weight shows as size, color and number. */
+.cart__sizes { position: absolute; z-index: 3; left: 50%; top: 8px; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 8px; }
+.cart__size {
+  --crate: var(--lantern);
+  width: 36px; height: 44px; padding: 0; cursor: pointer;
+  background: var(--crate); border: 4px solid var(--ink); box-shadow: inset 0 -5px 0 rgba(31, 33, 71, .22), inset 3px 3px 0 rgba(255, 255, 255, .45);
+  font-family: var(--font-pixel); font-size: var(--text-name); font-weight: 700; line-height: 1; color: var(--ink);
+  transition: transform 80ms ease;
+}
+.cart__size.cart__crate--w2 { width: 40px; }
+.cart__size.cart__crate--w3 { width: 44px; }
+.cart__size.cart__crate--w5 { width: 50px; }
+.cart__size:hover { filter: brightness(1.08); }
+.cart__size[aria-checked="true"] { transform: translateY(-3px); outline: 3px solid var(--ink); outline-offset: 2px; }
+.cart__size:focus-visible { outline: 3px solid var(--vermilion); outline-offset: 2px; }
 
 .cart__ground { position: absolute; left: 0; right: 0; bottom: 0; height: 32px; background: var(--path); border-top: 4px solid var(--ink); }
 
@@ -49,6 +66,9 @@
 .cart__wheel::after { content: ''; position: absolute; inset: 12px; background: var(--paper-shade); }
 .cart__wheel--left { left: 56px; }
 .cart__wheel--right { right: 56px; }
+
+/* Calm motion: no lift animation on the size rail. */
+.calm .cart__size { transition: none; }
 
 /* A balanced roll trundles off and back; a wobble shakes. Calm motion removes both (kit.css). */
 .cart--roll { animation: cart-roll 900ms steps(9) 1; }

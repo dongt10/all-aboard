@@ -1,42 +1,65 @@
-import { createBandEngine, sanitizeBandSnapshot, applyBeatChanges, notesForBeat, renderBandPreview, encodeWav } from '../../audio.js';
+import { createBandEngine, sanitizeBandSnapshot, applyBeatChanges, notesForBeat, phraseLength } from '../../audio.js';
 import { createPlaybackController, bandPlaybackMessage, CAST } from '../../music.js';
-import { getDraft, saveDraft, publishCreation } from '../../progress.js';
-import { MUSICIAN_COLORS, editorMode, toggleMusician, setPattern, toggleBeat, cycleNote, noteLabel, musicCommands } from '../band.js';
+import { getDraft, getCreations, saveDraft, publishCreation } from '../../progress.js';
+import {
+  MUSICIAN_COLORS, toggleMusician, toggleBeat, cycleNote, noteLabel, setTrackNotes, musicCommands,
+  leadTrack, TEMPO_NAMES, cycleTempo, setTempo, formLabel, cycleForm, setForm, defaultBandFor, isEdited,
+  melodyShape, shapeLine, restsLine, pickEcho, echoMatches, openingLine, helpLines,
+} from '../band.js';
 import { figureMarkup } from '../figures/index.js';
 import { icon } from '../icons.js';
 import { createCommandMenu } from '../menu.js';
 import { createDialogue } from '../dialogue.js';
-import { openWindow } from '../window.js';
 import { stopSpeaking } from '../voice.js';
 import { onceAtATime } from '../scenes.js';
 import { withScope } from '../save.js';
 import { creationMarkup } from '../creations.js';
 import { showItemGet } from './item-get.js';
+import { openSoundsWindow } from './sounds.js';
 
-// Kiko's Sound Garden: four musicians on floating pedestals, eight beat lanterns, and the 2×2 menu.
+// Kiko's Sound Garden: four musicians on floating pedestals, eight lanterns that edit the grade's lead
+// musician, a Speed sign (plus Echo at grade 2 and Form at grades 4–5), and the 2×2 menu.
 const PEDESTAL_X = [150, 370, 590, 810];   // feet x, in CAST order
 const FEET_Y = 260, SCALE = 1.5;
 const BOX = { width: 160, top: 132 };        // each musician button, relative to the stage
-const QUIET_MS = 60000 / 90;
+const LANTERN_GAP = 48;                      // lantern i sits at rail x = i * LANTERN_GAP
+const NOTE_STEP = 19, REST_STEP = 96;        // staircase: La hangs at the string, each pitch down adds a step, rests hang lowest
 const PART = { bass: 'Bass', voice: 'Singer', melody: 'Whistle', percussion: 'Rhythm' };
-const HELP = [
-  'Tap a friend to join the band or take a rest.',
-  'Press Play to hear your band, or Quiet play to watch the beat.',
-  'Open Tunes to change a friend’s tune.',
-  'Press Save band when you love your song.',
-];
-const gradeOf = state => (state.chapter === 0 ? 0 : state.grade);
+const LESSON = {
+  0: 'Slow and fast · high and low',
+  1: 'Cricket’s rhythm · sound and rest',
+  2: 'Cricket’s rhythm · sound and rest',
+  3: 'Kiko’s tune · up and down',
+  4: 'Cricket keeps the steady part',
+  5: 'Form · A B A',
+};
+const SPEED_LINES = { 60: 'Slow, like a sleepy walk.', 90: 'Steady, like a heartbeat.', 120: 'Fast, like a running rabbit!' };
+const FORM_LINES = { A: 'Just tune A, over and over.', AB: 'Tune A, then tune B.', ABA: 'Tune A, then B, then A comes back!' };
+export const ECHO_LINES = {
+  listen: 'Listen and watch the lanterns…',
+  copy: 'Your turn! Tap the lanterns to copy it.',
+  matched: 'You echoed it! Now make one for me.',
+  notYet: 'Not yet. Press Echo to hear it again.',
+  stopped: 'Echo stopped. Press Echo to hear it again.',
+};
+const gradeOf = state => (state.chapter === 0 ? 0 : Number(state.grade) || 0);
 const castOf = id => CAST.find(c => c.id === id);
 const trackOf = (band, id) => band.tracks.find(t => t.id === id);
+// Where a lantern hangs for a note: the string for La, one step down per pitch, and the bottom for a rest.
+export const lanternStep = note => (note === null || note === undefined ? REST_STEP : (4 - note) * NOTE_STEP);
 
 export function createMusicScene(ctx) {
-  let root = null, menu = null, dialogue = null, engine = null, playback = null, tunes = null;
-  let band = null, selected = 'melody', quiet = false, quietTimer = null, quietBand = null, quietBeat = 0;
-  let destroyed = false, finishing = false, recordingToken = 0, recording = false;
-  const downloads = new Map();
+  let root = null, menu = null, dialogue = null, engine = null, playback = null, sounds = null;
+  let band = null, grade = 0, lead = null, selected = 'melody';
+  let quiet = false, quietTimer = null, quietBand = null, quietBeat = 0, playedOnce = false;
+  let echo = null, echoCount = 0, echoToken = 0;   // echo: { mask, phase: 'demo' | 'copy', beat, timer }
+  let destroyed = false, finishing = false;
+  let reward = null;
   const $ = selector => root.querySelector(selector);
   const settings = () => ctx.getState().settings ?? {};
   const say = (speaker, words) => { if (!destroyed) dialogue.say(speaker, words); };
+  const lanterns = () => [...root.querySelectorAll('.music-lantern')];
+  const edited = () => playedOnce || isEdited(band, grade);
 
   // ---- Stage ----
   function musicianMarkup(c, i) {
@@ -44,6 +67,7 @@ export function createMusicScene(ctx) {
     const figureLeft = BOX.width / 2 - 32 * SCALE, figureTop = feet - 57 * SCALE;
     return `<button type="button" class="music-musician" data-id="${c.id}" style="--musician:${MUSICIAN_COLORS[c.id]};--float-delay:${-i * 600}ms;left:${fx - BOX.width / 2}px;top:${BOX.top}px">
         <span class="music-musician__float">
+          <span class="music-lead-glow" style="top:${feet - 18}px" aria-hidden="true"></span>
           <span class="music-ring" style="top:${feet - 14}px" aria-hidden="true"></span>
           <span class="music-pedestal" style="top:${feet}px" aria-hidden="true"><i class="music-pedestal__top"></i><i class="music-pedestal__rock"></i></span>
           <span class="music-figure" style="left:${figureLeft}px;top:${figureTop}px" aria-hidden="true">
@@ -53,19 +77,37 @@ export function createMusicScene(ctx) {
           <span class="music-note" aria-hidden="true">${c.icon}</span>
           <span class="music-zzz" aria-hidden="true">z<i>z</i></span>
         </span>
+        ${c.id === 'percussion' ? '<span class="px-chip music-badge" aria-hidden="true">steady part</span>' : ''}
         <span class="px-chip music-name" aria-hidden="true"><i class="music-swatch"></i>${c.name} · ${PART[c.id]}</span>
       </button>`;
   }
+  function lanternMarkup(i) {
+    const left = `left:${i * LANTERN_GAP}px`;
+    if (!lead) return `<span class="music-lantern" data-beat="${i}" style="${left}"><b>${i + 1}</b></span>`;
+    return `<button type="button" class="music-lantern" data-beat="${i}" style="${left}"><b></b></button>`;
+  }
+  function signsMarkup() {
+    const speed = `<button type="button" class="px-button music-sign" data-sign="speed">${icon('clock')}<span class="music-sign__word"></span></button>`;
+    const echoSign = grade === 2 ? `<button type="button" class="px-button music-sign" data-sign="echo">${icon('hear')}<span>Echo</span></button>` : '';
+    const form = grade >= 4 ? `<button type="button" class="px-button music-sign music-form" data-sign="form"${grade === 4 ? ' disabled' : ''}>${icon('turn')}<span class="music-form__letters"></span></button>` : '';
+    return `<div class="music-signs">${speed}${echoSign}${form}</div>`;
+  }
   function build() {
+    const leadName = lead ? castOf(lead).name : null;
     root = document.createElement('section');
     root.className = 'music';
+    root.dataset.grade = String(grade);
+    if (lead) root.dataset.lead = lead;
+    root.classList.toggle('music--steady', grade >= 4);
     root.setAttribute('aria-label', 'Kiko’s Sound Garden');
     root.innerHTML = `
       <div class="music-sky" aria-hidden="true"><i class="music-cloud music-cloud--a"></i><i class="music-cloud music-cloud--b"></i><i class="music-hill music-hill--back"></i><i class="music-hill music-hill--front"></i>
         ${Array.from({ length: 9 }, (_, i) => `<i class="music-flower" style="--x:${40 + i * 108}px;--y:${352 + (i % 3) * 8}px;--petal:var(${['--art', '--lantern', '--writing'][i % 3]})"></i>`).join('')}</div>
       <button type="button" class="px-button music-back">${icon('back')}<span>Village</span></button>
+      <p class="px-chip music-lesson"><span>${LESSON[Math.max(0, Math.min(5, grade))]}</span></p>
       <p class="px-chip px-name music-title">${icon('music')}<span>Kiko’s Sound Garden</span></p>
-      <div class="music-lanterns" role="img" aria-label="Eight beat lanterns"><i class="music-string"></i>${Array.from({ length: 8 }, (_, i) => `<span class="music-lantern" data-beat="${i}" style="left:${i * 54}px"><b>${i + 1}</b></span>`).join('')}</div>
+      ${signsMarkup()}
+      <div class="music-lanterns" role="${lead ? 'group' : 'img'}" aria-label="${lead ? `${leadName}’s lanterns. Beat ${lead === 'percussion' ? 'sounds and rests' : 'notes'}.` : 'Eight beat lanterns'}"${lead ? ` style="--lead:${MUSICIAN_COLORS[lead]}"` : ''}><i class="music-string"></i>${Array.from({ length: 8 }, (_, i) => lanternMarkup(i)).join('')}</div>
       <div class="music-band">${CAST.map(musicianMarkup).join('')}</div>
       <div class="music-dialogue"></div>
       <div class="music-menu"></div>`;
@@ -75,58 +117,129 @@ export function createMusicScene(ctx) {
     for (const c of CAST) {
       const on = trackOf(band, c.id).enabled, button = $(`.music-musician[data-id="${c.id}"]`);
       button.classList.toggle('is-resting', !on);
+      button.classList.toggle('is-lead', c.id === lead);
       button.setAttribute('aria-pressed', String(on));
-      button.setAttribute('aria-label', `${c.name}, ${c.sound}, ${on ? 'in the band. Tap to rest.' : 'resting. Tap to invite.'}`);
+      button.setAttribute('aria-label', `${c.name}, ${c.sound}, ${on ? 'in the band. Tap to rest.' : 'resting. Tap to invite.'}${c.id === lead ? ' Edit on the lanterns above.' : ''}`);
     }
+  }
+  // The lanterns show the lead's eight beats: sound/rest glyphs for Cricket, a note staircase for Kiko.
+  function paintRail() {
+    if (!lead) return;
+    const notes = trackOf(band, lead).notes;
+    lanterns().forEach((el, i) => {
+      const note = notes[i], rest = note === null || note === undefined;
+      el.classList.toggle('is-rest', rest);
+      el.classList.toggle('is-sound', !rest);
+      const label = el.querySelector('b');
+      if (lead === 'percussion') {
+        label.textContent = rest ? '–' : '♪';
+        el.setAttribute('aria-pressed', String(!rest));
+        el.setAttribute('aria-label', `Beat ${i + 1}: ${rest ? 'rest' : 'sound'}. Tap to flip.`);
+      } else {
+        label.textContent = rest ? '–' : noteLabel(note);
+        el.style.setProperty('--step', `${lanternStep(rest ? null : note)}px`);
+        el.setAttribute('aria-label', `Beat ${i + 1}: ${noteLabel(rest ? null : note)}. Tap for the next note.`);
+      }
+    });
+  }
+  function paintSpeed() {
+    const sign = $('[data-sign="speed"]');
+    if (!sign) return;
+    sign.querySelector('.music-sign__word').textContent = TEMPO_NAMES[band.tempo] ?? 'Steady';
+    sign.setAttribute('aria-label', `Speed: ${TEMPO_NAMES[band.tempo] ?? 'Steady'}. Tap for ${TEMPO_NAMES[cycleTempo(band.tempo)]}.`);
+  }
+  function paintForm() {
+    const sign = $('[data-sign="form"]');
+    if (!sign) return;
+    const label = formLabel(band.form);
+    const letters = sign.querySelector('.music-form__letters');
+    letters.innerHTML = '';
+    for (const letter of label.split(' ')) { const b = document.createElement('b'); b.textContent = letter; letters.append(b); }
+    sign.setAttribute('aria-label', sign.disabled ? `Form: ${label}. Cricket keeps the steady part.` : `Form: ${label}. Tap for ${formLabel(cycleForm(band.form))}.`);
+  }
+  function paintPhrase(index) {
+    root?.querySelectorAll('.music-form__letters b').forEach((b, i) => b.classList.toggle('is-now', index !== null && i === index));
   }
   function clearBeats() {
     root?.querySelectorAll('.is-lit, .is-performing').forEach(el => el.classList.remove('is-lit', 'is-performing'));
   }
-  function showBeat({ beat, notes }) {
+  function showBeat({ beat, notes, phraseIndex }) {
     if (destroyed) return;
+    if (echo?.phase === 'demo') {
+      // The engine wraps to beat 0 after the eight-beat demonstration.
+      showEchoBeat(beat === 0 && echo.beat > 0 ? 8 : beat);
+      return;
+    }
     clearBeats();
-    $(`.music-lantern[data-beat="${beat}"]`)?.classList.add('is-lit');
+    lanterns()[beat % 8]?.classList.add('is-lit');
     for (const note of notes) $(`.music-musician[data-id="${note.id}"]`)?.classList.add('is-performing');
+    paintPhrase(phraseIndex ?? Math.floor(beat / 8));
   }
 
   // ---- Sound ----
-  function refreshMenu() { menu?.set(musicCommands({ playing: Boolean(playback?.active), quiet })); }
+  function refreshMenu() { menu?.set(musicCommands({ playing: Boolean(playback?.active), quiet, edited: edited() })); }
   function stopQuiet() { clearInterval(quietTimer); quietTimer = null; quiet = false; quietBand = null; }
-  // Stops the band and quiet play. Used by Stop, pause(), leaving, saving and destroy().
+  function stopEchoTimers() {
+    echoToken++;
+    if (!echo) return;
+    clearInterval(echo.timer); echo.timer = null;
+    if (echo.phase === 'demo') {   // a copy in progress survives Play and See beat; a cut demo says so
+      echo = null;
+      say('Kiko', ECHO_LINES.stopped);   // whoever cut it (Play, a tap, Echo again) says its own line next
+    }
+    $('[data-sign="echo"]')?.classList.remove('is-busy');
+  }
+  // Stops the band, See beat and the echo demo. Used by Stop, pause(), leaving, saving and destroy().
   function stopAll() {
     stopQuiet();
+    stopEchoTimers();
     if (playback?.active) playback.stop(); else engine?.stop();
     clearBeats();
+    paintPhrase(null);
     refreshMenu();
   }
   function togglePlay() {
     if (playback.active) { stopAll(); return; }
     stopAll();
+    playedOnce = true;
     void playback.toggle(band);
   }
-  function toggleQuiet() {
-    if (quiet) { stopAll(); say('Kiko', 'Quiet play stopped. Your song is safe.'); return; }
-    stopAll();
-    quiet = true; quietBeat = 0; quietBand = sanitizeBandSnapshot(band);
+  // See beat: one ticker lights the lanterns at the band's speed, with no sound.
+  function startQuietTicker({ immediate = true } = {}) {
+    clearInterval(quietTimer);
     const tick = () => {
       quietBand = applyBeatChanges(quietBand, band, quietBeat);
-      showBeat({ beat: quietBeat, notes: notesForBeat(quietBand, quietBeat) });
-      quietBeat = (quietBeat + 1) % 8;
+      quietBeat %= phraseLength(quietBand);
+      showBeat({ beat: quietBeat, notes: notesForBeat(quietBand, quietBeat), phraseIndex: Math.floor(quietBeat / 8) });
+      quietBeat = (quietBeat + 1) % phraseLength(quietBand);
     };
-    tick();
-    quietTimer = setInterval(tick, QUIET_MS);
+    if (immediate) tick();
+    quietTimer = setInterval(tick, 60000 / band.tempo);
+  }
+  function toggleQuiet() {
+    if (quiet) { stopAll(); say('Kiko', 'See beat stopped. Your song is safe.'); return; }
+    stopAll();
+    quiet = true; quietBeat = 0; quietBand = sanitizeBandSnapshot(band); playedOnce = true;
+    startQuietTicker();
     refreshMenu();
     say('Kiko', bandPlaybackMessage(band, { quiet: true }));
   }
 
-  // ---- Saving ----
+  // ---- Saving and editing ----
   const saveNow = () => ctx.commit(saveDraft(ctx.getState(), 'music', withScope(band, ctx.getState())));
+  // Every edit (stage taps and the Sounds window alike) ends a running echo demo first, so the demo band
+  // never picks up the change on its next beat. finishDemo edits after the phase turns to 'copy', so it is spared.
+  const interruptDemo = () => { if (echo?.phase === 'demo') stopAll(); };
   function edit(next, { line, save = true } = {}) {
+    interruptDemo();
     band = next;
     engine.update(band);
     if (save) saveNow();
     paintMusicians();
-    if (tunes) paintTunes();
+    paintRail();
+    paintSpeed();
+    paintForm();
+    refreshMenu();
     if (line) say(line[0], line[1]);
   }
   function tapMusician(id) {
@@ -134,99 +247,85 @@ export function createMusicScene(ctx) {
     const next = toggleMusician(band, id), c = castOf(id), on = trackOf(next, id).enabled;
     edit(next, { line: [c.name, on ? `${c.name} joins on the next beat. ${c.line}` : `${c.name} rests for now. Tap again to invite them back.`] });
   }
-
-  // ---- Tunes window ----
-  function editorMarkup() {
-    const c = castOf(selected), t = trackOf(band, selected), mode = editorMode(gradeOf(ctx.getState()), selected);
-    const patterns = ['Sprout', 'Flower'].map((name, p) => `<button type="button" class="px-button tunes-pattern" data-pattern="${p}" aria-pressed="${t.pattern === p}">${t.pattern === p ? icon('check') : ''}<span>${name}</span></button>`).join('');
-    const hint = mode === 'patterns' ? 'Try Sprout and Flower. They sound lovely together!'
-      : mode === 'notes' ? 'Tap a beat to pick its note. Changes join at the next phrase.' : 'Tap a beat to add a sound or a rest.';
-    const beats = mode === 'patterns' ? '' : `<div class="tunes-beats">${t.notes.map((n, i) => mode === 'notes'
-      ? `<button type="button" class="tunes-beat${n === null ? '' : ' is-on'}" data-beat="${i}" aria-label="Beat ${i + 1}: ${noteLabel(n)}. Tap for the next note."><b>${i + 1}</b><span>${noteLabel(n)}</span></button>`
-      : `<button type="button" class="tunes-beat${n === null ? '' : ' is-on'}" data-beat="${i}" aria-pressed="${n !== null}" aria-label="Beat ${i + 1}: ${n === null ? 'rest' : 'sound'}"><b>${i + 1}</b><span>${n === null ? '–' : '♪'}</span></button>`).join('')}</div>`;
-    return `<div class="tunes-editor" style="--musician:${MUSICIAN_COLORS[c.id]}">
-        <p class="tunes-hint">${c.icon} ${c.name} · ${c.sound}. ${hint}</p>
-        <div class="tunes-patterns">${patterns}</div>${beats}
-        <label class="tunes-slider"><span>${c.name} volume</span><input type="range" data-volume="${c.id}" min="0" max="1" step=".05" value="${t.volume}"></label>
-        <label class="tunes-slider"><span>Band volume</span><input type="range" data-master min="0" max="1" step=".05" value="${band.masterVolume}"></label>
-      </div>`;
-  }
-  function paintTunes() {
-    const body = tunes.body, active = document.activeElement;
-    const keep = active && body.contains(active) ? (active.dataset.tab ? `[data-tab="${active.dataset.tab}"]` : active.dataset.pattern ? `[data-pattern="${active.dataset.pattern}"]` : active.dataset.beat ? `[data-beat="${active.dataset.beat}"]` : null) : null;
-    body.querySelectorAll('[data-tab]').forEach(tab => {
-      const on = tab.dataset.tab === selected;
-      tab.setAttribute('aria-selected', String(on));
-      tab.tabIndex = on ? 0 : -1;
-    });
-    if (active?.type === 'range' && body.contains(active)) return;   // don't rebuild a slider under the pointer
-    body.querySelector('.tunes-panel').innerHTML = editorMarkup();
-    if (keep) body.querySelector(keep)?.focus();
-  }
-  function setRecordLabel() {
-    const button = tunes?.body.querySelector('.tunes-record');
-    if (button) button.innerHTML = recording ? `${icon('stop')}<span>Cancel recording</span>` : `${icon('download')}<span>Save recording</span>`;
-  }
-  const tunesStatus = text => { const el = tunes?.body.querySelector('.tunes-status'); if (el) el.textContent = text; };
-  function cancelRecording() { recordingToken++; recording = false; setRecordLabel(); }
-  async function record() {
-    if (recording) { cancelRecording(); tunesStatus('Recording canceled.'); return; }
-    recording = true; setRecordLabel(); tunesStatus('Making a two-phrase recording…');
-    const token = ++recordingToken, score = sanitizeBandSnapshot(band);
-    try {
-      const buffer = await renderBandPreview(score, { phrases: 2 });
-      if (destroyed || token !== recordingToken) return;
-      const url = URL.createObjectURL(new Blob([encodeWav(buffer)], { type: 'audio/wav' }));
-      const anchor = document.createElement('a');
-      anchor.href = url; anchor.download = 'my-festival-band.wav'; anchor.hidden = true;
-      root.append(anchor); anchor.click(); anchor.remove();
-      downloads.set(url, setTimeout(() => { URL.revokeObjectURL(url); downloads.delete(url); }, 30000));
-      tunesStatus('Recording ready. Check your downloads.');
-    } catch {
-      if (!destroyed && token === recordingToken) tunesStatus('This browser could not make a recording. Your band is still here.');
-    } finally {
-      if (!destroyed && token === recordingToken) { recording = false; setRecordLabel(); }
+  function tapLantern(beat) {
+    if (!lead) return;
+    const next = lead === 'percussion' ? toggleBeat(band, lead, beat) : cycleNote(band, lead, beat);
+    const notes = trackOf(next, lead).notes;
+    let line = lead === 'percussion' ? restsLine(notes) : shapeLine(melodyShape(notes));
+    if (echo?.phase === 'copy') {
+      const sounds = notes.filter(n => n !== null && n !== undefined).length, wanted = echo.mask.filter(Boolean).length;
+      if (echoMatches(notes, echo.mask)) { echo = null; echoCount++; line = ECHO_LINES.matched; }
+      else if (sounds >= wanted) line = ECHO_LINES.notYet;   // enough sounds placed, but on the wrong beats
     }
+    edit(next, { line: ['Kiko', line] });
   }
-  function openTunes() {
-    if (ctx.scenes?.busy) return;   // never over a scene change
+  function tapSpeed() {
+    const tempo = cycleTempo(band.tempo);
+    edit(setTempo(band, tempo), { line: ['Kiko', SPEED_LINES[tempo]] });
+    if (quiet) startQuietTicker({ immediate: false });   // the lights follow the new speed at once
+  }
+  function tapForm() {
+    const form = cycleForm(band.form);
+    edit(setForm(band, form), { line: ['Kiko', FORM_LINES[form]] });
+  }
+
+  // ---- Echo (grade 2): Kiko plays a rhythm, the lanterns flash it, then Cricket's rail clears for the copy ----
+  async function startEcho() {
+    stopAll();
     stopSpeaking();
-    const body = document.createElement('div');
-    body.className = 'tunes';
-    body.innerHTML = `<div class="tunes-tabs" role="tablist" aria-label="Musicians">${CAST.map(c => `<button type="button" role="tab" class="px-chip tunes-tab" data-tab="${c.id}" style="--musician:${MUSICIAN_COLORS[c.id]}"><i class="music-swatch"></i>${c.icon} ${c.name}</button>`).join('')}</div>
-      <div class="tunes-panel" role="tabpanel"></div>
-      <div class="tunes-foot"><button type="button" class="px-button tunes-record"></button><p class="tunes-status" role="status" aria-live="polite">Download two phrases as a WAV file.</p></div>`;
-    body.addEventListener('click', event => {
-      const target = event.target.closest('button');
-      if (!target) return;
-      if (target.dataset.tab) { selected = target.dataset.tab; paintTunes(); return; }
-      if (target.dataset.pattern) { edit(setPattern(band, selected, Number(target.dataset.pattern))); tunesStatus('New tune ready for the next phrase.'); return; }
-      if (target.dataset.beat) {
-        const mode = editorMode(gradeOf(ctx.getState()), selected), beat = Number(target.dataset.beat);
-        edit(mode === 'notes' ? cycleNote(band, selected, beat) : toggleBeat(band, selected, beat));
-        return;
-      }
-      if (target.classList.contains('tunes-record')) void record();
+    const mask = echo?.mask ?? pickEcho(echoCount), token = echoToken;
+    echo = { mask, phase: 'demo', beat: 0, timer: null };
+    $('[data-sign="echo"]')?.classList.add('is-busy');
+    say('Kiko', ECHO_LINES.listen);
+    // One-off band: only Cricket sounds, and only on the picked beats.
+    const demo = {
+      ...sanitizeBandSnapshot(band), form: 'A',
+      tracks: band.tracks.map(t => (t.id === 'percussion'
+        ? { ...t, enabled: true, volume: Math.max(t.volume, .6), notes: mask.map(on => (on ? 0 : null)) }
+        : { ...t, enabled: false, notes: [...t.notes] })),
+    };
+    let audible = false;
+    try { audible = await engine.start(demo); } catch { /* lights still run without sound */ }
+    if (destroyed || token !== echoToken || echo?.phase !== 'demo') return;
+    if (audible) return;   // onBeat drives the lights and completion from the audio clock
+    const started = performance.now(), beatMs = 60000 / demo.tempo;
+    // A delayed callback catches up to the elapsed beat instead of stretching the rhythm.
+    const tick = () => showEchoBeat(Math.floor((performance.now() - started) / beatMs + 1e-9));
+    tick();
+    echo.timer = setInterval(tick, beatMs);
+  }
+  function showEchoBeat(beat) {
+    if (echo?.phase !== 'demo') return;
+    if (beat >= 8) { finishDemo(); return; }
+    clearBeats();
+    if (echo.mask[beat]) {
+      lanterns()[beat]?.classList.add('is-lit');
+      $('.music-musician[data-id="percussion"]')?.classList.add('is-performing');
+    }
+    echo.beat = beat + 1;
+  }
+  function finishDemo() {
+    clearInterval(echo.timer); echo.timer = null;
+    engine.stop();
+    clearBeats();
+    echo.phase = 'copy';
+    $('[data-sign="echo"]')?.classList.remove('is-busy');
+    edit(setTrackNotes(band, 'percussion', []), { line: ['Kiko', ECHO_LINES.copy] });
+  }
+
+  // ---- Sounds window (another module owns it; it talks back through these callbacks) ----
+  function openSounds() {
+    if (ctx.scenes?.busy || sounds) return;   // never over a scene change or a second window
+    stopSpeaking();
+    const handle = openSoundsWindow(ctx, {
+      getBand: () => band,
+      getGrade: () => grade,
+      getSelected: () => selected,
+      onEdit: (next, line, { save = true } = {}) => edit(next, { line: Array.isArray(line) ? line : line ? ['Kiko', line] : null, save }),
+      onSelect: id => { selected = id; },
+      onClose: () => { sounds = null; },
     });
-    body.addEventListener('keydown', event => {   // arrows move between musician tabs
-      const tab = event.target.closest?.('[data-tab]');
-      if (!tab || !['ArrowLeft', 'ArrowRight'].includes(event.key)) return;
-      event.preventDefault();
-      const i = CAST.findIndex(c => c.id === tab.dataset.tab), next = CAST[(i + (event.key === 'ArrowRight' ? 1 : CAST.length - 1)) % CAST.length];
-      selected = next.id; paintTunes();
-      body.querySelector(`[data-tab="${next.id}"]`).focus();
-    });
-    body.addEventListener('input', event => {   // live mix; the draft is saved on change
-      const input = event.target;
-      if (input.dataset.volume) edit({ ...band, tracks: band.tracks.map(t => (t.id === input.dataset.volume ? { ...t, notes: [...t.notes], volume: Number(input.value) } : t)) }, { save: false });
-      else if ('master' in input.dataset) edit({ ...band, masterVolume: Number(input.value) }, { save: false });
-    });
-    body.addEventListener('change', event => { if (event.target.type === 'range') saveNow(); });
-    const handle = openWindow(ctx.stage, { title: 'Tunes', body, initialFocus: () => body.querySelector(`[data-tab="${selected}"]`), onClose: () => { tunes = null; } });
-    if (!handle) return;
-    tunes = { ...handle, body };
-    paintTunes();
-    setRecordLabel();
+    sounds = handle ?? null;
   }
 
   // ---- Leaving and finishing ----
@@ -237,29 +336,55 @@ export function createMusicScene(ctx) {
     await ctx.go('village', { focus: 'music' });
   }
   const finish = onceAtATime(async () => {
+    if (destroyed || finishing || !edited()) return;
     stopAll();
     saveNow();
     finishing = true;   // the card is up: B and Village wait for it
-    await showItemGet(ctx.stage, { name: 'Your festival band', artHTML: creationMarkup('music', band), figureHTML: figureMarkup('music', { pose: 'joy', scale: 2 }) });
-    if (destroyed) return;
-    ctx.commit(publishCreation(ctx.getState(), 'music', withScope(band, ctx.getState())));
-    await ctx.go('village', { focus: 'music', celebrate: 'music' });
+    const app = ctx.getState();
+    const scope = { chapter: app.chapter, grade: app.grade, subjectId: 'music' };
+    const creation = withScope(band, scope);
+    reward = showItemGet(ctx.stage, { name: 'Festival band', artHTML: creationMarkup(scope.subjectId, creation), figureHTML: figureMarkup('music', { pose: 'joy', scale: 2 }) });
+    const accepted = await reward;
+    reward = null;
+    const current = ctx.getState();
+    if (!accepted || destroyed || current.chapter !== scope.chapter || current.grade !== scope.grade) return;
+    ctx.commit(publishCreation(current, scope.subjectId, creation));
+    await ctx.go('village', { focus: scope.subjectId, celebrate: scope.subjectId });
   });
   function choose(id) {
     if (id === 'play') togglePlay();
     else if (id === 'quiet') toggleQuiet();
-    else if (id === 'tunes') openTunes();
+    else if (id === 'tunes') openSounds();
     else if (id === 'save') void finish();
   }
   const onHidden = () => { if (document.hidden) stopAll(); };
 
+  // Arrow keys walk a row of buttons the way they walk the musicians; the ends stop, they never wrap.
+  function stepAlong(buttons, current, intent) {
+    const i = buttons.indexOf(current);
+    buttons[Math.max(0, Math.min(buttons.length - 1, i + (intent === 'right' ? 1 : -1)))]?.focus();
+    return true;
+  }
+  // The top row, left to right: the Village button, then the signs (Speed, Echo, Form) that can be pressed.
+  const topRow = () => [$('.music-back'), ...root.querySelectorAll('.music-sign')].filter(b => b && !b.disabled);
+  const firstLantern = () => root.querySelector('button.music-lantern');
+  // Up from the band or the rail lands on the row above; down from the top row lands on the rail, or the menu at K.
+  function focusTopRow() { ($('.music-sign:not(:disabled)') ?? $('.music-back'))?.focus(); return true; }
+  function focusBelowTopRow() { const lantern = firstLantern(); if (lantern) lantern.focus(); else menu.focus(); return true; }
+
   return {
     mount() {
-      band = sanitizeBandSnapshot(getDraft(ctx.getState(), 'music'));
+      const state = ctx.getState();
+      grade = gradeOf(state);
+      lead = leadTrack(grade);
+      band = sanitizeBandSnapshot(getDraft(state, 'music') ?? defaultBandFor(grade));
+      // A published band already passed the finish gate, even when its score is still the default.
+      playedOnce = Boolean(getCreations(state).music);
+      selected = lead ?? 'melody';
       build();
       dialogue = createDialogue($('.music-dialogue'), {
         speak: text => ctx.speak(text),
-        onHelp: () => ctx.open.help('Kiko’s Sound Garden', HELP),
+        onHelp: () => ctx.open.help('Kiko’s Sound Garden', helpLines(grade)),
         isLarge: () => settings().largeText,
         autoRead: () => settings().autoRead,
       });
@@ -268,58 +393,76 @@ export function createMusicScene(ctx) {
         onBeat: showBeat,
         onStatus: status => {
           if (destroyed) return;
-          if (status === 'stopped') { playback?.engineStopped(); if (!quiet) clearBeats(); }
-          if (status === 'interrupted') say('Kiko', 'Sound was interrupted. Press Play to start again.');
+          if (status === 'stopped') { playback?.engineStopped(); if (!quiet) { clearBeats(); paintPhrase(null); } }
+          if (status === 'interrupted') { stopEchoTimers(); say('Kiko', 'Sound was interrupted. Press Play to start again.'); }
         },
       });
       playback = createPlaybackController(engine, {
         onState: (state, reason) => {
           if (destroyed) return;
           refreshMenu();
-          say('Kiko', reason === 'unavailable' ? 'Sound is unavailable. Try Quiet play to see your band.'
+          say('Kiko', reason === 'unavailable' ? 'Sound is unavailable. Try See beat to see your band.'
             : state === 'starting' ? 'Waking up the band…' : state === 'playing' ? bandPlaybackMessage(band) : 'Band stopped. Your song is safe.');
         },
       });
       engine.update(band);
-      root.querySelector('.music-band').addEventListener('click', event => {
+      $('.music-band').addEventListener('click', event => {
         const button = event.target.closest('.music-musician');
         if (button) tapMusician(button.dataset.id);
+      });
+      $('.music-lanterns').addEventListener('click', event => {
+        const button = event.target.closest('button.music-lantern');
+        if (button) tapLantern(Number(button.dataset.beat));
+      });
+      $('.music-signs').addEventListener('click', event => {
+        const sign = event.target.closest('[data-sign]')?.dataset.sign;
+        if (sign === 'speed') tapSpeed();
+        else if (sign === 'echo') void startEcho();
+        else if (sign === 'form') tapForm();
       });
       $('.music-back').addEventListener('click', () => { void leave(); });
       document.addEventListener('visibilitychange', onHidden);
       paintMusicians();
+      paintRail();
+      paintSpeed();
+      paintForm();
       refreshMenu();
-      say('Kiko', 'Welcome to my Sound Garden! Tap a friend to join or rest, then press Play.');
+      say('Kiko', openingLine(grade));
       menu.focus();
     },
     handleIntent(intent) {
       if (finishing) return intent === 'b';   // the item-get card handles its own A; B waits
       if (intent === 'b') { void leave(); return true; }
       if (intent === 'a') { if (dialogue.next()) return true; menu.focus(); return true; }
-      const musician = document.activeElement?.closest?.('.music-musician');
-      if (musician && (intent === 'left' || intent === 'right')) {
-        const buttons = [...root.querySelectorAll('.music-musician')], i = buttons.indexOf(musician);
-        buttons[Math.max(0, Math.min(buttons.length - 1, i + (intent === 'right' ? 1 : -1)))].focus();
-        return true;
-      }
+      const active = document.activeElement;
+      const lantern = active?.closest?.('button.music-lantern'), musician = active?.closest?.('.music-musician');
+      const top = active?.closest?.('.music-sign, .music-back');
+      if (top && (intent === 'left' || intent === 'right')) return stepAlong(topRow(), top, intent);
+      if (top && intent === 'down') return focusBelowTopRow();
+      if (top && intent === 'up') return true;   // the top row is the top
+      if (lantern && (intent === 'left' || intent === 'right')) return stepAlong([...root.querySelectorAll('button.music-lantern')], lantern, intent);
+      if (lantern && intent === 'down') { menu.focus(); return true; }
+      if (lantern && intent === 'up') return focusTopRow();
+      if (musician && (intent === 'left' || intent === 'right')) return stepAlong([...root.querySelectorAll('.music-musician')], musician, intent);
+      if (musician && intent === 'up') { const first = firstLantern(); if (first) first.focus(); else focusTopRow(); return true; }
       if (musician && intent === 'down') { menu.focus(); return true; }
       return menu.handleIntent(intent);
     },
     pause() { stopAll(); },
     destroy() {
       if (destroyed) return;
+      if (echo) { clearInterval(echo.timer); echo = null; }   // leaving mid-demo needs no "Echo stopped" line
       stopAll();
       destroyed = true;
-      recordingToken++;
-      for (const [url, timer] of downloads) { clearTimeout(timer); URL.revokeObjectURL(url); }
-      downloads.clear();
+      reward?.cancel();
+      reward = null;
       document.removeEventListener('visibilitychange', onHidden);
       engine?.destroy();
       dialogue?.destroy();
       menu?.destroy();
       root?.remove();
-      tunes?.close();
-      tunes = null;
+      sounds?.close();
+      sounds = null;
     },
   };
 }

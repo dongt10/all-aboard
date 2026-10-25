@@ -1,13 +1,13 @@
 import { CHARACTERS } from '../../data.js';
 import { encounterReady } from '../../encounters.js';
 import { getDraft, saveDraft, publishCreation } from '../../progress.js';
-import { ACTIVITIES } from '../registry.js';
+import { ACTIVITIES, activityFor } from '../registry.js';
 import { withScope } from '../save.js';
 import { creationMarkup } from '../creations.js';
 import { figureMarkup, playerFigureId } from '../figures/index.js';
 import { icon } from '../icons.js';
 import { SUBJECT_THEME } from '../palette.js';
-import { createCommandMenu } from '../menu.js';
+import { createCommandMenu, arrangeCommands } from '../menu.js';
 import { createDialogue } from '../dialogue.js';
 import { onceAtATime } from '../scenes.js';
 import { showItemGet } from './item-get.js';
@@ -18,14 +18,28 @@ const NEIGHBOR = { x: 848, y: 240, scale: 2 };
 const PLAYER = { x: 120, y: 420, scale: 3 };   // high enough that the speaker chip never sits on the hair
 const TYPING = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 const FOCUSABLE = 'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
+const NOT_READY_LINE = 'Not ready yet. Open Help for the steps.';
+
+// What to say when an action returned no line but the creation's readiness flipped, so the last line
+// never goes stale: an activity's own notReadyLine (optional), or a plain fallback; and "Ready!" naming
+// the finish command when it just became ready.
+export function readinessLine(activity, commands, wasReady, isReady) {
+  if (wasReady && !isReady) return typeof activity.notReadyLine === 'string' ? activity.notReadyLine : NOT_READY_LINE;
+  if (!wasReady && isReady) {
+    const finish = commands.find(command => command?.finish);
+    return finish ? `Ready! Choose ${finish.label}.` : 'Ready!';
+  }
+  return null;
+}
 
 // The Pokémon-battle frame: plate, neighbor on its platform, the player's back, the field, dialogue and menu.
 export function createEncounterScene(ctx, { id } = {}) {
   const character = CHARACTERS.find(item => item.id === id);
-  const activity = ACTIVITIES[id];
+  let activity = ACTIVITIES[id];
   if (!character || !activity) throw new RangeError(`No encounter for ${id}`);
   const theme = SUBJECT_THEME[id];
-  let root, field, menu, dialogue, state, ui, grade, finishing = false;
+  let root, field, menu, dialogue, state, ui, grade, finishing = false, dirty = false;
+  let destroyed = false, reward = null;
 
   const scoped = () => withScope(state, ctx.getState());
   const saveNow = () => ctx.commit(saveDraft(ctx.getState(), id, scoped()));
@@ -34,33 +48,48 @@ export function createEncounterScene(ctx, { id } = {}) {
   // The menu can't take focus while every command is disabled (an empty sign), so say where it went.
   const focusMenu = () => { menu.focus(); return root.querySelector('.enc__menu').contains(document.activeElement); };
 
+  const commands = () => arrangeCommands(activity.commands(state, ui, grade));   // the finish always ends up in slot 4
+  // Help can depend on the grade (K has no typing box, no crate sizes): helpFor(grade), help(grade) or a plain array.
+  const helpSteps = () => (typeof activity.helpFor === 'function' ? activity.helpFor(grade)
+    : typeof activity.help === 'function' ? activity.help(grade) : activity.help);
+
   function dispatch(action) {
     if (finishing) return;
+    const wasReady = encounterReady(state);
     const result = activity.act(state, ui, action, grade);
     const changed = result.state !== state;
     state = result.state;
     ui = result.ui;
-    if (changed) saveNow();
+    if (changed) { dirty = true; saveNow(); }
     field.update(state, ui);
-    menu.set(activity.commands(state, ui, grade));
-    if (result.line) say(result.line);
+    const next = commands();
+    menu.set(next);
+    const line = result.line || readinessLine(activity, next, wasReady, encounterReady(state));
+    if (line) say(line);
   }
 
   const finish = onceAtATime(async () => {
-    if (finishing || !encounterReady(state)) return;
+    if (destroyed || finishing || !encounterReady(state)) return;
     finishing = true;
     saveNow();
-    await showItemGet(ctx.stage, {
-      name: character.reward.label,
-      artHTML: creationMarkup(id, scoped()),
+    const app = ctx.getState();
+    const scope = { chapter: app.chapter, grade: app.grade, subjectId: id };
+    const creation = withScope(state, scope);
+    reward = showItemGet(ctx.stage, {
+      name: activity.rewardLabel ?? character.reward.label,
+      artHTML: creationMarkup(scope.subjectId, creation),
       figureHTML: figureMarkup(id, { pose: 'joy', scale: 2 }),
     });
-    ctx.commit(publishCreation(ctx.getState(), id, scoped()));
-    await ctx.go('village', { focus: id, celebrate: id });
+    const accepted = await reward;
+    reward = null;
+    const current = ctx.getState();
+    if (!accepted || destroyed || current.chapter !== scope.chapter || current.grade !== scope.grade) return;
+    ctx.commit(publishCreation(current, scope.subjectId, creation));
+    await ctx.go('village', { focus: scope.subjectId, celebrate: scope.subjectId });
   });
   const leave = onceAtATime(async () => {
     if (finishing) return;
-    saveNow();
+    if (dirty) saveNow();   // an untouched stall must not look "Started" in the village
     await ctx.go('village', { focus: id });
   });
 
@@ -68,6 +97,7 @@ export function createEncounterScene(ctx, { id } = {}) {
     mount() {
       const app = ctx.getState();
       grade = app.chapter === 0 ? 0 : app.grade;
+      activity = activityFor(id, grade);
       ({ state, ui } = activity.start(getDraft(app, id), { chapter: app.chapter, grade }));
 
       root = document.createElement('div');
@@ -94,7 +124,7 @@ export function createEncounterScene(ctx, { id } = {}) {
       field = activity.mountField(root.querySelector('.enc__field'), { grade, dispatch });
       dialogue = createDialogue(root.querySelector('.enc__dialogue'), {
         speak: text => ctx.speak(text),
-        onHelp: () => ctx.open.help(activity.title, activity.help),
+        onHelp: () => ctx.open.help(activity.title, helpSteps()),
         isLarge: () => ctx.stage.classList.contains('large-text'),
         autoRead: () => Boolean(ctx.getState().settings?.autoRead),
       });
@@ -102,7 +132,7 @@ export function createEncounterScene(ctx, { id } = {}) {
         onChoose: commandId => (commandId === 'finish' ? finish() : dispatch({ type: 'command', id: commandId })),
       });
       field.update(state, ui);
-      menu.set(activity.commands(state, ui, grade));
+      menu.set(commands());
       say(activity.opening(state, ui, grade));
       if (!focusMenu()) root.querySelector('.enc__field').querySelector(FOCUSABLE)?.focus();
     },
@@ -126,6 +156,10 @@ export function createEncounterScene(ctx, { id } = {}) {
     },
     pause() {},
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      reward?.cancel();
+      reward = null;
       field?.destroy();
       dialogue?.destroy();
       menu?.destroy();

@@ -3,6 +3,10 @@ import { keyIntent } from './input.js';
 
 const TABBABLE = 'button:not(:disabled), [href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])';
 let serial = 0;
+const windows = new WeakMap();
+
+// App teardown must run each window's cleanup, not just detach its DOM.
+export function closeWindow(stage) { windows.get(stage)?.close(); }
 
 // An in-stage modal window. `body` is an HTML string, a node, or an array of nodes. `initialFocus` is a
 // selector inside the body, an element, or a function that returns one; by default the first control.
@@ -30,6 +34,7 @@ export function openWindow(stage, { title, body, onClose, initialFocus } = {}) {
   function close() {
     if (closed) return;
     closed = true;
+    windows.delete(stage);
     backdrop.remove();
     dimmed.forEach(child => { child.inert = false; });
     if (opener?.isConnected && !opener.disabled) opener.focus();
@@ -37,7 +42,7 @@ export function openWindow(stage, { title, body, onClose, initialFocus } = {}) {
   }
   // Tab wraps at the window's edges; anywhere else the browser moves focus on its own.
   function trapTab(event) {
-    const items = [...dialog.querySelectorAll(TABBABLE)].filter(el => el.getClientRects().length);
+    const items = [...dialog.querySelectorAll(TABBABLE)].filter(el => el.tabIndex >= 0 && el.getClientRects().length);
     const active = document.activeElement;
     const inside = dialog.contains(active);
     const atEdge = event.shiftKey ? active === items[0] || active === dialog : active === items.at(-1);
@@ -56,5 +61,7 @@ export function openWindow(stage, { title, body, onClose, initialFocus } = {}) {
   stage.append(backdrop);
   const first = typeof initialFocus === 'function' ? initialFocus() : typeof initialFocus === 'string' ? content.querySelector(initialFocus) : initialFocus;
   (first ?? content.querySelector(TABBABLE) ?? closeButton).focus();
-  return { close };
+  const handle = { close };
+  windows.set(stage, handle);
+  return handle;
 }

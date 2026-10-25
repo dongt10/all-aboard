@@ -9,6 +9,8 @@ const TEXT_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT']);
 export function keyIntent(event) {
   if (event.altKey || event.ctrlKey || event.metaKey) return null;
   const { key, target } = event;
+  // Sliders keep native adjustment keys, but X / Backspace still close the window.
+  if (target?.tagName === 'INPUT' && target.type === 'range') return B_KEYS.has(key) ? 'b' : null;
   if (TEXT_TAGS.has(target?.tagName) || target?.isContentEditable) return key === 'Escape' ? 'b' : null;
   if (A_KEYS.has(key)) return 'a';
   if (B_KEYS.has(key)) return 'b';

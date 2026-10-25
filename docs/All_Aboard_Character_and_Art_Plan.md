@@ -186,6 +186,10 @@ The backend supplies the chapter, grade, activity content, dialogue, available s
 
 ## Asset guide
 
+### Reference art is the source of truth
+
+The original design overrides all. Taro and Momo come from the team’s reference drawings in [docs/art/source/neighbors](art/source/neighbors). Their sheets are derived by the transforms in [manifest.json](art/source/neighbors/manifest.json) and never redrawn or restyled. [tests/figures-references.test.js](../tests/figures-references.test.js) fails on any deviation from these rules. To change the art, change the reference.
+
 ### Sprite sheets in the game (current)
 
 Every character is drawn on the team’s **64 × 64 chibi canvas**, the one the boy and girl designs use, and ships as one sheet.
@@ -198,7 +202,7 @@ Every character is drawn on the team’s **64 × 64 chibi canvas**, the one the 
 | **Columns** | Step A, stand, step B, joy | Joy is the happy face on the front row only. Non-walkers fill only the stand column. |
 | **Pixels** | Fully opaque or fully clear | No soft edges. Silhouette edges are dark outlines. |
 
-Sheets live in `assets/figures/` (`player-boy.png`, `player-girl.png`, then one per neighbor). To change a character, edit its PNG in a pixel editor and keep the layout. `npm test` checks the size, the feet row, the outlines, and that no two characters share a silhouette. The source layers for the boy and girl are in `docs/art/source/`.
+Sheets live in `assets/figures/` (`player-boy.png`, `player-girl.png`, then one per neighbor). For Taro and Momo, change the reference and derive the sheet using the manifest; for other characters, edit their PNG in a pixel editor and keep the layout. `npm test` checks the reference transforms, size, feet row, outlines, and that no two characters share a silhouette. The source layers for the boy and girl are in `docs/art/source/`.
 
 ### Original proposal
 

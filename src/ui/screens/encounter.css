@@ -36,7 +36,7 @@
 .enc__dialogue { position: absolute; left: 16px; top: 388px; width: 472px; height: 136px; z-index: 4; }
 .enc__menu { position: absolute; left: 504px; top: 388px; width: 440px; height: 136px; z-index: 4; }
 
-/* The item-get card. Shared with the music stage (Save band), so it lives here and is linked globally. */
+/* The item-get card. Shared with the music stage, so it lives here and is linked globally. */
 .item-get { position: absolute; inset: 0; z-index: 60; display: grid; place-items: center; background: rgba(31, 33, 71, .55); }
 .item-get__card { position: relative; width: 600px; max-width: calc(100% - 32px); display: grid; justify-items: center; gap: 10px; padding: 16px 24px 20px; text-align: center; }
 .item-get__lead { font-family: var(--font-pixel); font-size: var(--text-body); line-height: 1.1; }
@@ -48,6 +48,7 @@
    zooms that same drawing; signs and books get room to wrap so every word shows. */
 .item-get__art > span.creation { width: auto; height: auto; max-width: 64px; max-height: none; zoom: 3.5; }
 .item-get__art > span.world-sign, .item-get__art > span.world-book { max-width: 120px; zoom: 2; }
+.item-get__art > span.world-sign { max-height: 82px; overflow-y: auto; }
 .item-get__figure { line-height: 0; }
 .item-get__go { font-family: var(--font-read); }
 .item-get__spark { position: absolute; width: 12px; height: 12px; background: var(--lantern); box-shadow: 0 0 0 4px var(--ink); animation: item-get-spark 900ms steps(3) infinite; }

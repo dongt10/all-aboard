@@ -1,21 +1,54 @@
 // Willow Bay, the bright overworld: stalls, wandering neighbors, the player, the HUD and the festival board.
 import { CHARACTERS } from '../../data.js';
-import { getCreations, getCompleted, canStartParade } from '../../progress.js';
+import { getCreations, getCompleted, getDraft, canStartParade } from '../../progress.js';
 import { SUBJECT_THEME } from '../palette.js';
 import { icon } from '../icons.js';
 import { figureMarkup, playerFigureId } from '../figures/index.js';
 import { createDialogue } from '../dialogue.js';
 import { onceAtATime } from '../scenes.js';
-import { creationMarkup } from '../creations.js';
+import { creationMarkup, creationLabel, fitSignPreviews } from '../creations.js';
 import {
-  VILLAGE_SPOTS, SIDE_SPOTS, PLAYER_START, WALK_BOUNDS, STEP, homeSpot, hotspotRect, talkPoint, nearestNeighbor,
-  stepPlayer, stallState, wanderTarget, stepToward, guideArrow, villageMapSVG, stallSVG, easelRect,
+  VILLAGE_SPOTS, SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, talkPoint, nearestNeighbor,
+  clampWalk, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, villageMapSVG, stallSVG, easelRect,
 } from '../village-map.js';
 
 const SIDE = {
   pip: { name: 'Pip', line: 'I delivered every invitation! Except this one. Oh. It’s mine.' },
   nori: { name: 'Nori', line: 'You can go anywhere first. I’m going slowly. That’s my favorite speed.' },
 };
+// Pip greets every visit until the first creation is made in this grade. Each sentence fits one Bigger-words page.
+export const WELCOME_LINE = 'Welcome to Willow Bay! Tap a neighbor to help them make something.';
+export const HELP_STEPS = [
+  'Tap a neighbor, or walk to one and press Enter.',
+  'Make one thing and the Parade opens.',
+  'Make all seven for the big finale.',
+  'Open the Guide to find a neighbor or see your stamps.',
+];
+export const CELEBRATE_LINE = 'That’s going straight into the festival!';
+const A_KEYS = new Set(['Enter', ' ', 'z', 'Z']);
+
+// While the Talk chip names a neighbor, the A key talks to them even if another neighbor's button (or the chip
+// itself) has focus; the browser would otherwise click that button. `button` is true only for those actor buttons:
+// the HUD, the grade chip, the Parade button and the dialogue's own tabs keep their native Enter, Space and Z.
+export function talkKeyWins(near, { button = false, inVillage = false, inDialogue = false } = {}) {
+  return Boolean(near) && button && inVillage && !inDialogue;
+}
+
+// Who speaks when the village opens: the neighbor whose creation was just made, else Pip's welcome while this
+// grade has nothing made yet, else nobody. Never moves focus; mount() keeps that on the player controls.
+export function openingLine({ creations = {}, celebrate = null } = {}) {
+  if (celebrate && CHARACTERS.some(c => c.id === celebrate)) return { id: celebrate, words: CELEBRATE_LINE };
+  if (!Object.keys(creations ?? {}).length) return { id: 'pip', words: WELCOME_LINE };
+  return null;
+}
+
+// What A does: turn the page when the box has more to say, else talk to the neighbor the chip names
+// (or whoever is nearest), else close the box.
+export function aAction({ near = null, nearest = null, dialogueOpen = false, hasMore = false } = {}) {
+  if (dialogueOpen && hasMore) return { act: 'next' };
+  const id = near ?? nearest;
+  return id ? { act: 'talk', id } : { act: 'hush' };
+}
 const STEP_CYCLE = [1, 0, 2, 0];
 const STEP_MS = 120;            // ms per walk frame at the base speed; faster walks step faster
 const WANDER_STEP_MS = 300;     // a stroll: the neighbors amble
@@ -34,11 +67,27 @@ const now = () => globalThis.performance?.now?.() ?? Date.now();
 const nextFrame = fn => (globalThis.requestAnimationFrame ? globalThis.requestAnimationFrame(fn) : setTimeout(() => fn(now()), 16));
 const cancelFrame = id => (globalThis.cancelAnimationFrame ? globalThis.cancelAnimationFrame(id) : clearTimeout(id));
 
+// A neighbor's button: the subject badge with its status mark, the figure, and the name chip. Pure, so tests can
+// check that a started stall shows "..." and says "Started. Tap to continue."
+export function neighborMarkup(c, made = {}) {
+  const theme = SUBJECT_THEME[c.id];
+  const status = stallState(c.id, made.creations, made.completed, made.drafts);
+  const badge = stallBadge(status);
+  const mark = status === 'made' ? `<span class="village-badge__mark village-badge__mark--made">${icon('check', { size: 16 })}</span>`
+    : `<span class="village-badge__mark village-badge__mark--${status}">${esc(badge.mark)}</span>`;
+  const said = status === 'made' ? madeLabel(creationLabel(c.id, made.creations?.[c.id])) : badge.said;
+  return `<button type="button" class="village-actor village-npc village-npc--${status}" data-id="${c.id}" aria-label="${esc(`${c.name}, ${theme.label}. ${said}`)}">
+        <span class="village-badge" style="--subject:${theme.color}" aria-hidden="true">${icon(theme.icon)}${mark}</span>
+        <span class="village-actor__fig" aria-hidden="true"></span>
+        <span class="px-chip px-name village-name" aria-hidden="true">${esc(c.name)} · ${esc(theme.label)}</span>
+      </button>`;
+}
+
 export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
-  let root = null, dialogue = null, frame = 0, last = 0, paused = false, alive = false, leaving = false;
+  let root = null, dialogue = null, previews = null, frame = 0, last = 0, paused = false, alive = false, leaving = false;
   let findTarget = homeSpot(guide) ? guide : null;
   const actors = new Map();          // id → { id, el, fig, pos, target, facing, step, clock, waitUntil, render }
-  const player = { pos: { ...PLAYER_START }, target: null, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
+  const player = { pos: { ...PLAYER_START }, target: null, tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
   let near = null;
 
   const state = () => ctx.getState();
@@ -59,7 +108,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   function say(id, words) {
     if (!dialogue) return;
     const host = root.querySelector('.village-dialogue'), feet = actors.get(id)?.pos;
-    host.classList.toggle('village-dialogue--top', Boolean(feet && feet.x > 440 && feet.y > 330));
+    // Pip's welcome also goes to the top, so the first thing a new player reads never hides Kiko's stall.
+    host.classList.toggle('village-dialogue--top', Boolean(feet && feet.x > 440 && feet.y > 330) || words === WELCOME_LINE);
     host.hidden = false;
     dialogue.say(nameOf(id), words);
   }
@@ -73,19 +123,6 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
 
   /* ---------- Markup ---------- */
 
-  function neighborMarkup(c, made) {
-    const theme = SUBJECT_THEME[c.id];
-    const status = stallState(c.id, made.creations, made.completed);
-    const mark = status === 'made' ? `<span class="village-badge__mark village-badge__mark--made">${icon('check', { size: 16 })}</span>`
-      : status === 'visited' ? '<span class="village-badge__mark village-badge__mark--visited">Visited</span>'
-      : '<span class="village-badge__mark village-badge__mark--new">!</span>';
-    const said = status === 'made' ? madeLabel(c.reward.label) : status === 'visited' ? 'Visited.' : 'Something new to make.';
-    return `<button type="button" class="village-actor village-npc village-npc--${status}" data-id="${c.id}" aria-label="${esc(`${c.name}, ${theme.label}. ${said}`)}">
-        <span class="village-badge" style="--subject:${theme.color}" aria-hidden="true">${icon(theme.icon)}${mark}</span>
-        <span class="village-actor__fig" aria-hidden="true"></span>
-        <span class="px-chip px-name village-name" aria-hidden="true">${esc(c.name)} · ${esc(theme.label)}</span>
-      </button>`;
-  }
   function sideMarkup(id) {
     return `<button type="button" class="village-actor village-side" data-id="${id}" aria-label="Talk to ${SIDE[id].name}">
         <span class="village-actor__fig" aria-hidden="true"></span>
@@ -104,8 +141,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       const theme = SUBJECT_THEME[c.id], filled = Boolean(made.creations[c.id]);
       return `<span class="village-pip${filled ? ' village-pip--filled' : ''}" style="--subject:${theme.color}" title="${theme.label}">${icon(theme.icon, { size: 20 })}<span class="sr-only">${theme.label}${filled ? ', made' : ', not yet'}</span></span>`;
     }).join('');
-    return `<div class="px-frame village-board" role="group" aria-label="Festival board: ${count} of 7 made">
-        <span class="village-board__title" aria-hidden="true">${icon('star', { size: 20 })}</span>
+    return `<div class="px-frame village-board" role="group" aria-label="${esc(boardLabel(count))}">
+        <span class="village-board__title" aria-hidden="true">${icon('star', { size: 20 })}<span class="village-board__label">${esc(boardLabel(count))}</span></span>
         <span class="village-board__pips">${pips}</span>
         <button type="button" class="px-button px-button--finish village-parade"${canStartParade(state()) ? '' : ' hidden'}>${icon('star')}<span>Parade</span></button>
       </div>`;
@@ -113,12 +150,13 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
 
   function build() {
     const s = state();
-    const made = { creations: getCreations(s), completed: getCompleted(s) };
+    const drafts = Object.fromEntries(CHARACTERS.map(c => [c.id, getDraft(s, c.id)]).filter(([, draft]) => draft));
+    const made = { creations: getCreations(s), completed: getCompleted(s), drafts };
     root = document.createElement('div');
     root.className = 'village';
     root.tabIndex = 0;
     root.setAttribute('role', 'region');
-    root.setAttribute('aria-label', 'Willow Bay. Walk with the arrow keys. Press A near a neighbor to talk, or choose a neighbor.');
+    root.setAttribute('aria-label', 'Willow Bay. Walk with the arrow keys. Press Enter near a neighbor to talk. Or choose a neighbor.');
     root.innerHTML = `${villageMapSVG()}
       <div class="village-stalls">${CHARACTERS.map(c => stallMarkup(c, made)).join('')}</div>
       <div class="village-actors">
@@ -147,7 +185,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     }
     dialogue = createDialogue(root.querySelector('.village-dialogue'), {
       speak: text => ctx.speak?.(text),
-      onHelp: () => ctx.open?.help?.('Willow Bay', ['Walk with the arrow keys or WASD, or tap a neighbor.', 'Stand near a neighbor and press A to talk.', 'Make something at every stall, then start the Parade.']),
+      onHelp: () => ctx.open?.help?.('Willow Bay', [...HELP_STEPS]),
       isLarge: () => ctx.stage?.classList.contains('large-text'),
       autoRead: () => Boolean(state().settings?.autoRead),
     });
@@ -176,9 +214,10 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const chip = root.querySelector('.village-talk');
     if (id !== near) {
       near = id;
+      if (!id && chip.contains(document.activeElement)) root.focus({ preventScroll: true });
       chip.hidden = !id;
       if (id) {
-        chip.innerHTML = `<span class="village-talk__key" aria-hidden="true">A</span><span aria-hidden="true">·</span><span>Talk to ${esc(nameOf(id))}</span>`;
+        chip.innerHTML = `<span class="village-talk__key" aria-hidden="true">Enter</span><span aria-hidden="true">·</span><span>Talk to ${esc(nameOf(id))}</span>`;
         chip.setAttribute('aria-label', `Talk to ${nameOf(id)}`);
       }
       for (const a of actors.values()) a.el.classList.toggle('village-actor--near', a.id === id);
@@ -201,7 +240,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const dir = guideArrow(player.pos, target.pos);
     pointer.textContent = ARROW_GLYPH[dir];
     pointer.dataset.dir = dir;
-    pointer.style.left = px(Math.min(WALK_BOUNDS.maxX, player.pos.x + 26));
+    pointer.style.left = px(player.pos.x + 26);
     pointer.style.top = px(player.pos.y - 52);
     pointer.style.zIndex = '801';
   }
@@ -233,12 +272,12 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     a.step = STEP_CYCLE[Math.floor(a.clock / WANDER_STEP_MS) % 4];
   }
   function tickPlayer(dt) {
-    const goal = player.visitOnArrive ? clampToBounds(talkPoint(player.visitOnArrive, actors.get(player.visitOnArrive).pos)) : player.target;
+    const goal = player.visitOnArrive ? clampWalk(talkPoint(player.visitOnArrive, actors.get(player.visitOnArrive).pos)) : player.target;
     if (!goal) { player.step = 0; return; }
     player.target = goal;
     const move = stepToward(player.pos, goal, player.speed * dt / 1000);
     const dx = goal.x - player.pos.x, dy = goal.y - player.pos.y;
-    player.pos = move.pos;
+    player.pos = clampWalk(move.pos);
     player.clock += dt * player.speed / PLAYER_SPEED;   // the legs keep up with a tap walk
     if (Math.abs(dx) >= Math.abs(dy) && dx) player.facing = dx > 0 ? 'right' : 'left';
     else if (dy) player.facing = dy > 0 ? 'front' : 'back';
@@ -247,13 +286,13 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   }
   function arrive() {
     player.target = null;
+    player.tapWalk = false;
     player.step = 0;
     player.clock = 0;
     const id = player.visitOnArrive;
     player.visitOnArrive = null;
     if (id) { player.facing = 'back'; visit(id); }
   }
-  const clampToBounds = p => ({ x: Math.max(WALK_BOUNDS.minX, Math.min(WALK_BOUNDS.maxX, p.x)), y: Math.max(WALK_BOUNDS.minY, Math.min(WALK_BOUNDS.maxY, p.y)) });
 
   function tick(t) {
     if (!alive) return;
@@ -274,7 +313,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     hush();
     const a = actors.get(id);
     if (!a) return;
-    const goal = clampToBounds(talkPoint(id, a.pos));
+    const goal = clampWalk(talkPoint(id, a.pos));
     if (calm()) {   // no walking tween: stand there and go
       player.pos = goal;
       player.facing = 'back';
@@ -283,11 +322,13 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       return;
     }
     player.visitOnArrive = id;
+    player.tapWalk = true;
     player.clock = 0;
     player.speed = Math.max(PLAYER_SPEED, Math.hypot(goal.x - player.pos.x, goal.y - player.pos.y) / (TAP_WALK_MS / 1000));
   }
   function stepBy(intent) {
     hush();
+    if (player.tapWalk) { player.target = null; player.tapWalk = false; player.clock = 0; }
     player.visitOnArrive = null;
     player.facing = FACING_FOR[intent];
     const from = player.target ?? player.pos;
@@ -297,12 +338,31 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (calm()) { player.pos = next; player.target = null; player.step = 0; drawPlayer(); drawTalk(); drawFind(); return; }
     player.target = next;
   }
-  function talk() {
-    const id = nearestNeighbor(player.pos, positions());
-    if (!id) return false;
-    player.facing = 'back';
-    visit(id);
-    return true;
+  // The A button: the neighbor the Talk chip names comes first, so the chip always tells the truth.
+  function pressA() {
+    const box = root.querySelector('.village-dialogue');
+    const next = aAction({ near, nearest: nearestNeighbor(player.pos, positions()), dialogueOpen: !box.hidden, hasMore: dialogue.hasMore() });
+    if (next.act === 'next') dialogue.next();
+    else if (next.act === 'talk') { player.facing = 'back'; visit(next.id); }
+    else hush();
+  }
+  // Keys reach the document after the village, so claiming A here stops the browser (and app.js) from clicking
+  // whichever button happens to hold focus. Space clicks on keyup, so that keyup is swallowed too.
+  let swallowSpaceUp = false;
+  function onKey(event) {
+    if (event.type === 'keyup') {
+      if (swallowSpaceUp && event.key === ' ') { swallowSpaceUp = false; event.preventDefault(); }
+      return;
+    }
+    if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !A_KEYS.has(event.key)) return;
+    if (ctx.stage?.querySelector('.win-backdrop')) return;   // a window owns the keys
+    const target = event.target;
+    const actorButton = Boolean(target?.closest?.('.village-actor, .village-talk'));   // never the HUD, the board or a window
+    const focus = { button: actorButton, inVillage: Boolean(root?.contains(target)), inDialogue: Boolean(target?.closest?.('.village-dialogue')) };
+    if (!talkKeyWins(near, focus)) return;
+    event.preventDefault();
+    swallowSpaceUp = event.key === ' ';
+    if (!event.repeat) pressA();
   }
 
   function onClick(event) {
@@ -318,8 +378,9 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       hush();
       player.visitOnArrive = null;
       player.speed = PLAYER_SPEED * 1.5;
-      player.target = clampToBounds({ x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height });
-      if (calm()) { player.pos = player.target; player.target = null; }
+      player.target = clampWalk({ x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height });
+      player.tapWalk = true;
+      if (calm()) { player.pos = player.target; player.target = null; player.tapWalk = false; }
     }
   }
 
@@ -334,42 +395,43 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     mount() {
       build();
       ctx.stage.append(root);
+      previews = fitSignPreviews(root, 64, 40);
       root.addEventListener('click', onClick);
+      root.addEventListener('keydown', onKey);
+      root.addEventListener('keyup', onKey);
       alive = true;
       for (const a of actors.values()) { a.waitUntil = now() + 500 + Math.random() * 2500; drawActor(a); }
       drawPlayer();
       drawTalk();
       drawFind();
-      const hero = CHARACTERS.find(c => c.id === celebrate);
-      if (hero) { sparkle(hero.id); say(hero.id, 'That’s going straight into the festival!'); }
+      const opening = openingLine({ creations: getCreations(state()), celebrate });
+      if (opening) { if (opening.id !== 'pip') sparkle(opening.id); say(opening.id, opening.words); }   // nothing made yet: Pip says what to do
       if (findTarget) ctx.announce?.(`Find ${nameOf(findTarget)}. Follow the arrow.`);
       const button = focus && root.querySelector(`.village-actor[data-id="${focus}"]`);
-      (button || root).focus({ preventScroll: true });
+      (button || root).focus({ preventScroll: true });   // the welcome never takes focus from the player controls
       frame = nextFrame(tick);
     },
     handleIntent(intent) {
       if (!root) return false;
       if (FACING_FOR[intent]) { stepBy(intent); return true; }
-      if (intent === 'a') {
-        const box = root.querySelector('.village-dialogue');
-        if (!box.hidden && dialogue.hasMore()) { dialogue.next(); return true; }
-        if (talk()) return true;
-        hush();
-        return true;
-      }
+      if (intent === 'a') { pressA(); return true; }
       if (intent === 'b') { hush(); return true; }
       return false;
     },
     pause() {
       paused = true;
       player.target = null;
+      player.tapWalk = false;
       player.visitOnArrive = null;
     },
     destroy() {
       alive = false;
       cancelFrame(frame);
+      previews?.();
       dialogue?.destroy();
       root?.removeEventListener('click', onClick);
+      root?.removeEventListener('keydown', onKey);
+      root?.removeEventListener('keyup', onKey);
       root?.remove();
       root = null;
       dialogue = null;

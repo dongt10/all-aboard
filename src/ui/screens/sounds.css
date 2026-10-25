@@ -1,0 +1,53 @@
+/* The Sounds window: tabs, one panel, Tune 1 / Tune 2, the beat editor and the volumes.
+   Row budget with Bigger words on (the body has about 400px inside the 960×540 stage: 540 - 48 backdrop
+   padding - 24 frame padding - 52 head - 10 gap). A beat button is number 20 + word 24 + 12 padding and
+   border = 56px; the staircase track adds La's 40px step (grid tracks size by the margin box) = 96px.
+   Tallest tab (grades 3–5, Sora or Nori): tabs 44 + hint 31 + tunes 60 + staircase 96 + volume 32 +
+   band volume 32 + 5 gaps × 8 = 335. The lead's tab has no Tune buttons. ROW_HEIGHTS in sounds.js
+   carries the same numbers so the test asserts the budget. */
+/* Leave 824px inside the frame for eight full sound labels at Bigger words. */
+.win:has(.sounds) { width: min(864px, 100%); }
+.sounds { display: grid; gap: 8px; font-size: var(--text-field); }
+.sounds-tabs { display: flex; flex-wrap: wrap; gap: 8px; }
+.sounds-tab { min-height: 44px; font-size: var(--text-field); }
+.sounds-tab[aria-selected="true"] { --chip: var(--musician); }
+.sounds-tab:hover { --chip: var(--white); }
+.sounds-tab[aria-selected="true"]:hover { --chip: var(--musician); }
+
+.sounds-editor { display: grid; gap: 8px; }
+.sounds-hint { margin: 0; font-size: var(--text-field); line-height: 1.3; }
+.sounds-hint__icon { display: inline-grid; place-items: center; width: 1.3em; height: 1.3em; margin-right: 2px; background: var(--musician); border: 2px solid var(--ink); font-size: .9em; line-height: 1; vertical-align: -.25em; }
+.sounds-hint--lead { font-weight: 700; }
+
+/* Tune 1 / Tune 2: the name on top, the eight-beat glyph preview under it. */
+.sounds-patterns { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sounds-pattern { min-height: 48px; padding: 4px 10px; gap: 8px; }
+.sounds-pattern .icon { flex: none; width: 20px; height: 20px; }
+.sounds-pattern__text { display: grid; gap: 0; line-height: 1.1; }
+.sounds-pattern__text small { font-size: var(--text-small); font-weight: 700; letter-spacing: 1px; white-space: nowrap; }
+.sounds-pattern[aria-pressed="true"] { --fill: var(--musician); --light: var(--white); }
+
+/* Eight beats. Sound beats fill with the musician's color; a rest stays paper with a dash. */
+.sounds-beats { display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; }
+.sounds-beat { position: relative; isolation: isolate; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 52px; padding: 2px;
+  border: 4px solid var(--ink); background: var(--paper); color: var(--ink); font-size: var(--text-field); font-weight: 700; line-height: 1.1;
+  clip-path: polygon(0 4px, 4px 4px, 4px 0, calc(100% - 4px) 0, calc(100% - 4px) 4px, 100% 4px, 100% calc(100% - 4px), calc(100% - 4px) calc(100% - 4px), calc(100% - 4px) 100%, 4px 100%, 4px calc(100% - 4px), 0 calc(100% - 4px)); }
+.sounds-beat b { font-family: var(--font-pixel); font-size: var(--text-small); }
+.sounds-beat span { font-size: var(--text-small); white-space: nowrap; }
+.sounds-beat:hover { background: var(--white); }
+.sounds-beat.is-on { background: var(--musician); box-shadow: inset 3px 3px 0 rgba(255, 255, 255, .55); }
+.sounds-beat:focus-visible { clip-path: none; }
+/* The staircase (grades 3–5): every beat hangs at a height by pitch. A rest sits on the floor, La five steps
+   up. The step margins alone make the row tall enough for the highest note; no extra padding. */
+.sounds-beats--stairs { align-items: end; }
+.sounds-beat--note { margin-bottom: calc(var(--step, 0) * 8px); }
+.sounds-beat--note:not(.is-on) { color: var(--ink-soft); background: var(--paper-shade); }
+
+/* Volumes: Loud / Soft buttons at K, sliders from grade 1. */
+.sounds-levels { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sounds-level { min-height: 48px; gap: 8px; }
+.sounds-level .icon { flex: none; width: 20px; height: 20px; }
+.sounds-level[aria-pressed="true"] { --fill: var(--musician); --light: var(--white); }
+.sounds-level[aria-pressed="true"]:hover { --fill: var(--musician); }
+.sounds-slider { display: grid; grid-template-columns: 9em 1fr; align-items: center; gap: 12px; font-size: var(--text-field); }
+.sounds-slider input { width: 100%; min-height: 32px; margin: 0; accent-color: var(--ink); }

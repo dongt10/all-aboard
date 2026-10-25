@@ -12,7 +12,9 @@ export const VILLAGE_SPOTS = {
 export const SIDE_SPOTS = { pip: { x: 330, y: 280 }, nori: { x: 640, y: 280 } };
 export const WANDER = { x: 36, y: 4 };
 export const PLAYER_START = { x: 480, y: 500 };
-export const WALK_BOUNDS = { minX: 40, maxX: 920, minY: 96, maxY: 510 };
+// Reserve the 64×64 figure and the 44×36 Find chip beside it, even when Find is off.
+const WALK_SHAPE = { left: 32, right: 70, top: 57, bottom: 7 };
+export const WALK_BOUNDS = { minX: 40, maxX: 960 - WALK_SHAPE.right, minY: HUD_ZONES[0].h + WALK_SHAPE.top, maxY: 510 };
 export const STEP = 24;
 export const TALK_OFFSET = 40;
 
@@ -51,19 +53,56 @@ export function nearestNeighbor(player, positions = VILLAGE_SPOTS, maxDistance =
   return best;
 }
 
+// Project a destination (or an animation frame) onto the nearest clear edge of the HUD.
+export function clampWalk(point, fixedAxis = null) {
+  let pos = {
+    x: clamp(point.x, WALK_BOUNDS.minX, WALK_BOUNDS.maxX),
+    y: clamp(point.y, WALK_BOUNDS.minY, WALK_BOUNDS.maxY),
+  };
+  const rect = p => ({ x: p.x - WALK_SHAPE.left, y: p.y - WALK_SHAPE.top, w: WALK_SHAPE.left + WALK_SHAPE.right, h: WALK_SHAPE.top + WALK_SHAPE.bottom });
+  const clear = p => p.x >= WALK_BOUNDS.minX && p.x <= WALK_BOUNDS.maxX && p.y >= WALK_BOUNDS.minY && p.y <= WALK_BOUNDS.maxY
+    && HUD_ZONES.every(zone => !overlaps(rect(p), zone));
+  for (const zone of HUD_ZONES) {
+    if (!overlaps(rect(pos), zone)) continue;
+    pos = [
+      { x: zone.x - WALK_SHAPE.right, y: pos.y },
+      { x: zone.x + zone.w + WALK_SHAPE.left, y: pos.y },
+      { x: pos.x, y: zone.y - WALK_SHAPE.bottom },
+      { x: pos.x, y: zone.y + zone.h + WALK_SHAPE.top },
+    ].filter(p => clear(p) && (!fixedAxis || p[fixedAxis] === pos[fixedAxis]))
+      .sort((a, b) => Math.hypot(a.x - pos.x, a.y - pos.y) - Math.hypot(b.x - pos.x, b.y - pos.y))[0];
+  }
+  return pos;
+}
+
 export function stepPlayer(player, intent) {
   const move = MOVES[intent];
   if (!move) return { x: player.x, y: player.y };
-  return {
-    x: clamp(player.x + move[0] * STEP, WALK_BOUNDS.minX, WALK_BOUNDS.maxX),
-    y: clamp(player.y + move[1] * STEP, WALK_BOUNDS.minY, WALK_BOUNDS.maxY),
-  };
+  return clampWalk({ x: player.x + move[0] * STEP, y: player.y + move[1] * STEP }, move[0] ? 'y' : 'x');
 }
 
 // 'made': a creation stands at the stall. 'visited': an older save finished it without a creation.
-export function stallState(id, creations = {}, completed = []) {
+// 'started': a draft exists but nothing is finished, so the stall looks started rather than new.
+export function stallState(id, creations = {}, completed = [], drafts = {}) {
   if (creations?.[id]) return 'made';
-  return completed.includes(id) ? 'visited' : 'new';
+  if (completed.includes(id)) return 'visited';
+  return drafts?.[id] ? 'started' : 'new';
+}
+
+// The badge mark and the words a screen reader hears for every stall state except 'made'
+// (a made stall shows a check and names what was made, which the scene knows).
+export const STALL_BADGE = {
+  new: { mark: '!', said: 'Something new to make.' },
+  started: { mark: '...', said: 'Started. Tap to continue.' },
+  visited: { mark: 'Visited', said: 'Visited.' },
+};
+export const stallBadge = status => STALL_BADGE[status] ?? null;
+
+// The festival board's visible label: how many of the seven are made in this grade.
+export const BOARD_TOTAL = 7;
+export function boardLabel(count, total = BOARD_TOTAL) {
+  const made = Math.max(0, Math.min(total, Math.floor(Number(count) || 0)));
+  return made >= total ? `${total} of ${total} · Festival complete!` : `Festival board · ${made} of ${total}`;
 }
 
 export const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;

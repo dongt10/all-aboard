@@ -6,13 +6,18 @@ export const PATTERNS = {
   melody: [[null,4,null,3,null,2,null,3],[null,2,3,null,4,null,3,2]],
   percussion: [[0,null,1,null,0,1,1,null],[0,1,null,1,0,null,1,1]],
 };
+// Speeds in beats per minute (Slow, Steady, Fast) and the phrase forms a band can take.
+export const TEMPOS = [60, 90, 120];
+export const FORMS = ['A', 'AB', 'ABA'];
 const clamp = (value, fallback) => Number.isFinite(value) ? Math.max(0,Math.min(1,value)) : fallback;
 export function createDefaultBand() {
-  return {kind:'music',tempo:90,masterVolume:.65,tracks:TRACK_IDS.map((id,i)=>({id,enabled:true,pattern:0,notes:[...PATTERNS[id][0]],volume:[.8,.65,.55,.6][i]}))};
+  return {kind:'music',tempo:90,form:'A',masterVolume:.65,tracks:TRACK_IDS.map((id,i)=>({id,enabled:true,pattern:0,notes:[...PATTERNS[id][0]],volume:[.8,.65,.55,.6][i]}))};
 }
 export function sanitizeBandSnapshot(value) {
   const band = createDefaultBand();
   if(!value || typeof value!=='object') return band;
+  band.tempo=TEMPOS.includes(value.tempo)?value.tempo:90;
+  band.form=FORMS.includes(value.form)?value.form:'A';
   band.masterVolume=clamp(value.masterVolume,band.masterVolume);
   band.tracks=band.tracks.map(base=>{
     const track=Array.isArray(value.tracks)?value.tracks.find(t=>t?.id===base.id):null;
@@ -22,11 +27,26 @@ export function sanitizeBandSnapshot(value) {
   });
   return band;
 }
-export function notesForBeat(band,beat) {
-  return band.tracks.filter(t=>t.enabled&&t.volume>0&&t.notes[beat%8]!==null).map(t=>({id:t.id,pitch:t.notes[beat%8],volume:t.volume}));
+// A form is a row of 8-beat phrases: "A" repeats one phrase, "AB" and "ABA" bring in a
+// second phrase where the melodic friends swap to their other tune and Cricket keeps
+// the steady part. The period of a band is 8 * form.length beats.
+export const phraseLength = band => 8 * ((FORMS.includes(band?.form) ? band.form : 'A').length);
+export function phraseAt(band,beat) {
+  const form=FORMS.includes(band?.form)?band.form:'A';
+  return form[Math.floor(beat/8)%form.length];
 }
+export function phraseNotes(track,letter) {
+  if(letter!=='B'||track.id==='percussion') return [...track.notes];
+  return [...PATTERNS[track.id][(track.pattern===1?1:0)^1]];
+}
+export function notesForBeat(band,beat) {
+  const letter=phraseAt(band,beat);
+  return band.tracks.filter(t=>t.enabled&&t.volume>0).map(t=>({id:t.id,pitch:phraseNotes(t,letter)[beat%8],volume:t.volume})).filter(n=>n.pitch!==null);
+}
+// Mute, volume and tempo change on the very next beat; notes, patterns and form wait
+// for the start of a phrase so a tune never changes mid-sentence.
 export function applyBeatChanges(current,pending,beat) {
-  return {...pending,tracks:pending.tracks.map(t=>{
+  return {...pending,form:beat%8===0?pending.form:current.form,tracks:pending.tracks.map(t=>{
     const old=current.tracks.find(x=>x.id===t.id);
     return beat%8===0?{...t,notes:[...t.notes]}:{...t,pattern:old.pattern,notes:[...old.notes]};
   })};
@@ -99,11 +119,13 @@ export function playBandNote(context,destination,{id,pitch,volume},time,register
 export async function renderBandPreview(snapshot,{phrases=2,sampleRate=44100}={}) {
   const band=sanitizeBandSnapshot(snapshot),Offline=globalThis.OfflineAudioContext||globalThis.webkitOfflineAudioContext;
   if(!Offline)throw new Error('Offline audio rendering is unavailable in this browser.');
-  const count=Math.max(1,Math.min(8,Math.floor(phrases)||2))*8;
-  const context=new Offline(2,Math.ceil((count*60/90+1)*sampleRate),sampleRate),master=context.createGain();
+  // `phrases` counts 8-beat phrases, rounded up to whole runs of the form so every letter
+  // is heard: "A" and "AB" render 16 beats for phrases:2, "ABA" renders 24.
+  const period=phraseLength(band),count=Math.ceil(Math.max(1,Math.min(8,Math.floor(phrases)||2))*8/period)*period,step=60/band.tempo;
+  const context=new Offline(2,Math.ceil((count*step+1)*sampleRate),sampleRate),master=context.createGain();
   master.gain.value=band.masterVolume;master.connect(context.destination);
   const mix=createBandMix(context,master);
-  for(let beat=0;beat<count;beat++)for(const note of notesForBeat(band,beat))playBandNote(context,mix.input,note,.05+beat*60/90);
+  for(let beat=0;beat<count;beat++)for(const note of notesForBeat(band,beat))playBandNote(context,mix.input,note,.05+beat*step);
   return context.startRendering();
 }
 export function encodeWav(buffer) {
@@ -140,18 +162,21 @@ export function createBandEngine({onBeat=()=>{},onStatus=()=>{}}={}) {
     if(!running)return;
     while(nextTime<context.currentTime+.11) {
       active=applyBeatChanges(active,pending,nextBeat);
+      // A shorter form adopted at a phrase start restarts at its A, so the beat never
+      // points past the new form (ABA -> AB at beat 16 becomes beat 0, not phrase 2).
+      nextBeat%=phraseLength(active);
       const notes=notesForBeat(active,nextBeat);
       for(const note of notes) playBandNote(context,mix.input,note,nextTime,source=>{
         sources.add(source);source.addEventListener('ended',()=>sources.delete(source),{once:true});
       });
-      visuals.push({time:nextTime,beat:nextBeat,notes});
-      nextTime+=60/90;nextBeat=(nextBeat+1)%8;
+      visuals.push({time:nextTime,beat:nextBeat,notes,phrase:phraseAt(active,nextBeat),phraseIndex:Math.floor(nextBeat/8)});
+      nextTime+=60/active.tempo;nextBeat=(nextBeat+1)%phraseLength(active);
     }
   }
   function paint() {
     if(!running)return;
     while(visuals.length&&visuals[0].time<=context.currentTime)onBeat(visuals.shift());
-    frame=requestAnimationFrame(paint);
+    if(running)frame=requestAnimationFrame(paint);   // onBeat may stop a finished demonstration
   }
   const hidden=()=>{if(document.hidden)stop();};
   if(typeof document!=='undefined')document.addEventListener('visibilitychange',hidden);
@@ -168,10 +193,11 @@ export function createBandEngine({onBeat=()=>{},onStatus=()=>{}}={}) {
           master=context.createGain();master.connect(context.destination);
           mix=createBandMix(context,master);
         }
+        pending=sanitizeBandSnapshot(snapshot);
         await context.resume();
         if(token!==epoch||destroyed)return false;
         if(context.state!=='running'){status('unavailable');return false;}
-        pending=sanitizeBandSnapshot(snapshot);active=pending;
+        active=pending;
         master.gain.setValueAtTime(pending.masterVolume,context.currentTime);
         nextTime=context.currentTime+.055;nextBeat=0;running=true;
         schedule();timer=setInterval(schedule,25);paint();status('playing');return true;

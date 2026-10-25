@@ -5,6 +5,7 @@
 .dlg { position: relative; width: 472px; height: 136px; max-width: 100%; outline: none; }
 .dlg__frame { height: 100%; padding: 10px 14px 8px; }
 .dlg__text { height: 100%; overflow: hidden; font-family: var(--font-read); font-size: var(--text-body); line-height: 1.25; overflow-wrap: anywhere; cursor: pointer; }
+.dlg__measure { position: absolute; inset: 10px 14px 8px; height: auto; visibility: hidden; pointer-events: none; }
 .large-text .dlg__text { line-height: 1.18; }
 .dlg__speaker, .dlg__tabs, .dlg__more { position: absolute; z-index: 1; }
 .dlg__speaker, .dlg__tabs { top: -18px; }
@@ -23,12 +24,17 @@
 .cmd-slot { position: relative; min-width: 0; min-height: 0; justify-content: flex-start; gap: 6px; padding: 2px 6px 2px 8px; font-family: var(--font-read); font-size: var(--text-command); white-space: nowrap; }
 .cmd-slot__cursor { position: absolute; left: -11px; z-index: 1; top: 50%; transform: translateY(-50%); font-size: 14px; line-height: 1; }
 .cmd-slot[data-cursor="true"] .cmd-slot__cursor::before { content: '▶'; }
+.cmd-slot--empty { visibility: hidden; pointer-events: none; }
 .cmd-slot__pic { display: inline-flex; flex: none; align-items: center; }
 .cmd-slot__pic .icon { width: 22px; height: 22px; }
 /* Picture commands (Sora's reading words) pass art with no intrinsic size. */
 .cmd-slot__pic svg { display: block; width: 32px; height: 32px; flex: none; }
 .cmd-slot__label { min-width: 0; overflow: hidden; text-overflow: clip; }
-.large-text .cmd-slot[data-long] .cmd-slot__pic { display: none; }
+/* Each cell is about 204×56. A label over 9 characters (data-long) steps the font down one size
+   (26 → 22px with Bigger words) so a 12-character word and its picture share the cell, and may wrap
+   to two 22px lines (48px plus padding fits the 56px cell) rather than clip. The picture is never
+   dropped: every choice keeps color, icon and word. */
+.large-text .cmd-slot[data-long] { font-size: calc(var(--text-command) - 4px); white-space: normal; line-height: 1.1; text-align: left; }
 .large-text .cmd-slot { gap: 4px; padding-right: 4px; letter-spacing: -.3px; }
 .large-text .cmd-slot__pic .icon { width: 20px; height: 20px; }
 .large-text .cmd-slot__pic svg { width: 28px; height: 28px; }

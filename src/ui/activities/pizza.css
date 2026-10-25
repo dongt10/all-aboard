@@ -1,0 +1,36 @@
+/* Taro's pizza picnic, in a 520 × 268 logical-pixel field. */
+.pizza-field { position: absolute; inset: 0; color: var(--ink); font-family: var(--font-read); }
+.pizza-badges { position: absolute; left: 8px; right: 8px; top: 6px; display: flex; justify-content: space-between; gap: 8px; pointer-events: none; }
+.pizza-total, .pizza-equation { --chip: var(--math); font-family: var(--font-read); font-size: var(--text-field); line-height: 1.2; white-space: nowrap; }
+.pizza-equation--ready { --chip: var(--finish); color: var(--paper); }
+.pizza-board { position: absolute; left: 32px; top: 52px; width: 160px; height: 160px; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.pizza-board svg { display: block; width: 100%; height: 100%; }
+.pizza-board:hover { filter: brightness(1.04); }
+.pizza-plank { position: absolute; left: 24px; top: 230px; width: 176px; height: 14px; border: 3px solid var(--ink); background: var(--wood); }
+.pizza-wheel { position: absolute; top: 242px; width: 24px; height: 24px; background: var(--ink); clip-path: polygon(30% 0,70% 0,100% 30%,100% 70%,70% 100%,30% 100%,0 70%,0 30%); }
+.pizza-wheel::after { content: ''; position: absolute; inset: 8px; background: var(--paper-shade); }
+.pizza-wheel--left { left: 48px; }
+.pizza-wheel--right { left: 152px; }
+.pizza-ground { position: absolute; left: 214px; right: 8px; top: 230px; border-top: 2px solid var(--grass-dark); }
+.pizza-friends { position: absolute; top: 52px; left: 216px; width: 290px; display: grid; grid-template-columns: repeat(4, 68px); grid-template-rows: 110px 89px; gap: 6px; }
+.pizza-give { position: relative; width: 68px; height: 110px; padding: 0; border: 0; background: transparent; color: var(--ink); font: inherit; cursor: pointer; display: flex; flex-direction: column; align-items: center; }
+.pizza-name { font-size: var(--text-small); line-height: 22px; font-weight: 700; }
+.pizza-idle, .pizza-joy { width: 64px; height: 64px; line-height: 0; }
+.pizza-plate { position: relative; width: 56px; height: 18px; margin-top: 3px; background: var(--paper); border: 2px solid var(--ink); border-radius: 50%; }
+.pizza-count { position: absolute; left: 50%; top: -6px; transform: translateX(-50%); padding: 0 3px; background: var(--paper); font: 700 var(--text-field)/1.2 var(--font-read); }
+.pizza-give:hover .pizza-plate { background: var(--lantern); }
+.pizza-worry { position: absolute; top: 22px; right: 0; padding: 0 5px; background: var(--paper); border: 2px solid var(--ink); font-weight: 700; line-height: 22px; }
+.pizza-pieces { display: grid; grid-template-columns: repeat(3, 20px); grid-auto-rows: 20px; gap: 3px; align-content: start; width: 66px; }
+.pizza-piece { width: 20px; height: 20px; padding: 0; border: 0; background: var(--paper-shade); cursor: pointer; }
+.pizza-piece svg { display: block; width: 20px; height: 20px; fill: var(--lantern); stroke: var(--ink); stroke-width: 1; }
+.pizza-piece-half, .pizza-piece--half .pizza-piece-whole { display: none; }
+.pizza-piece--half .pizza-piece-half { display: inline; }
+.pizza-field [hidden] { display: none !important; }
+.pizza-give--got .pizza-plate { animation: pizza-got 360ms steps(2) 1; }
+.pizza-give--ready .pizza-joy { animation: pizza-cheer 600ms steps(3) 2; }
+@keyframes pizza-got { 50% { background: var(--lantern); transform: translateY(-3px); } }
+@keyframes pizza-cheer { 50% { transform: translateY(-6px); } }
+.large-text .pizza-total { display: none; }
+.large-text .pizza-badges { justify-content: flex-end; }
+.calm .pizza-field * { animation: none !important; transition: none !important; }
+@media (prefers-reduced-motion: reduce) { .pizza-field * { animation: none !important; transition: none !important; } }

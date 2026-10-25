@@ -1,23 +1,32 @@
 // Scene = { mount(), destroy(), handleIntent?(intent), pause?() }. One scene lives at a time.
 export function createSceneManager({ create, transition = swap => swap() }) {
-  let scene = null, current = null, busy = false;
+  let scene = null, current = null, busy = false, disposed = false;
   async function go(name, params) {
-    if (busy) return false;
+    if (busy || disposed) return false;
     busy = true;
     try {
       await transition(async () => {
+        if (disposed) return;
         const old = scene;
         scene = null; current = null;
         old?.destroy();   // the old scene is gone before the next one exists
+        if (disposed) return;
         scene = create(name, params); current = name;
         await scene.mount();
       });
     } finally { busy = false; }
-    return true;
+    return !disposed;
   }
   return {
     go,
     pause() { scene?.pause?.(); },
+    destroy() {
+      if (disposed) return;
+      disposed = true;
+      const old = scene;
+      scene = null; current = null;
+      old?.destroy();
+    },
     get current() { return current; },
     get scene() { return scene; },
     get busy() { return busy; },

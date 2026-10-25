@@ -2,12 +2,36 @@
 import { bandPlaybackMessage } from '../music.js';
 
 export const PARADE_ORDER = ['math', 'science', 'art', 'reading', 'writing', 'community', 'music'];
+export const PARADE_LAPS = 2;   // the line crosses the stage twice, then stops in a line-up
+
+export const PARADE_LINES = {
+  opening: 'Your parade! Every idea belongs here.',
+  noBand: 'Visit Kiko to make a band first.',
+  over: 'The parade is over. Make more, and march again!',
+  complete: 'Everyone marched! You made the whole festival.',
+};
 
 // creations: getCreations(state), subject id → snapshot. Legacy completions without a creation are
 // already left out by getCreations; empty or unknown entries are skipped here too.
 export function paradeLineup(creations = {}) {
   const made = creations ?? {};
   return PARADE_ORDER.filter(id => made[id]).map(id => ({ id, creation: made[id] }));
+}
+
+// The first line of the parade. Without a band, it says why Play band is grayed out.
+export function paradeOpening({ hasBand = false } = {}) {
+  return hasBand ? PARADE_LINES.opening : `${PARADE_LINES.opening} ${PARADE_LINES.noBand}`;
+}
+
+// When the march stops, and what the unnamed line says then. laps: finished crossings of the stage;
+// calm: Calm motion (the setting or the system preference), which shows the line-up at once;
+// made: how many creations march. Every subject made means the whole festival is done.
+// hasBand: without a band the line keeps saying why Play band is grayed out (the opening is gone by then).
+export function paradeEnding({ laps = 0, calm = false, made = 0, hasBand = true } = {}) {
+  const over = Boolean(calm) || laps >= PARADE_LAPS;
+  if (!over) return { over: false, line: null };
+  if (made >= PARADE_ORDER.length) return { over: true, line: PARADE_LINES.complete };   // the band is one of the seven
+  return { over: true, line: hasBand ? PARADE_LINES.over : `${PARADE_LINES.over} ${PARADE_LINES.noBand}` };
 }
 
 // playing: the band is starting or playing (the playback controller is active).
@@ -23,9 +47,10 @@ export function paradeCommands({ hasBand = false, playing = false } = {}) {
 // The music stage's status lines, reworded for the parade, which has no volume or friend controls
 // (the same replacements the original parade screen used).
 export function paradeStatus(phase, reason, band) {
+  if (!band) return PARADE_LINES.noBand;
   if (reason === 'unavailable') return 'Sound could not start. The parade is still yours.';
   if (phase === 'starting') return 'Starting your band…';
-  if (phase !== 'playing') return 'Music stopped';
+  if (phase !== 'playing') return 'Music stopped.';
   return bandPlaybackMessage(band)
     .replace('Invite a friend or add a note.', 'Visit Kiko to invite a friend or add a note.')
     .replace('Raise a friend’s volume to listen.', 'Visit Kiko to raise a friend’s volume.')

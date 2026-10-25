@@ -1,0 +1,75 @@
+/* Whose tale is this? (reading, grades 3–5): Sora's tale card beside her three-slot tale book, inside the 520×268 field.
+   Same two columns and paper look as the story bag (story.css). Text on a fill keeps 4.5:1 or better:
+   ink on paper, lantern and reading blue; paper on the finish green. */
+.tales-field { display: grid; grid-template-columns: 1fr 140px; gap: 8px; width: 100%; height: 100%; box-sizing: border-box; font-family: var(--font-read); color: var(--ink); }
+
+.tales-card {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 0; padding: 7px 10px 8px; box-sizing: border-box;
+  background: var(--paper); border: 3px solid var(--ink); border-left: 10px solid var(--reading); box-shadow: 4px 4px 0 var(--ink);
+  overflow-x: hidden; overflow-y: auto; transition: background-color 200ms;
+}
+.tales-head { margin: 0; font-family: var(--font-pixel); font-size: var(--text-small); line-height: 1.2; color: var(--ink-soft); }
+.tales-card--done .tales-head { color: var(--finish); }
+
+/* The name falls back onto the card once the proof is found. */
+.tales-named { display: flex; flex: none; align-items: center; gap: 10px; animation: tales-drop 320ms ease-out; }
+.tales-named[hidden] { display: none; }
+.tales-named__pic { display: block; flex: none; width: 64px; height: 64px; }
+.tales-named__name { font-family: var(--font-pixel); font-size: var(--text-body); line-height: 1.1; color: var(--ink); }
+@keyframes tales-drop { from { transform: translateY(-14px); opacity: 0; } to { transform: none; opacity: 1; } }
+
+.tales-lines { display: flex; flex: none; flex-direction: column; gap: 4px; }
+.tales-line {
+  display: flex; flex: none; align-items: flex-start; gap: 6px; width: 100%; margin: 0; padding: 3px 6px 3px 3px; box-sizing: border-box;
+  background: transparent; border: 2px solid transparent; border-radius: 0; box-shadow: none;
+  font: inherit; font-size: var(--text-field); line-height: 1.2; color: var(--ink); text-align: left; cursor: pointer;
+  transition: background-color 150ms;
+}
+.tales-line[hidden] { display: none; }
+.tales-line:hover { background: var(--paper-shade); }
+.tales-line:focus-visible { outline: 3px solid var(--ink); outline-offset: 1px; box-shadow: none; }
+.tales-line__tag {
+  flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-width: 24px; height: 24px; padding: 0 3px; box-sizing: border-box;
+  font-family: var(--font-pixel); font-size: var(--text-small); line-height: 1; color: var(--ink); background: var(--reading); border: 2px solid var(--ink);
+}
+.tales-line__who { display: none; }
+.tales-line__text { min-width: 0; overflow-wrap: break-word; }
+
+/* Proving: the lines become choices (lantern fill, ink ring). */
+.tales-card--prove .tales-line { background: var(--lantern); border-color: var(--ink); }
+.tales-card--prove .tales-line:hover { background: #ffd877; }
+
+/* The proof line, once found: finish green with a check after the number. */
+.tales-line--proof, .tales-line--proof:hover { background: var(--finish); border-color: var(--ink); color: var(--paper); }
+.tales-line--proof .tales-line__tag::after { content: '✓'; }
+
+/* All three named: the message centered, then one row per tale with its neighbor (tap to hear the clue). */
+.tales-card--ready { background: var(--paper-shade); justify-content: center; }
+.tales-card--ready .tales-head { font-size: calc(var(--text-body) * 1.1); color: var(--ink); text-align: center; }
+.tales-line--named { align-items: center; }
+.tales-line--named .tales-line__who { display: block; flex: none; width: 32px; height: 32px; }
+.tales-line--named .tales-line__text { font-weight: 700; }
+
+/* Bigger words: three 44-character lines wrap to two rows each; the number tags shrink, never the sentences. */
+.large-text .tales-card { gap: 3px; padding-top: 5px; padding-bottom: 5px; }
+.large-text .tales-lines { gap: 2px; }
+.large-text .tales-line { padding-top: 1px; padding-bottom: 1px; line-height: 1.15; }
+.large-text .tales-line__tag { min-width: 20px; height: 20px; padding: 0 2px; font-size: 16px; }
+
+/* Sora's tale book: a wood frame with three slots that fill in deck order. */
+.tales-book { display: flex; flex-direction: column; gap: 4px; min-height: 0; padding: 6px; box-sizing: border-box; background: var(--wood); border: 3px solid var(--ink); box-shadow: 4px 4px 0 var(--ink); }
+.tales-book__title { margin: 0; padding: 1px 4px; font-family: var(--font-pixel); font-size: var(--text-small); line-height: 1.2; color: var(--ink); background: var(--paper); border: 2px solid var(--ink); text-align: center; }
+.tales-slot { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; gap: 3px; background: var(--paper-shade); border: 2px dashed var(--ink-soft); transition: background-color 200ms; }
+.tales-slot__pic { flex: none; }
+.tales-slot__pic { display: block; width: 48px; height: 48px; }
+.tales-slot__pic:empty { display: none; }
+.tales-slot__name { font-size: var(--text-small); line-height: 1.1; color: var(--ink-soft); }
+.tales-slot--filled { background: var(--paper); border-style: solid; border-color: var(--ink); }
+.tales-slot--filled .tales-slot__name { color: var(--ink); font-weight: 700; }
+
+.calm .tales-card, .calm .tales-line, .calm .tales-slot { transition: none; }
+.calm .tales-named { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .tales-card, .tales-line, .tales-slot { transition: none; }
+  .tales-named { animation: none; }
+}

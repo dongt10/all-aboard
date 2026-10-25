@@ -1,12 +1,16 @@
 import { keyIntent } from '../input.js';
+import { icon } from '../icons.js';
 
 let serial = 0;
 
 // The item-get card: "You made… {name}!", the creation drawn large beside the neighbor's joy pose, and
-// ▶ Put it in the festival. A (or any click on the card) resolves the promise once. artHTML and
+// a Put it in the festival button with the play icon like every other button. A (or any click on the
+// card) resolves the promise true once. Its cancel() removes the card and resolves false. artHTML and
 // figureHTML are trusted markup from creations.js and figures; the name is set as text.
 export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {}) {
-  return new Promise(resolve => {
+  let cancel;
+  const promise = new Promise(resolve => {
+    const opener = document.activeElement;
     const titleId = `item-get-title-${++serial}`;
     const backdrop = document.createElement('div');
     backdrop.className = 'item-get';
@@ -18,7 +22,7 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {})
           <div class="px-frame item-get__art">${artHTML}</div>
           <div class="item-get__figure">${figureHTML}</div>
         </div>
-        <button type="button" class="px-button px-button--finish item-get__go">▶ Put it in the festival</button>
+        <button type="button" class="px-button px-button--finish item-get__go">${icon('play', { size: 22 })}<span>Put it in the festival</span></button>
       </section>`;
     backdrop.querySelector('.item-get__name').textContent = `${name ?? ''}!`;
     const card = backdrop.firstElementChild;
@@ -27,20 +31,24 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {})
     dimmed.forEach(child => { child.inert = true; });
 
     let done = false;
-    function finish() {
+    function finish(accepted) {
       if (done) return;
       done = true;
       backdrop.remove();
       dimmed.forEach(child => { child.inert = false; });
-      resolve();
+      if (opener?.isConnected && !opener.disabled) opener.focus({ preventScroll: true });
+      resolve(accepted);
     }
-    card.addEventListener('click', finish);
+    cancel = () => finish(false);
+    card.addEventListener('click', () => finish(true));
     card.addEventListener('keydown', event => {
       const intent = keyIntent(event);
-      if (intent === 'a' && !event.repeat) { event.preventDefault(); event.stopPropagation(); finish(); }
+      if (intent === 'a' && !event.repeat) { event.preventDefault(); event.stopPropagation(); finish(true); }
       else if (event.key === 'Tab') { event.preventDefault(); button.focus(); }   // one control: Tab stays on it
     });
     stage.append(backdrop);
     button.focus({ preventScroll: true });
   });
+  promise.cancel = cancel;
+  return promise;
 }
