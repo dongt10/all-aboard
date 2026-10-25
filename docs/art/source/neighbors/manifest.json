@@ -45,6 +45,24 @@
         "left": "fead9b4512c19fc834420a63605c9d3dfd643391eaed7ed8ebd9651510691785",
         "right": "72d684c0fc7d1a1d4d730d8f711b523f9f561d06c9e775b7526292df9f87f8c4"
       }
+    },
+    "art": {
+      "name": "Yuki",
+      "composite": "ref-21.png",
+      "grid": { "blockSize": 4, "offset": [0, 0] },
+      "swatchBox": [49, 3, 62, 8],
+      "background": { "color": "#ffffff", "removal": "exterior" },
+      "dropRows": [],
+      "shift": [0, -5],
+      "feetRow": 56,
+      "joyEyeBox": [22, 26, 41, 31],
+      "frontStepColumns": [[18, 28], [35, 45]],
+      "rightMirrorColumns": [0, 1, 2],
+      "sideStandSha256": {
+        "left": "6d03d332006b1f10dcc386ee9e46de2b4a05a6778358cac5ceaf7b3cfd49e14a",
+        "right": "44b0a1638171279dbb9665983d79bcf68d6b6f1052244ccd146d23bbd8a77d52"
+      },
+      "backStandSha256": "76396f9507aa874f2667831eec83cd8e2e8076080ae7766ec5a831f3c737986a"
     }
   }
 }
