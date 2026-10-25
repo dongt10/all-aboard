@@ -1,7 +1,7 @@
 /* Willow Bay overworld. Everything is absolutely positioned on the 960×540 stage. */
 .village { position: absolute; inset: 0; isolation: isolate; overflow: hidden; background: var(--grass); outline: none; }
 .village:focus-visible { box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 8px var(--ink); }
-.village-map { position: absolute; left: 0; top: 0; width: 960px; height: 540px; display: block; }
+.village-map { position: absolute; left: 0; top: 0; width: 960px; height: 540px; display: block; image-rendering: pixelated; }
 .village-stalls, .village-actors { position: absolute; inset: 0; pointer-events: none; }
 .village-stalls > *, .village-actors > * { pointer-events: auto; }
 
@@ -105,10 +105,10 @@
 .village-parade { cursor: pointer; min-height: 40px; padding: 4px 10px; white-space: nowrap; }   /* 22 + 4 + 40 fits the board's 68px inside */
 .village-parade[hidden], .village-talk[hidden], .village-find[hidden], .village-pointer[hidden], .village-dialogue[hidden] { display: none; }
 
-/* Dialogue (styles for .dlg live in interaction.css); it sits bottom right, clear of the board */
-.village-dialogue { position: absolute; right: 12px; bottom: 24px; width: 472px; z-index: 1001; }
-/* Over the festival square: it covers the torii and Sora's name chip, never a neighbor or a stall front. */
-.village-dialogue--top { right: auto; bottom: auto; left: 244px; top: 168px; }
+/* Compact dialogue uses the house corners, clear of all figures and stalls. */
+.village-dialogue { position: absolute; right: 12px; bottom: 314px; width: 232px; z-index: 1001; }
+/* The alternate corner leaves room when the player approaches the right edge. */
+.village-dialogue--top { right: auto; bottom: auto; left: 12px; top: 90px; }
 
 /* A new creation sparkles once */
 .village-sparkle { position: absolute; inset: -8px; display: none; pointer-events: none; }
@@ -145,3 +145,8 @@
   .village-find, .village-badge__mark--new, .village-stall--sparkle .village-sparkle { animation: none; }
   .village-actor:hover .village-actor__fig, .village-actor--near .village-actor__fig { transform: none; }
 }
+
+/* Keep the speaker and two controls separate in a narrow dialogue. Text labels remain accessible. */
+.village-dialogue .dlg__tabs { gap: 4px; }
+.village-dialogue .dlg__tab { width: 28px; padding: 0; }
+.village-dialogue .dlg__tab > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }

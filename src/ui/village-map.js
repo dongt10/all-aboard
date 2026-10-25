@@ -1,25 +1,39 @@
-// Willow Bay's layout and art, drawn natively for the 960×540 stage. Everything here is pure.
-import { INK, INK_SOFT, PAPER, PAPER_SHADE, SKY, SEA, GRASS, GRASS_DARK, PATH, WOOD, VERMILION, LANTERN, LETTERBOX, FINISH, SUBJECT_THEME } from './palette.js';
+// Village furniture and movement on the shared crossroads layout.
+import { INK, INK_SOFT, PAPER, PAPER_SHADE, WOOD, LANTERN, LETTERBOX, FINISH, SUBJECT_THEME } from './palette.js';
+import { VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, HUD_ZONES, EASELS, ROAD_MASK, STAGE } from './village-layout.js';
+import { maskFromRGBA, createWalkable } from './walkable.js';
+export { VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, HUD_ZONES } from './village-layout.js';
 
-// The HUD strip across the top and the festival board in the bottom-left corner.
-export const HUD_ZONES = [{ x: 0, y: 0, w: 960, h: 72 }, { x: 0, y: 452, w: 440, h: 88 }];
-const SHORE_Y = 486;
-// Centered on x=480; wide enough for the player and the Find chip at PLAYER_START.
-const PIER = { x: 408, y: 470, w: 144, h: 70 };
-export const WATER_ZONES = [
-  { x: 0, y: SHORE_Y, w: PIER.x, h: 540 - SHORE_Y },
-  { x: PIER.x + PIER.w, y: SHORE_Y, w: 960 - PIER.x - PIER.w, h: 540 - SHORE_Y },
-];
-const BLOCKED_ZONES = [...HUD_ZONES, ...WATER_ZONES];
-// Home spots are feet positions.
-export const VILLAGE_SPOTS = {
-  community: { x: 180, y: 168 }, reading: { x: 480, y: 168 }, writing: { x: 780, y: 168 },
-  math: { x: 140, y: 300 }, art: { x: 820, y: 300 },
-  science: { x: 330, y: 416 }, music: { x: 630, y: 416 },
-};
-export const SIDE_SPOTS = { pip: { x: 330, y: 280 }, nori: { x: 640, y: 280 } };
-export const WANDER = { x: 36, y: 4 };
-export const PLAYER_START = { x: 480, y: 500 };
+let current = null, playerRoad = null, loading = null;
+export const road = () => current;
+export function setRoad(walkable) {
+  if (current === walkable) return;
+  current = walkable;
+  playerRoad = null;
+}
+
+export async function loadRoad(src = ROAD_MASK) {
+  if (current) return current;
+  if (!loading) loading = new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+        const context = canvas.getContext('2d', { willReadFrequently: true });
+        context.drawImage(img, 0, 0);
+        const { width, height, data } = context.getImageData(0, 0, canvas.width, canvas.height);
+        const walkable = createWalkable(maskFromRGBA({ width, height, rgba: data }));
+        setRoad(walkable);
+        resolve(walkable);
+      } catch (error) { reject(error); }
+    };
+    img.onerror = () => reject(new Error('The village road could not be loaded.'));
+    img.src = src;
+  }).finally(() => { loading = null; });
+  return loading;
+}
+
 // Reserve the 64×64 figure and the 44×36 Find chip beside it, even when Find is off.
 export const WALK_SHAPE = { left: 32, right: 70, top: 57, bottom: 7 };
 export const WALK_BOUNDS = { minX: 40, maxX: 960 - WALK_SHAPE.right, minY: HUD_ZONES[0].h + WALK_SHAPE.top, maxY: 510 };
@@ -45,11 +59,7 @@ export function roamRect(id) {
 
 export const talkPoint = (id, feet = homeSpot(id)) => ({ x: feet.x, y: feet.y + TALK_OFFSET });
 
-// A creation's 80×56 easel stands 4px beside its stall, on the side toward the middle of the map.
-export function easelRect(id) {
-  const { x, y } = VILLAGE_SPOTS[id];
-  return { x: x > 480 ? x - 64 - 84 : x + 64 + 4, y: y - 70, w: 80, h: 56 };
-}
+export const easelRect = id => EASELS[id];
 
 // `positions` maps id → current feet. The player talks from a point just below the feet.
 export function nearestNeighbor(player, positions = VILLAGE_SPOTS, maxDistance = 72) {
@@ -61,36 +71,74 @@ export function nearestNeighbor(player, positions = VILLAGE_SPOTS, maxDistance =
   return best;
 }
 
-// Project a destination (or an animation frame) onto the nearest clear HUD/water edge.
-export function clampWalk(point, fixedAxis = null) {
-  const pos = {
-    x: clamp(point.x, WALK_BOUNDS.minX, WALK_BOUNDS.maxX),
-    y: clamp(point.y, WALK_BOUNDS.minY, WALK_BOUNDS.maxY),
-  };
-  const rect = p => ({ x: p.x - WALK_SHAPE.left, y: p.y - WALK_SHAPE.top, w: WALK_SHAPE.left + WALK_SHAPE.right, h: WALK_SHAPE.top + WALK_SHAPE.bottom });
-  const clear = p => p.x >= WALK_BOUNDS.minX && p.x <= WALK_BOUNDS.maxX && p.y >= WALK_BOUNDS.minY && p.y <= WALK_BOUNDS.maxY
-    && BLOCKED_ZONES.every(zone => !overlaps(rect(p), zone));
-  if (clear(pos)) return pos;
-  // Include corners: an edge of the water may itself be behind the festival board.
-  const xs = fixedAxis === 'x' ? [pos.x] : [pos.x, ...BLOCKED_ZONES.flatMap(z => [z.x - WALK_SHAPE.right, z.x + z.w + WALK_SHAPE.left])];
-  const ys = fixedAxis === 'y' ? [pos.y] : [pos.y, ...BLOCKED_ZONES.flatMap(z => [z.y - WALK_SHAPE.bottom, z.y + z.h + WALK_SHAPE.top])];
-  return xs.flatMap(x => ys.map(y => ({ x, y }))).filter(clear)
+const walkRect = p => ({ x: p.x - WALK_SHAPE.left, y: p.y - WALK_SHAPE.top, w: WALK_SHAPE.left + WALK_SHAPE.right, h: WALK_SHAPE.top + WALK_SHAPE.bottom });
+const hudClear = p => p.x >= WALK_BOUNDS.minX && p.x <= WALK_BOUNDS.maxX && p.y >= WALK_BOUNDS.minY && p.y <= WALK_BOUNDS.maxY
+  && HUD_ZONES.every(zone => !overlaps(walkRect(p), zone));
+
+function clampHUD(point, fixedAxis = null) {
+  const pos = { x: clamp(point.x, WALK_BOUNDS.minX, WALK_BOUNDS.maxX), y: clamp(point.y, WALK_BOUNDS.minY, WALK_BOUNDS.maxY) };
+  if (hudClear(pos)) return pos;
+  const xs = fixedAxis === 'x' ? [pos.x] : [pos.x, ...HUD_ZONES.flatMap(z => [z.x - WALK_SHAPE.right, z.x + z.w + WALK_SHAPE.left])];
+  const ys = fixedAxis === 'y' ? [pos.y] : [pos.y, ...HUD_ZONES.flatMap(z => [z.y - WALK_SHAPE.bottom, z.y + z.h + WALK_SHAPE.top])];
+  return xs.flatMap(x => ys.map(y => ({ x, y }))).filter(hudClear)
     .sort((a, b) => Math.hypot(a.x - pos.x, a.y - pos.y) - Math.hypot(b.x - pos.x, b.y - pos.y))[0];
 }
 
-// Round the pier's corner on land, so a diagonal tap walk cannot stick against the water.
-export function walkWaypoint(from, to) {
-  const shore = SHORE_Y - WALK_SHAPE.bottom;
-  const onPier = x => x >= PIER.x + WALK_SHAPE.left && x <= PIER.x + PIER.w - WALK_SHAPE.right;
-  if (from.y > shore && !onPier(to.x)) return { x: from.x, y: shore };
-  if (to.y > shore && !onPier(from.x)) return { x: to.x, y: Math.min(from.y, shore) };
-  return to;
+// The engine also plans around the HUD, reserving the full figure and Find chip.
+// Each bit includes the feet footprint plus a 1px road margin: the engine samples
+// paths every 2px, so the margin keeps unsampled corners off obstacles too.
+function playerWalkable() {
+  if (!current) return null;
+  if (!playerRoad) {
+    const { width, height } = STAGE, bits = new Uint8Array(Math.ceil(width * height / 8));
+    for (let y = WALK_BOUNDS.minY; y <= WALK_BOUNDS.maxY; y++) for (let x = WALK_BOUNDS.minX; x <= WALK_BOUNDS.maxX; x++) {
+      const p = { x, y }, i = y * width + x;
+      if (!hudClear(p) || HUD_ZONES.some(zone => overlaps(walkRect({ x: x + 0.999, y: y + 0.999 }), zone))) continue;
+      let clear = true;
+      for (let dy = -1; dy <= 1 && clear; dy++) for (let dx = -1; dx <= 1; dx++) {
+        if (!current.isWalkable({ x: x + dx, y: y + dy })) { clear = false; break; }
+      }
+      if (clear) bits[i >> 3] |= 1 << (i & 7);
+    }
+    playerRoad = createWalkable({ width, height, bits }, { footprint: [[0, 0]] });
+  }
+  return playerRoad;
+}
+
+// An unsnappable result remains a destination only: movement must reject it.
+export function clampWalk(point, fixedAxis = null) {
+  const clamped = clampHUD(point, fixedAxis);
+  if (!current) return clamped;
+  const nearest = current.nearest(clamped, 96);
+  return nearest && hudClear(nearest) ? nearest : playerWalkable().nearest(clamped, 96) ?? clamped;
+}
+
+export function roadPath(from, point, maxRadius = 96) {
+  const walkable = playerWalkable();
+  if (!walkable) return null;
+  const goal = walkable.nearest(clampHUD(point), maxRadius);
+  const start = walkable.nearest(from, 2);
+  if (!goal || !start || !current.straightClear(from, start)) return null;
+  // A keyboard step may finish on the road edge, just outside the planning margin.
+  for (const t of [0.25, 0.5, 0.75]) {
+    if (!hudClear({ x: from.x + (start.x - from.x) * t, y: from.y + (start.y - from.y) * t })) return null;
+  }
+  const path = walkable.findPath(start, goal, { maxRadius: 0 });
+  if (path && (from.x !== start.x || from.y !== start.y)) path.unshift({ ...from });
+  return path;
+}
+
+export function talkGoal(id, feet = homeSpot(id)) {
+  if (!current) return null;
+  const point = talkPoint(id, feet), goal = playerWalkable().nearest(clampHUD(point), 96);
+  return goal && current.isWalkable(goal) && hudClear(goal) && Math.hypot(goal.x - point.x, goal.y - point.y) <= 72 ? goal : null;
 }
 
 export function stepPlayer(player, intent) {
   const move = MOVES[intent];
-  if (!move) return { x: player.x, y: player.y };
-  return clampWalk({ x: player.x + move[0] * STEP, y: player.y + move[1] * STEP }, move[0] ? 'y' : 'x');
+  if (!move || !current) return { x: player.x, y: player.y };
+  const to = clampHUD({ x: player.x + move[0] * STEP, y: player.y + move[1] * STEP }, move[0] ? 'y' : 'x');
+  return current.step(player, to);
 }
 
 // 'made': a creation stands at the stall. 'visited': an older save finished it without a creation.
@@ -121,8 +169,7 @@ export const overlaps = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.
 
 export function wanderTarget(id, random = Math.random) {
   const home = homeSpot(id);
-  const offset = range => clamp(Math.round((random() * 2 - 1) * range), -range, range);
-  return { x: home.x + offset(WANDER.x), y: home.y + offset(WANDER.y) };
+  return current ? current.randomWalkableNear(home, WANDER, random) : { ...home };
 }
 
 export function stepToward(pos, target, maxStep) {
@@ -145,7 +192,6 @@ const rect = (x, y, w, h, fill) => `<rect x="${x}" y="${y}" width="${w}" height=
 
 // Hand-picked steps of the festival tokens: light always comes from the upper left.
 const TIMBER = { base: WOOD, light: '#dca372', shade: '#885036' };
-const RED = { base: VERMILION, light: '#ff8a61', shade: '#a72f35' };
 const GOLD = { base: LANTERN, light: '#ffe69a', shade: '#c28b2c' };
 const SHEET = { base: PAPER, light: '#ffffff', shade: PAPER_SHADE };
 const CLOTH = {
@@ -169,115 +215,6 @@ function post(x, y, w, h) {
   return panel(x, y, w, h, TIMBER) + rect(x + 2, y + h - 4, w - 3, 2, TIMBER.shade)
     + rect(x + 2, y + 4, 1, 1, INK) + rect(x + w - 3, y + 10, 1, Math.min(8, h - 12), TIMBER.shade)
     + rect(x + 2, y + h - 8, 1, 1, INK);
-}
-
-function tree(x, y) {   // (x, y) is the base of the trunk
-  return post(x - 4, y - 18, 8, 18) + rect(x - 3, y - 4, 6, 3, TIMBER.shade)
-    // Four closed tiers keep the original 36×50 silhouette and trunk position.
-    + rect(x - 12, y - 50, 24, 6, INK) + rect(x - 16, y - 46, 32, 8, INK)
-    + rect(x - 18, y - 40, 36, 20, INK) + rect(x - 14, y - 22, 28, 8, INK)
-    + rect(x - 11, y - 49, 22, 6, GRASS) + rect(x - 15, y - 45, 30, 8, GRASS)
-    + rect(x - 17, y - 39, 34, 18, GRASS) + rect(x - 13, y - 22, 26, 7, GRASS)
-    + rect(x + 9, y - 44, 6, 6, GRASS_DARK) + rect(x + 11, y - 38, 6, 16, GRASS_DARK)
-    + rect(x + 5, y - 28, 8, 12, GRASS_DARK) + rect(x - 12, y - 19, 24, 4, GRASS_DARK)
-    + rect(x - 10, y - 48, 12, 3, '#a1df7e') + rect(x - 14, y - 44, 8, 4, '#a1df7e')
-    + rect(x - 16, y - 38, 6, 6, '#a1df7e') + rect(x - 6, y - 40, 6, 4, '#a1df7e')
-    + rect(x - 11, y - 28, 4, 2, '#a1df7e') + rect(x + 2, y - 35, 4, 2, GRASS_DARK);
-}
-const flower = (x, y, color) => rect(x, y - 3, 3, 9, INK) + rect(x - 3, y, 9, 3, INK)
-  + rect(x + 1, y - 2, 1, 7, color) + rect(x - 2, y + 1, 7, 1, color)
-  + rect(x, y, 3, 3, LANTERN) + rect(x, y, 1, 1, PAPER);
-
-// A stepped string of lanterns hanging between two posts, sagging in the middle.
-function lanternString(x1, x2, y, sag, colors) {
-  let out = '';
-  const span = x2 - x1;
-  let previousY = y;
-  for (let x = x1; x < x2; x += 4) {
-    const t = (x - x1) / span;
-    const nextY = Math.round(y + sag * 4 * t * (1 - t));
-    out += rect(x, nextY, 4, 1, INK) + rect(x, Math.min(previousY, nextY), 1, Math.abs(nextY - previousY) + 1, INK);
-    previousY = nextY;
-  }
-  const count = Math.floor(span / 40);
-  for (let i = 1; i < count; i++) {
-    const x = x1 + Math.round(i * span / count), t = (x - x1) / span, top = Math.round(y + sag * 4 * t * (1 - t)) + 2;
-    const tone = colors[i % colors.length] === VERMILION ? RED : GOLD;
-    out += rect(x - 1, top - 1, 2, 4, INK)
-      + rect(x - 4, top + 2, 8, 14, INK) + rect(x - 6, top + 4, 12, 10, INK)
-      + rect(x - 3, top + 3, 6, 12, tone.base) + rect(x - 5, top + 5, 10, 8, tone.base)
-      + rect(x - 3, top + 4, 2, 8, tone.light) + rect(x - 4, top + 5, 6, 2, tone.light)
-      + rect(x + 3, top + 6, 2, 7, tone.shade) + rect(x - 2, top + 13, 5, 2, tone.shade)
-      + rect(x + 1, top + 7, 1, 6, tone.shade) + rect(x - 3, top + 9, 6, 1, tone.shade)
-      + rect(x - 2, top + 2, 4, 1, INK) + rect(x - 2, top + 15, 4, 1, INK)
-      + rect(x - 1, top + 16, 2, 4, INK) + rect(x, top + 16, 1, 3, tone.base);
-  }
-  return out + post(x1 - 3, y - 4, 6, 60) + post(x2 - 3, y - 4, 6, 60);
-}
-
-function yagura(cx, base) {   // the festival tower, feet of its legs at y = base
-  const x = cx - 50;
-  return panel(x + 6, base - 2, 88, 6, TIMBER)
-    + [8, 46, 84].map(dx => post(x + dx, base - 70, 8, 70)).join('')
-    + panel(x + 16, base - 40, 68, 4, TIMBER) + panel(x + 16, base - 20, 68, 4, TIMBER)
-    + rect(x + 22, base - 39, 2, 1, INK) + rect(x + 76, base - 19, 2, 1, INK)
-    + panel(x, base - 78, 100, 10, RED) + rect(x + 3, base - 71, 94, 2, RED.shade)
-    + panel(x + 10, base - 100, 80, 22, SHEET)
-    + Array.from({ length: 6 }, (_, i) => {
-      const sx = x + 18 + i * 12, tone = i % 2 ? GOLD : RED;
-      return rect(sx, base - 98, 6, 19, tone.base) + rect(sx, base - 97, 1, 15, tone.light)
-        + rect(sx + 4, base - 96, 2, 16, tone.shade) + rect(sx, base - 82, 4, 2, tone.shade);
-    }).join('')
-    + rect(x + 12, base - 81, 76, 1, TIMBER.shade)
-    + panel(x - 8, base - 108, 116, 10, RED) + rect(x - 6, base - 101, 112, 2, RED.shade)
-    + panel(x + 14, base - 116, 72, 8, RED)
-    + rect(x + 18, base - 115, 40, 2, RED.light) + rect(x + 18, base - 110, 64, 1, RED.shade)
-    + [28, 44, 60, 76].map(dx => rect(x + dx, base - 113, 1, 4, RED.shade)).join('')
-    + panel(cx - 2, base - 128, 4, 12, TIMBER) + panel(cx - 6, base - 128, 12, 4, GOLD);
-}
-
-export function villageMapSVG() {
-  const ground = rect(0, 0, 960, 540, GRASS)
-    // distant rooftops and hills under the HUD
-    + rect(0, 0, 960, 40, SKY) + rect(0, 40, 960, 32, GRASS_DARK)
-    + Array.from({ length: 12 }, (_, i) => panel(i * 84 + 8, 28, 40, 12, i % 2 ? RED : TIMBER) + panel(i * 84 + 12, 40, 32, 12, SHEET) + rect(i * 84 + 24, 44, 8, 8, INK_SOFT)).join('')
-    // grass speckles
-    + Array.from({ length: 60 }, (_, i) => rect((i * 157) % 940 + 10, (i * 89) % 360 + 80, 4, 4, GRASS_DARK)).join('');
-  const paths = [
-    [100, 176, 760, 24], [80, 308, 800, 24], [290, 424, 380, 24],   // three streets under the three rows
-    [168, 176, 24, 156], [768, 176, 24, 156], [468, 176, 24, 300],   // side lanes and the main avenue
-    [318, 308, 24, 140], [618, 308, 24, 140],
-  ].map(([x, y, w, h]) => rect(x - 2, y - 2, w + 4, h + 4, PAPER_SHADE) + rect(x, y, w, h, PATH)).join('');
-  const square = rect(388, 214, 184, 104, PAPER_SHADE) + rect(392, 218, 176, 96, PATH)
-    + Array.from({ length: 11 }, (_, i) => rect(400 + i * 16, 226 + (i % 2) * 40, 8, 4, PAPER_SHADE)).join('');
-  const shore = rect(0, 456, 960, 34, PATH) + rect(0, SHORE_Y, 960, 540 - SHORE_Y, SEA)
-    + Array.from({ length: 14 }, (_, i) => rect(i * 70 + 12, 500 + (i % 3) * 12, 24, 3, SKY)).join('')
-    + rect(0, 484, 960, 4, PAPER);
-  const pier = panel(PIER.x, PIER.y, PIER.w, PIER.h, TIMBER)
-    + Array.from({ length: 8 }, (_, i) => {
-      const y = 472 + i * 8;
-      return panel(PIER.x + 4, y, PIER.w - 8, 8, TIMBER) + rect(PIER.x + 7, y + 3, 1, 1, INK) + rect(PIER.x + PIER.w - 8, y + 3, 1, 1, INK)
-        + rect(454 + (i % 3) * 8, y + 4, 16, 1, TIMBER.shade) + rect(478 + (i % 2) * 8, y + 2, 10, 1, TIMBER.light);
-    }).join('')
-    + [PIER.x - 4, PIER.x + PIER.w - 4].map(x => post(x, 488, 8, 52)
-      + panel(x, 488, 8, 6, TIMBER) + rect(x + 1, 504, 6, 2, PAPER_SHADE)).join('');
-  const boat = panel(588, 488, 4, 24, TIMBER)
-    + rect(592, 490, 16, 16, INK) + rect(608, 494, 4, 8, INK)
-    + rect(593, 491, 14, 14, PAPER) + rect(607, 495, 4, 6, PAPER)
-    + rect(593, 491, 12, 2, '#ffffff') + rect(593, 493, 2, 10, '#ffffff')
-    + rect(605, 493, 2, 12, PAPER_SHADE) + rect(607, 499, 4, 2, PAPER_SHADE) + rect(595, 503, 10, 2, PAPER_SHADE)
-    + rect(598, 494, 1, 8, PAPER_SHADE)
-    + rect(560, 512, 64, 4, INK) + rect(562, 516, 60, 4, INK) + rect(566, 520, 52, 4, INK)
-    + rect(561, 513, 62, 2, RED.light) + rect(563, 515, 58, 4, RED.base) + rect(567, 519, 50, 4, RED.base)
-    + rect(568, 521, 48, 2, RED.shade) + rect(614, 516, 6, 3, RED.shade)
-    + rect(568, 515, 22, 1, RED.light) + rect(576, 517, 2, 2, INK) + rect(602, 517, 2, 2, INK);
-  const trees = [[24, 128], [60, 200], [28, 396], [70, 440], [932, 128], [900, 210], [930, 400], [890, 444], [328, 128], [632, 128], [252, 260], [708, 260], [416, 400], [544, 400]].map(([x, y]) => tree(x, y)).join('');
-  const flowers = [[96, 250, VERMILION], [112, 262, LANTERN], [860, 252, SUBJECT_THEME.art.color], [878, 262, VERMILION], [210, 440, SUBJECT_THEME.art.color], [752, 440, LANTERN], [400, 160, VERMILION], [560, 160, SUBJECT_THEME.art.color], [36, 300, LANTERN], [928, 300, VERMILION]].map(([x, y, c]) => flower(x, y, c)).join('');
-  const lanterns = lanternString(276, 456, 214, 22, [VERMILION, LANTERN]) + lanternString(504, 684, 214, 22, [LANTERN, VERMILION]);
-  const welcome = panel(550, 470, 4, 14, TIMBER) + panel(526, 448, 52, 24, TIMBER) + panel(529, 451, 46, 18, SHEET)
-    + rect(536, 456, 32, 2, INK_SOFT) + rect(536, 462, 24, 2, INK_SOFT)
-    + rect(527, 450, 1, 1, INK) + rect(576, 469, 1, 1, INK);
-  return `<svg class="village-map" viewBox="0 0 960 540" width="960" height="540" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${ground}${paths}${square}${shore}${pier}${boat}${trees}${flowers}${yagura(480, 312)}${lanterns}${welcome}</svg>`;
 }
 
 // One stall, 128×80, drawn in the subject color: an awning, posts, and a counter.

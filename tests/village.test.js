@@ -8,31 +8,35 @@ import { createEncounterScene } from '../src/ui/screens/encounter.js';
 import { createState, publishCreation, loadState, STORAGE_KEY } from '../src/progress.js';
 import { paradeStatus } from '../src/ui/parade-lineup.js';
 import { createDefaultBand } from '../src/audio.js';
-import { HUD_ZONES, WATER_ZONES, WALK_SHAPE, VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, clampWalk, hotspotRect, roamRect, talkPoint, nearestNeighbor, stepPlayer, stallState, overlaps, wanderTarget, stepToward, guideArrow } from '../src/ui/village-map.js';
+import { HUD_ZONES, WALK_SHAPE, setRoad, road, loadRoad, roadPath, talkGoal, VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, clampWalk, hotspotRect, roamRect, talkPoint, nearestNeighbor, stepPlayer, stallState, overlaps, wanderTarget, stepToward, guideArrow } from '../src/ui/village-map.js';
 import { creationMarkup, fitSignPreviews } from '../src/ui/creations.js';
 import { STAGE } from '../src/ui/stage.js';
 import { CHARACTERS } from '../src/data.js';
+import { BACKGROUND, ROAD_MASK, STALLS, EASELS } from '../src/ui/village-layout.js';
+import { readPNG } from './helpers/png.js';
+import { createWalkable, maskFromRGBA } from '../src/ui/walkable.js';
+const realRoad = createWalkable(maskFromRGBA(readPNG(new URL(`../${ROAD_MASK}`, import.meta.url))));
+setRoad(realRoad);
 
 // A small seeded generator, so wander tests are repeatable.
 const seeded = (seed = 7) => () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
 const CAST = [...CHARACTERS.map(c => c.id), 'pip', 'nori'];
 
-test('every neighbor and side character has a roomy patch clear of the HUD, water and each other', () => {
+test('all neighbor, side character and player footprints stand on the real road', () => {
   assert.deepEqual(Object.keys(VILLAGE_SPOTS).sort(), CHARACTERS.map(c => c.id).sort());
   assert.deepEqual(Object.keys(SIDE_SPOTS).sort(), ['nori', 'pip']);
-  const rects = CAST.map(id => [id, roamRect(id)]);
-  for (const [id, r] of rects) {
+  for (const [id, feet] of Object.entries({ ...VILLAGE_SPOTS, ...SIDE_SPOTS, player: PLAYER_START })) {
+    assert.ok(realRoad.isWalkable(feet), id);
+    const figure = { x: feet.x - 32, y: feet.y - 57, w: 64, h: 64 };
+    for (const zone of HUD_ZONES) assert.equal(overlaps(figure, zone), false, id);
+    if (id === 'player') continue;
     const hot = hotspotRect(id);
-    assert.ok(VILLAGE_SPOTS[id] ? hot.w >= 96 && hot.h >= 96 : hot.w >= 64 && hot.h >= 64, `${id} big enough`);
-    assert.ok(r.x >= 0 && r.y >= 0 && r.x + r.w <= STAGE.width && r.y + r.h <= STAGE.height, `${id} inside the stage`);
-    for (const zone of HUD_ZONES) assert.equal(overlaps(r, zone), false, `${id} clear of the HUD`);
-    for (const zone of WATER_ZONES) assert.equal(overlaps(r, zone), false, `${id} clear of the water`);
-    for (const [other, o] of rects) if (other !== id) assert.equal(overlaps(r, o), false, `${id} vs ${other}`);
+    assert.ok(VILLAGE_SPOTS[id] ? hot.w >= 96 && hot.h >= 96 : hot.w >= 64 && hot.h >= 64, id);
   }
 });
 
 test('hotspots follow the feet they are given', () => {
-  assert.deepEqual(hotspotRect('math'), { x: 84, y: 220, w: 112, h: 112 });
+  assert.deepEqual(hotspotRect('math'), { x: 258, y: 270, w: 112, h: 112 });
   assert.deepEqual(hotspotRect('math', { x: 150, y: 302 }), { x: 94, y: 222, w: 112, h: 112 });
   assert.deepEqual(hotspotRect('pip', { x: 100, y: 200 }), { x: 64, y: 128, w: 72, h: 88 });
   assert.deepEqual(talkPoint('math', { x: 150, y: 302 }), { x: 150, y: 342 });
@@ -43,19 +47,21 @@ test('overlaps is strict: touching edges do not overlap', () => {
   assert.equal(overlaps({ x: 0, y: 0, w: 10, h: 10 }, { x: 9, y: 9, w: 10, h: 10 }), true);
 });
 
-test('wander targets stay inside the home patch', () => {
+test('500 seeded wander targets per character stay on clear road segments inside the home patch', () => {
   const random = seeded();
   for (const id of CAST) {
     const home = VILLAGE_SPOTS[id] ?? SIDE_SPOTS[id];
-    for (let i = 0; i < 200; i++) {
+    for (let i = 0; i < 500; i++) {
       const t = wanderTarget(id, random);
       assert.ok(Math.abs(t.x - home.x) <= WANDER.x && Math.abs(t.y - home.y) <= WANDER.y, `${id} target ${t.x},${t.y}`);
+      assert.ok(realRoad.isWalkable(t), id);
+      assert.ok(realRoad.straightClear(home, t), id);
       const hot = hotspotRect(id, t), roam = roamRect(id);
       assert.ok(hot.x >= roam.x && hot.y >= roam.y && hot.x + hot.w <= roam.x + roam.w && hot.y + hot.h <= roam.y + roam.h, `${id} hotspot stays in its roam rect`);
     }
   }
-  assert.deepEqual(wanderTarget('math', () => 0), { x: 104, y: 296 });
-  assert.deepEqual(wanderTarget('math', () => 0.5), { x: 140, y: 300 });
+  assert.ok(realRoad.isWalkable(wanderTarget('math', () => 0)));
+  assert.deepEqual(wanderTarget('math', () => 0.5), VILLAGE_SPOTS.math);
 });
 
 test('stepToward walks a capped step and faces the way it goes', () => {
@@ -79,15 +85,19 @@ test('the player can talk only when standing near a neighbor', () => {
   assert.equal(nearestNeighbor(PLAYER_START), null);
   const moved = { ...VILLAGE_SPOTS, math: { x: 170, y: 300 } };
   assert.equal(nearestNeighbor({ x: 170, y: 340 }, moved), 'math');
-  assert.equal(nearestNeighbor({ x: 330, y: 320 }, { ...VILLAGE_SPOTS, ...SIDE_SPOTS }), 'pip');
+  assert.equal(nearestNeighbor(talkPoint('pip'), { ...VILLAGE_SPOTS, ...SIDE_SPOTS }), 'pip');
 });
 
-test('walking moves 24px and stops at the edges', () => {
-  assert.deepEqual(stepPlayer({ x: 480, y: 500 }, 'up'), { x: 480, y: 476 });
-  assert.deepEqual(stepPlayer({ x: 40, y: 300 }, 'left'), { x: 40, y: 300 });
-  assert.deepEqual(stepPlayer({ x: 880, y: 300 }, 'right'), { x: 890, y: 300 });
-  assert.deepEqual(stepPlayer({ x: 480, y: 510 }, 'down'), { x: 480, y: 510 });
-  assert.deepEqual(stepPlayer({ x: 880, y: 300 }, 'a'), { x: 880, y: 300 });
+test('walking moves 24px, respects HUD bounds and stops at the road edge', () => {
+  assert.deepEqual(stepPlayer(PLAYER_START, 'up'), { x: 490, y: 486 });
+  assert.deepEqual(stepPlayer(PLAYER_START, 'down'), PLAYER_START);
+  assert.deepEqual(stepPlayer(PLAYER_START, 'a'), PLAYER_START);
+  const from = { x: 420, y: 196 };
+  let edge = from;
+  for (let i = 0; i < 10; i++) { edge = stepPlayer(edge, 'left'); assert.ok(realRoad.isWalkable(edge)); }
+  assert.notDeepEqual(edge, from);
+  assert.deepEqual(stepPlayer(edge, 'left'), edge, 'a step off the road is refused');
+  assert.ok(realRoad.straightClear(from, edge));
 });
 
 test('player cadence alternates feet at 80ms, scales with speed and never exceeds 120ms', () => {
@@ -101,30 +111,33 @@ test('player cadence alternates feet at 80ms, scales with speed and never exceed
   assert.equal(frameFor(100, 0), 0, 'standing when stopped');
 });
 
-test('water spans the sea except the pier, and stops downward steps at the shore', () => {
-  assert.deepEqual(WATER_ZONES, [
-    { x: 0, y: 486, w: 408, h: 54 },
-    { x: 552, y: 486, w: 408, h: 54 },
-  ]);
-  const shore = { x: 700, y: 479 };
-  assert.deepEqual(stepPlayer(shore, 'down'), shore, 'a step into water is refused');
-  assert.deepEqual(stepPlayer({ x: 700, y: 470 }, 'down'), shore, 'approaching feet stop 7px above the sea');
-  assert.deepEqual(clampWalk({ x: 700, y: 520 }), shore, 'a water tap projects onto the shore');
-  assert.deepEqual(clampWalk({ x: 490, y: 500 }), { x: 482, y: 500 }, 'near the pier its edge is closer');
-  assert.deepEqual(clampWalk(PLAYER_START), PLAYER_START);
-  assertVisiblePlayer(PLAYER_START);
-  const topOfPier = stepPlayer(PLAYER_START, 'up');
-  assert.deepEqual(topOfPier, { x: 480, y: 476 });
-  assert.deepEqual(stepPlayer(topOfPier, 'right'), { x: 504, y: 476 }, 'step sideways off the dry pier onto sand');
-  assert.deepEqual(stepPlayer({ x: 482, y: 500 }, 'right'), { x: 482, y: 500 }, 'cannot step sideways into sea');
+test('all nine talk goals are reachable, in range and joined by clear road segments', () => {
+  for (const id of CAST) {
+    const goal = talkGoal(id), point = talkPoint(id);
+    assert.ok(goal, id);
+    assert.ok(Math.hypot(goal.x - point.x, goal.y - point.y) <= 72, id);
+    assert.equal(nearestNeighbor(goal, { ...VILLAGE_SPOTS, ...SIDE_SPOTS }), id);
+    const path = roadPath(PLAYER_START, goal, 0);
+    assert.ok(path, id);
+    assert.deepEqual(path.at(-1), goal);
+    path.forEach((p, i) => {
+      assert.ok(realRoad.isWalkable(p), id);
+      assertVisiblePlayer(p);
+      if (i) assert.ok(realRoad.straightClear(path[i - 1], p), id);
+    });
+  }
 });
 
-test('projections stay clear where water meets the board and pier', () => {
-  for (let x = 0; x <= 960; x += 8) for (let y = 440; y <= 540; y += 5) {
-    const p = clampWalk({ x, y });
-    assertVisiblePlayer(p);
-    assert.deepEqual(clampWalk(p), p, 'projection is stable');
-    for (const intent of ['up', 'down', 'left', 'right']) assertVisiblePlayer(stepPlayer(p, intent));
+test('road projections stay on the mask and all accepted paths preserve HUD clearance', () => {
+  for (let x = 0; x <= 960; x += 40) for (let y = 80; y <= 540; y += 40) {
+    const point = { x, y }, snapped = clampWalk(point);
+    if (realRoad.isWalkable(snapped)) { assertVisiblePlayer(snapped); assert.deepEqual(clampWalk(snapped), snapped); }
+    const path = roadPath(PLAYER_START, point);
+    if (!path) continue;
+    for (let i = 1; i < path.length; i++) {
+      assert.ok(realRoad.straightClear(path[i - 1], path[i]));
+      for (let n = 0; n <= 20; n++) assertVisiblePlayer({ x: path[i - 1].x + (path[i].x - path[i - 1].x) * n / 20, y: path[i - 1].y + (path[i].y - path[i - 1].y) * n / 20 });
+    }
   }
 });
 
@@ -146,7 +159,7 @@ test('saved creations render safely', () => {
 
 test('creation easels stand beside their stalls, a few pixels clear of every stall and each other', async () => {
   const { easelRect } = await import('../src/ui/village-map.js');
-  const stall = id => ({ x: VILLAGE_SPOTS[id].x - 64, y: VILLAGE_SPOTS[id].y - 96, w: 128, h: 80 });
+  const stall = id => STALLS[id];
   const roomy = r => ({ x: r.x - 2, y: r.y - 2, w: r.w + 4, h: r.h + 4 });   // at least 4px between any two
   const ids = Object.keys(VILLAGE_SPOTS);
   for (const id of ids) {
@@ -315,7 +328,7 @@ import { Doc, Event, Target, pressKey } from './helpers/dom.js';
 import { speak } from '../src/ui/voice.js';
 
 
-function villageFixture(t, { calm = false, large = false, state = createState(), voice = () => false, ...options } = {}) {
+function villageFixture(t, { calm = false, large = false, state = createState(), voice = () => false, walkable = realRoad, ...options } = {}) {
   const doc = new Doc(), frames = new Map(), restore = [];
   let frameId = 0, time = 0;
   for (const [key, value] of Object.entries({
@@ -333,12 +346,12 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
   stage.className = `stage${calm ? ' calm' : ''}${large ? ' large-text' : ''}`;
   doc.body.append(stage);
   const scene = createVillageScene({
-    stage, getState: () => state,
+    stage, walkable, getState: () => state,
     go: (...args) => { gone.push(args); return true; },
     speak: text => { spoken.push(text); return voice(text); },
     open: Object.fromEntries(['grade', 'guide', 'comfort', 'pause', 'help'].map(act => [act, () => opened.push(act)])),
   }, options);
-  scene.mount();
+  const mounted = scene.mount();
   const root = stage.querySelector('.village');
   root.getBoundingClientRect = () => ({ left: 0, top: 0, width: 960, height: 540 });
   const tick = (ms = 16) => {
@@ -352,25 +365,109 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
   };
   const tap = (x, y) => root.querySelector('.village-map').dispatchEvent(new Event('click', { clientX: x, clientY: y }));
   t.after(() => { scene.destroy(); restore.forEach(reset => reset()); });
-  return { doc, scene, root, stage, gone, opened, spoken, tick, pos, tap };
+  return { doc, scene, root, stage, gone, opened, spoken, tick, pos, tap, mounted, frames };
 }
+
+test('the scene uses the fixed-size background and the supplied furniture geometry', t => {
+  const f = villageFixture(t);
+  const image = f.root.querySelector('.village-map');
+  assert.equal(image.tagName, 'IMG');
+  assert.equal(image.getAttribute('src'), BACKGROUND);
+  assert.equal(image.getAttribute('width'), '960');
+  assert.equal(image.getAttribute('height'), '540');
+  assert.equal(image.getAttribute('draggable'), 'false');
+  assert.match(cssBlock(readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8'), '.village-map'), /image-rendering:\s*pixelated/);
+  for (const id of Object.keys(STALLS)) {
+    for (const [selector, rect] of [['.village-stall', STALLS[id]], ['.village-easel', EASELS[id]]]) {
+      const el = f.root.querySelector(`${selector}[data-id="${id}"]`);
+      assert.match(el.getAttribute('style'), new RegExp(`left:${rect.x}px;top:${rect.y}px`));
+    }
+  }
+});
+
+function pendingRoad(t) {
+  setRoad(null);
+  const images = [], original = Object.getOwnPropertyDescriptor(globalThis, 'Image');
+  Object.defineProperty(globalThis, 'Image', { configurable: true, value: class {
+    constructor() { this.naturalWidth = 960; this.naturalHeight = 540; images.push(this); }
+  } });
+  t.after(() => {
+    setRoad(realRoad);
+    if (original) Object.defineProperty(globalThis, 'Image', original); else delete globalThis.Image;
+  });
+  return images;
+}
+function supplyRoadPixels(t, doc) {
+  const create = doc.createElement.bind(doc), png = readPNG(new URL(`../${ROAD_MASK}`, import.meta.url));
+  t.mock.method(doc, 'createElement', tag => tag === 'canvas' ? {
+    getContext: () => ({ drawImage() {}, getImageData: () => ({ ...png, data: png.rgba }) }),
+  } : create(tag));
+}
+
+test('player and wanderers wait for the mask, then reuse the cached browser road', async t => {
+  const images = pendingRoad(t), f = villageFixture(t, { walkable: null });
+  assert.equal(road(), null);
+  const before = f.pos(), actors = f.root.querySelectorAll('.village-actor').map(el => [el.style.left, el.style.top]);
+  f.scene.handleIntent('left');
+  f.tap(500, 320);
+  f.root.querySelector('.village-actor[data-id="writing"]').click();
+  for (let i = 0; i < 50; i++) f.tick(100);
+  assert.deepEqual(f.pos(), before);
+  assert.deepEqual(f.root.querySelectorAll('.village-actor').map(el => [el.style.left, el.style.top]), actors);
+  assert.equal(f.frames.size, 0);
+  assert.deepEqual(stepPlayer(PLAYER_START, 'up'), PLAYER_START);
+  assert.deepEqual(wanderTarget('math'), VILLAGE_SPOTS.math);
+  assert.equal(roadPath(PLAYER_START, talkPoint('math')), null);
+  assert.equal(images[0].src, ROAD_MASK);
+  supplyRoadPixels(t, f.doc);
+  images[0].onload();
+  await f.mounted;
+  assert.equal(f.frames.size, 1);
+  assert.ok(road().isWalkable(PLAYER_START));
+  assert.equal(await loadRoad(), road());
+  assert.equal(images.length, 1);
+  f.scene.handleIntent('up'); f.tick(100);
+  assert.notDeepEqual(f.pos(), before);
+  assertVisiblePlayer(f.pos());
+});
+
+test('a failed mask keeps the scene still; a destroyed loading scene never starts a tick', async t => {
+  const images = pendingRoad(t), f = villageFixture(t, { walkable: null });
+  images[0].onerror();
+  await f.mounted;
+  f.scene.handleIntent('up'); f.tick(100);
+  assert.deepEqual(f.pos(), PLAYER_START);
+  assert.equal(f.frames.size, 0);
+  f.scene.destroy();
+  const g = villageFixture(t, { walkable: null });
+  assert.equal(images.length, 2, 'failed loads can be retried');
+  g.scene.destroy();
+  supplyRoadPixels(t, g.doc);
+  images[1].onload();
+  await g.mounted;
+  assert.equal(g.frames.size, 0);
+});
+
+test('successive wandering frames keep every character on the real road', t => {
+  const f = villageFixture(t);
+  t.mock.method(Math, 'random', seeded(17));
+  for (let i = 0; i < 2000; i++) {
+    f.tick(100);
+    for (const el of f.root.querySelectorAll('.village-actor')) {
+      const side = Boolean(SIDE_SPOTS[el.dataset.id]);
+      const pos = { x: parseFloat(el.style.left) + (side ? 36 : 56), y: parseFloat(el.style.top) + (side ? 72 : 80) };
+      assert.ok(realRoad.isWalkable(pos), `${el.dataset.id}: ${JSON.stringify(pos)}`);
+    }
+  }
+});
 
 const A_KEY_CASES = [['Enter', 'Enter'], [' ', 'Space'], ['z', 'Z'], ['Z', 'Shift+Z']];
 const WALK_HINT = 'Walk up to a neighbor, then press Enter.';
-test('dialogueBox prefers a clear sprite rectangle, then smaller overlap, then the old preference', () => {
-  for (const feet of [null, undefined, { x: 0, y: 0 }, PLAYER_START]) {
-    assert.equal(dialogueBox(feet, WELCOME_LINE), 'top');
-  }
-  for (const feet of [null, undefined, { x: 440, y: 500 }, { x: 800, y: 330 }, { x: 480, y: 332 }, { x: 480, y: 348 }]) {
-    assert.equal(dialogueBox(feet, WALK_HINT), 'bottom');
-  }
-  for (const feet of [PLAYER_START, { x: 880, y: 470 }, { x: 800, y: 331 }]) {
-    assert.equal(dialogueBox(feet, WALK_HINT), 'top');
-  }
-  assert.equal(dialogueBox({ x: 480, y: 300 }, WELCOME_LINE), 'bottom', 'safety precedes the welcome preference');
-  assert.equal(dialogueBox({ x: 600, y: 359 }, WALK_HINT), 'bottom', 'both intersect: bottom overlaps less');
-  assert.equal(dialogueBox({ x: 600, y: 375 }, WALK_HINT), 'top', 'both intersect: top overlaps less');
-  assert.equal(dialogueBox({ x: 600, y: 367 }, WALK_HINT), 'top', 'equal overlap keeps the old preference');
+test('dialogueBox chooses the clear corner and preserves the preference on ties', () => {
+  assert.equal(dialogueBox(PLAYER_START, WELCOME_LINE), 'top');
+  assert.equal(dialogueBox(null, WALK_HINT), 'bottom');
+  assert.equal(dialogueBox({ x: 100, y: 170 }, WELCOME_LINE), 'bottom');
+  assert.equal(dialogueBox({ x: 820, y: 170 }, WALK_HINT), 'top');
 });
 
 test('hint placement minimizes overlap across the stage, including tabs and the More chip', () => {
@@ -482,7 +579,7 @@ test('a child-started neighbor conversation cancels the opening timeout and stay
   f.tick();
   const line = f.root.querySelector('.dlg__text').textContent;
   assert.match(line, /I delivered every invitation/);
-  assert.equal(f.root.querySelector('.village-dialogue').classList.contains('village-dialogue--top'), false, 'Pip keeps the speaker-based placement');
+  assert.equal(f.root.querySelector('.village-dialogue').classList.contains('village-dialogue--top'), dialogueBox(f.pos(), line) === 'top', 'Pip uses a corner clear of the player');
   clock.advance(60000);
   assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
   assert.equal(f.root.querySelector('.dlg__text').textContent, line);
@@ -526,10 +623,10 @@ test('last-page A cancels the opening timer and starts a fresh three-second hint
   assert.equal(clock.callbacks.at(-1).mock.callCount(), 1);
 });
 
-for (const large of [false, true]) test(`the Enter hint closes by itself after 3 s and sits on top at the pier, at the bottom elsewhere (large=${large})`, t => {
+for (const large of [false, true]) test(`the Enter hint closes by itself after 3 s and uses a clear corner on the crossroads (large=${large})`, t => {
   const clock = openingClock(t), f = villageFixture(t, { calm: true, large });
   const box = f.root.querySelector('.village-dialogue');
-  for (const [feet, top] of [[PLAYER_START, true], [{ x: 480, y: 320 }, false], [{ x: 880, y: 470 }, true], [{ x: 480, y: 332 }, false], [{ x: 480, y: 348 }, false]]) {
+  for (const [feet, top] of [[PLAYER_START, true], [{ x: 500, y: 225 }, false], [{ x: 500, y: 510 }, true]]) {
     f.tap(feet.x, feet.y); f.tick();
     assert.deepEqual(f.pos(), feet);
     assert.equal(f.root.querySelector('.village-talk').hidden, true);
@@ -840,26 +937,22 @@ test('bottom dialogue keeps More and its focus ring inside the stage at both tex
   assert.ok(STAGE.height - inset - frameBorder - moreBottom + outline <= STAGE.height, 'More and its full focus ring fit');
 });
 
-test('the top dialogue sits over the square: its box, tabs and More button clear every neighbor and stall', () => {
-  // The welcome and Kiko's cheer use the top placement. It may cover the torii and Sora's name chip, never a figure.
+test('both dialogue corners clear all nine sprites, stalls and the player start', () => {
   const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
   const interaction = readFileSync(new URL('../src/ui/interaction.css', import.meta.url), 'utf8');
-  const top = cssBlock(css, '.village-dialogue--top');
-  const left = cssPx(top, 'left'), y = cssPx(top, 'top');
-  const w = cssPx(cssBlock(css, '.village-dialogue'), 'width'), h = cssPx(cssBlock(interaction, '.dlg'), 'height');
-  const parts = {
-    box: { x: left, y, w, h },
-    speakerTab: { x: left + 14, y: y - 18, w: 120, h: 24 },
-    hearHelpTabs: { x: left + w - 12 - 160, y: y - 18, w: 160, h: 24 },   // "Hear" and "Help" tabs, 8px apart
-    more: { x: left + w - 14 - 110, y: y + h - 6, w: 110, h: 24 },
-  };
-  for (const [id, feet] of Object.entries(VILLAGE_SPOTS)) {
-    const figure = { x: feet.x - 48, y: feet.y - 84, w: 96, h: 84 };            // the drawn 1.5× figure above its feet
-    const stall = { x: feet.x - 64, y: feet.y - 92, w: 128, h: 76 };            // the stall front, below the roof peak
-    for (const [part, rect] of Object.entries(parts)) {
-      assert.equal(overlaps(rect, figure), false, `${part} clears ${id}`);
-      assert.equal(overlaps(rect, stall), false, `${part} clears ${id}'s stall`);
+  const top = cssBlock(css, '.village-dialogue--top'), bottom = cssBlock(css, '.village-dialogue');
+  const w = cssPx(bottom, 'width'), h = cssPx(cssBlock(interaction, '.dlg'), 'height');
+  const boxes = [
+    { x: cssPx(top, 'left'), y: cssPx(top, 'top') - 18, w, h: h + 36 },
+    { x: 960 - cssPx(bottom, 'right') - w, y: 540 - cssPx(bottom, 'bottom') - h - 18, w, h: h + 36 },
+  ];
+  for (const box of boxes) {
+    for (const [id, feet] of Object.entries({ ...VILLAGE_SPOTS, ...SIDE_SPOTS, player: PLAYER_START })) {
+      const figure = { x: feet.x - 32, y: feet.y - 57, w: 64, h: 64 };
+      assert.equal(overlaps(box, figure), false, id);
     }
+    for (const [id, stall] of Object.entries(STALLS)) assert.equal(overlaps(box, stall), false, id);
+    for (const hud of HUD_ZONES) assert.equal(overlaps(box, hud), false);
   }
 });
 
@@ -896,8 +989,10 @@ const playerRects = p => [
   { x: p.x + 26, y: p.y - 52, w: 44, h: 36 },
 ];
 function assertVisiblePlayer(p) {
-  const shape = { x: p.x - WALK_SHAPE.left, y: p.y - WALK_SHAPE.top, w: WALK_SHAPE.left + WALK_SHAPE.right, h: WALK_SHAPE.top + WALK_SHAPE.bottom };
-  for (const water of WATER_ZONES) assert.equal(overlaps(shape, water), false, `full walk shape clears water at ${JSON.stringify(p)}`);
+  assert.ok(realRoad.isWalkable(p), `feet stay on road at ${JSON.stringify(p)}`);
+  assertHUDClear(p);
+}
+function assertHUDClear(p) {
   for (const rect of playerRects(p)) {
     assert.ok(rect.x >= 0 && rect.y >= 0 && rect.x + rect.w <= STAGE.width && rect.y + rect.h <= STAGE.height, `player and Find pointer fit at ${JSON.stringify(p)}`);
     for (const hud of HUD_ZONES) assert.equal(overlaps(rect, hud), false, `player and Find pointer clear the HUD at ${JSON.stringify(p)}`);
@@ -915,25 +1010,16 @@ test('keyboard movement keeps the full player and Find pointer clear of every HU
   assert.deepEqual(stepPlayer({ x: 472, y: 450 }, 'left'), { x: 472, y: 450 }, 'Left stops beside the board without a vertical shift');
 });
 
-for (const calm of [false, true]) test(`ground walks avoid the HUD and water throughout the route (calm=${calm})`, t => {
+for (const calm of [false, true]) test(`ground taps snap near houses or are ignored when unreachable (calm=${calm})`, t => {
   const f = villageFixture(t, { calm, large: true, guide: 'art' });
-  for (const goal of [[100, 510], [100, 96], [920, 96], [920, 510], [100, 160], [800, 510]]) {
+  for (const goal of [[225, 200], [100, 100], [850, 100], [800, 510], [490, 510], [400, 250]]) {
+    const before = f.pos(), path = roadPath(before, { x: goal[0], y: goal[1] });
     f.tap(...goal);
-    for (let i = 0; i < 50; i++) { f.tick(100); assertVisiblePlayer(f.pos()); }
+    for (let i = 0; i < 100; i++) { f.tick(50); assertVisiblePlayer(f.pos()); }
     assert.equal(f.root.querySelector('.village-pointer').hidden, false);
-    assert.deepEqual(f.pos(), clampWalk({ x: goal[0], y: goal[1] }), 'the walk reaches its clear destination');
+    assert.deepEqual(f.pos(), path ? path.at(-1) : before);
   }
 });
-
-for (const calm of [false, true]) test(`taps leave and return to the pier without crossing water or getting stuck (calm=${calm})`, t => {
-  const f = villageFixture(t, { calm, guide: 'art' });
-  for (const goal of [[800, 520], [480, 500], [100, 510], [480, 500]]) {
-    f.tap(...goal);
-    for (let i = 0; i < 200; i++) { f.tick(16); assertVisiblePlayer(f.pos()); }
-    assert.deepEqual(f.pos(), clampWalk({ x: goal[0], y: goal[1] }));
-  }
-});
-
 
 test('the Find chip has a fixed box that fits the movement clearance with Bigger words', () => {
   const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
@@ -942,11 +1028,17 @@ test('the Find chip has a fixed box that fits the movement clearance with Bigger
   assert.equal(cssPx(pointer, 'height'), 36);
 });
 
-for (const id of Object.keys(VILLAGE_SPOTS)) test(`tap-walking to ${id} still arrives and opens its activity`, t => {
+for (const frameMs of [16, 33, 100]) for (const id of CAST) test(`tap-walking to ${id} arrives at ${frameMs}ms per frame`, t => {
   const f = villageFixture(t, { guide: id });
   f.root.querySelector(`.village-actor[data-id="${id}"]`).click();
-  for (let i = 0; i < 40; i++) { f.tick(100); assertVisiblePlayer(f.pos()); }
-  assert.deepEqual(f.gone, id === 'music' ? [['music']] : [['encounter', { id }]]);
+  for (let i = 0; i < Math.ceil(1200 / frameMs); i++) { f.tick(frameMs); assertVisiblePlayer(f.pos()); }
+  assert.deepEqual(f.pos(), talkGoal(id));
+  assert.equal(nearestNeighbor(f.pos(), { ...VILLAGE_SPOTS, ...SIDE_SPOTS }), id);
+  if (SIDE_SPOTS[id]) {
+    assert.deepEqual(f.gone, []);
+    assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+    assert.equal(f.root.querySelector('.village-talk').hidden, false);
+  } else assert.deepEqual(f.gone, id === 'music' ? [['music']] : [['encounter', { id }]]);
 });
 
 for (const grade of [0, 1, 2, 3, 4, 5]) test(`village keyboard guidance uses short sentences in grade ${grade}`, t => {

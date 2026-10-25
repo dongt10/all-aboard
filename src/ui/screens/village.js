@@ -8,9 +8,10 @@ import { createDialogue } from '../dialogue.js';
 import { onceAtATime } from '../scenes.js';
 import { creationMarkup, creationLabel, fitSignPreviews } from '../creations.js';
 import {
-  VILLAGE_SPOTS, SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, talkPoint, nearestNeighbor,
-  clampWalk, stepPlayer, walkWaypoint, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, villageMapSVG, stallSVG, easelRect,
+  SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, nearestNeighbor,
+  setRoad, road, loadRoad, roadPath, talkGoal, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, stallSVG, easelRect,
 } from '../village-map.js';
+import { BACKGROUND, STALLS } from '../village-layout.js';
 
 const SIDE = {
   pip: { name: 'Pip', line: 'I delivered every invitation! Except this one. Oh. It’s mine.' },
@@ -31,8 +32,8 @@ const WALK_HINT = 'Walk up to a neighbor, then press Enter.';
 const preferredBox = (feet, words) => words === WELCOME_LINE || (feet?.x > 440 && feet?.y > 330) ? 'top' : 'bottom';
 // Include the tabs and More chip, which extend 18px above and below each frame.
 const DIALOGUE_BOXES = {
-  top: { x: 244, y: 150, w: 472, h: 172 },
-  bottom: { x: 476, y: 362, w: 472, h: 172 },
+  top: { x: 12, y: 72, w: 232, h: 172 },
+  bottom: { x: 716, y: 72, w: 232, h: 172 },
 };
 // Hints avoid the whole player sprite; ties preserve the familiar placement.
 export function dialogueBox(feet, words) {
@@ -82,7 +83,7 @@ const ARROW_GLYPH = { up: '↑', 'up-right': '↗', right: '→', 'down-right': 
 const FACING_FOR = { up: 'back', down: 'front', left: 'left', right: 'right' };
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const px = n => `${Math.round(n)}px`;
+const px = n => `${n}px`;
 const madeLabel = label => /^your /i.test(label) ? `Made ${label.charAt(0).toLowerCase()}${label.slice(1)}.` : `Made a ${label.toLowerCase()}.`;
 const gradeLabel = state => state.chapter === 1 ? `Grade ${state.grade}` : 'Kindergarten';
 const now = () => globalThis.performance?.now?.() ?? Date.now();
@@ -107,9 +108,10 @@ export function neighborMarkup(c, made = {}) {
 
 export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   let root = null, dialogue = null, previews = null, frame = 0, last = 0, paused = false, alive = false, leaving = false;
+  let ready = false;
   let findTarget = homeSpot(guide) ? guide : null;
   const actors = new Map();          // id → { id, el, fig, pos, target, facing, step, clock, waitUntil, render }
-  const player = { pos: { ...PLAYER_START }, target: null, tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
+  const player = { pos: { ...PLAYER_START }, target: null, path: [], tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
   let near = null;
   let timing = null, closeTimer = null, unwatchSpeech = null;
 
@@ -164,13 +166,13 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       };
     }
   }
-  // Hints use the player's feet; neighbor lines use the speaker's feet.
+  // Both hints and neighbor lines keep the player's sprite clear.
   function say(id, words, { opening = false, closeAfter = null } = {}) {
     cancelOpening();
     if (!dialogue) return;
     if (opening || closeAfter !== null) timing = { closeAfter };
-    const host = root.querySelector('.village-dialogue'), feet = id ? actors.get(id)?.pos : player.pos;
-    const box = id ? preferredBox(feet, words) : dialogueBox(feet, words);
+    const host = root.querySelector('.village-dialogue');
+    const box = dialogueBox(player.pos, words);
     host.classList.toggle('village-dialogue--top', box === 'top');
     host.hidden = false;
     dialogue.say(nameOf(id), words);
@@ -193,9 +195,9 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       </button>`;
   }
   function stallMarkup(c, made) {
-    const { x, y } = VILLAGE_SPOTS[c.id];
+    const { x, y } = STALLS[c.id];
     const creation = made.creations[c.id], easel = easelRect(c.id);
-    return `<div class="village-stall" data-id="${c.id}" style="left:${x - 64}px;top:${y - 96}px">${stallSVG(c.id)}<span class="village-sparkle" aria-hidden="true"></span></div>
+    return `<div class="village-stall" data-id="${c.id}" style="left:${x}px;top:${y}px">${stallSVG(c.id)}<span class="village-sparkle" aria-hidden="true"></span></div>
       <div class="village-easel${creation ? '' : ' village-easel--empty'}" data-id="${c.id}" style="left:${easel.x}px;top:${easel.y}px">${creation ? creationMarkup(c.id, creation) : ''}</div>`;
   }
   function boardMarkup(made) {
@@ -220,7 +222,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     root.tabIndex = 0;
     root.setAttribute('role', 'region');
     root.setAttribute('aria-label', 'Willow Bay. Walk with the arrow keys. Press Enter near a neighbor to talk. Or choose a neighbor.');
-    root.innerHTML = `${villageMapSVG()}
+    root.innerHTML = `<img class="village-map" src="${BACKGROUND}" alt="" draggable="false" width="960" height="540">
       <div class="village-stalls">${CHARACTERS.map(c => stallMarkup(c, made)).join('')}</div>
       <div class="village-actors">
         ${CHARACTERS.map(c => neighborMarkup(c, made)).join('')}
@@ -321,36 +323,47 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     return Math.hypot(player.pos.x - a.pos.x, player.pos.y - a.pos.y) < STOP_RADIUS;
   }
   function tickActor(a, dt, t) {
+    if (!ready) return;
     if (calm()) { a.pos = { ...homeSpot(a.id) }; a.target = null; a.facing = 'front'; a.step = 0; return; }
     if (shouldHold(a)) { a.target = null; a.facing = 'front'; a.step = 0; a.waitUntil = Math.max(a.waitUntil, t + 1500); return; }
     if (!a.target) {
       if (t < a.waitUntil) return;
-      a.target = wanderTarget(a.id);
+      const home = homeSpot(a.id);
+      // Return home between excursions: each leg has a straight clear route.
+      a.target = a.pos.x === home.x && a.pos.y === home.y ? wanderTarget(a.id) : { ...home };
       a.clock = 0;
     }
     const move = stepToward(a.pos, a.target, WANDER_SPEED * dt / 1000);
-    a.pos = move.pos;
+    a.pos = road().step(a.pos, move.pos);
     a.clock += dt;
     if (move.arrived) { a.target = null; a.facing = 'front'; a.step = 0; a.waitUntil = t + 1500 + Math.random() * 2500; return; }
     a.facing = move.facing;
     a.step = STEP_CYCLE[Math.floor(a.clock / WANDER_STEP_MS) % 4];
   }
   function tickPlayer(dt) {
-    const goal = player.visitOnArrive ? clampWalk(talkPoint(player.visitOnArrive, actors.get(player.visitOnArrive).pos)) : player.target;
-    if (!goal) { player.step = 0; return; }
-    player.target = goal;
-    const waypoint = walkWaypoint(player.pos, goal);
-    const move = stepToward(player.pos, waypoint, player.speed * dt / 1000);
-    const dx = waypoint.x - player.pos.x, dy = waypoint.y - player.pos.y;
-    player.pos = clampWalk(move.pos);
+    if (!ready || !player.target) { player.step = 0; return; }
+    let remaining = player.speed * dt / 1000;
     player.clock += dt;
-    if (Math.abs(dx) >= Math.abs(dy) && dx) player.facing = dx > 0 ? 'right' : 'left';
-    else if (dy) player.facing = dy > 0 ? 'front' : 'back';
+    while (player.path.length && remaining > 0) {
+      const waypoint = player.path[0];
+      const dx = waypoint.x - player.pos.x, dy = waypoint.y - player.pos.y;
+      const move = stepToward(player.pos, waypoint, remaining);
+      const next = road().step(player.pos, move.pos);
+      remaining -= Math.hypot(next.x - player.pos.x, next.y - player.pos.y);
+      player.pos = next;
+      if (Math.abs(dx) >= Math.abs(dy) && dx) player.facing = dx > 0 ? 'right' : 'left';
+      else if (dy) player.facing = dy > 0 ? 'front' : 'back';
+      if (next.x !== move.pos.x || next.y !== move.pos.y) { player.path = []; player.visitOnArrive = null; break; }
+      if (!move.arrived) break;
+      player.path.shift();
+    }
     player.step = calm() ? 0 : frameFor(player.clock, player.speed);
-    if (move.arrived && waypoint === goal) arrive();
+    if (!player.path.length) arrive();
   }
+
   function arrive() {
     player.target = null;
+    player.path = [];
     player.tapWalk = false;
     player.step = 0;
     // Keep the stride phase between keyboard steps so both feet take turns.
@@ -378,30 +391,39 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   function walkTo(id) {
     hush();
     const a = actors.get(id);
-    if (!a) return;
-    const goal = clampWalk(talkPoint(id, a.pos));
-    if (calm()) {   // no walking tween: stand there and go
-      player.pos = goal;
+    if (!a || !ready) return;
+    const goal = talkGoal(id, a.pos);
+    const path = goal && roadPath(player.pos, goal, 0);
+    if (!path) return;
+    if (calm()) {
+      player.pos = path.at(-1);
+      player.path = []; player.target = null; player.tapWalk = false; player.visitOnArrive = null;
       player.facing = 'back';
-      drawPlayer();
+      drawPlayer(); drawTalk(); drawFind();
       visit(id);
       return;
     }
     player.visitOnArrive = id;
+    player.target = path.at(-1);
+    player.path = path.slice(1);
     player.tapWalk = true;
     player.clock = 0;
-    player.speed = Math.max(PLAYER_SPEED, Math.hypot(goal.x - player.pos.x, goal.y - player.pos.y) / (TAP_WALK_MS / 1000));
+    const length = path.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - path[i].x, p.y - path[i].y), 0);
+    player.speed = Math.max(PLAYER_SPEED, length / (TAP_WALK_MS / 1000));
   }
   function stepBy(intent) {
     hush();
-    if (player.tapWalk) { player.target = null; player.tapWalk = false; player.clock = 0; }
-    player.visitOnArrive = null;
     player.facing = FACING_FOR[intent];
+    if (!ready) { drawPlayer(); return; }
+    if (player.tapWalk) { player.target = null; player.path = []; player.tapWalk = false; player.clock = 0; }
+    player.visitOnArrive = null;
     const from = player.target ?? player.pos;
-    if (player.target && Math.hypot(player.target.x - player.pos.x, player.target.y - player.pos.y) >= STEP) return;   // a held key waits for the last step
+    if (player.target && Math.hypot(player.target.x - player.pos.x, player.target.y - player.pos.y) >= STEP) return;
     const next = stepPlayer(from, intent);
     player.speed = PLAYER_SPEED;
-    if (calm()) { player.pos = next; player.target = null; player.step = 0; drawPlayer(); drawTalk(); drawFind(); return; }
+    if (calm()) { player.pos = next; player.target = null; player.path = []; player.step = 0; drawPlayer(); drawTalk(); drawFind(); return; }
+    // Keep the old step's corner when a held direction changes mid-stride.
+    player.path = player.target ? [player.target, next] : [next];
     player.target = next;
   }
   // The A button: finish unread pages, then follow the Talk chip without starting a walk.
@@ -440,14 +462,18 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (actor) { walkTo(actor.dataset.id); return; }
     if (event.target.closest('.village-map')) {   // tap the ground to walk there
       const box = root.getBoundingClientRect();
-      if (!box.width) return;
+      if (!box.width || !ready) return;
+      const point = { x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height };
+      const path = roadPath(player.pos, point);
+      if (!path) return;
       hush();
       player.visitOnArrive = null;
       player.speed = PLAYER_SPEED * 1.5;
       player.clock = 0;
-      player.target = clampWalk({ x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height });
+      player.target = path.at(-1);
+      player.path = path.slice(1);
       player.tapWalk = true;
-      if (calm()) { player.pos = player.target; player.target = null; player.tapWalk = false; }
+      if (calm()) { player.pos = player.target; player.target = null; player.path = []; player.tapWalk = false; drawPlayer(); drawTalk(); drawFind(); }
     }
   }
 
@@ -459,7 +485,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   }
 
   return {
-    mount() {
+    async mount() {
       build();
       ctx.stage.append(root);
       previews = fitSignPreviews(root, 64, 40);
@@ -476,7 +502,15 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       if (findTarget) ctx.announce?.(`Find ${nameOf(findTarget)}. Follow the arrow.`);
       const button = focus && root.querySelector(`.village-actor[data-id="${focus}"]`);
       (button || root).focus({ preventScroll: true });   // the welcome never takes focus from the player controls
-      frame = nextFrame(tick);
+      try {
+        if (ctx.walkable) setRoad(ctx.walkable);
+        else await loadRoad();
+        if (!alive) return;
+        ready = true;
+        frame = nextFrame(tick);
+      } catch {
+        if (alive) ctx.announce?.('The village road could not load. Please reopen the village.');
+      }
     },
     handleIntent(intent) {
       if (!root) return false;
@@ -489,6 +523,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       cancelOpening();
       paused = true;
       player.target = null;
+      player.path = [];
       player.tapWalk = false;
       player.visitOnArrive = null;
     },
