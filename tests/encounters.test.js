@@ -22,7 +22,7 @@ test('every repaired saved placement occupies a visible cell and can be removed'
 test('cargo groups can differ while total weight balances',()=>{const s=normalizeEncounterSnapshot('math',{kind:'math',left:[2,3],right:[5],rolled:true},4);assert.deepEqual(cartBalance(s),{left:5,right:5,balanced:true});assert.equal(encounterReady(s),true);s.right=[];assert.equal(encounterReady(s),false);});
 test('empty cart cannot count as a completed creation',()=>assert.equal(encounterReady({kind:'math',left:[],right:[],rolled:true}),false));
 test('ice model has equal starts and a slower shaded melt',()=>{assert.equal(iceRemaining(0,false),iceRemaining(0,true));assert.ok(iceRemaining(10,true)>iceRemaining(10,false));assert.equal(iceRemaining(100,false),0);assert.equal(encounterReady({kind:'science',canopy:'none',time:20}),false);});
-test('banner normalization keeps actual art while rejecting foreign colors and bounding positions',()=>{const s=normalizeEncounterSnapshot('art',{kind:'art',stamps:[{shape:'star',color:'#e96163',x:999,y:-9,rotation:90},{shape:'script',color:'#000',x:2,y:3}]},2);assert.deepEqual(s.stamps,[{shape:'star',color:'#e96163',x:95,y:5,rotation:90}]);assert.equal(encounterReady(s),true);});
+test('banner normalization keeps actual art while rejecting foreign colors and bounding positions',()=>{const s=normalizeEncounterSnapshot('art',{kind:'art',stamps:[{shape:'star',color:'#e96163',x:999,y:-9,rotation:90},{shape:'script',color:'#000',x:2,y:3}]},0);assert.deepEqual(s.stamps,[{shape:'star',color:'#e96163',x:95,y:5,rotation:90}]);assert.equal(encounterReady(s),true);});
 test('map needs a clear route, rest and a quiet place before opening',()=>{const s={kind:'community',grade:2,tried:true,placements:[{item:'bench',x:50,y:90},{item:'quiet',x:10,y:10}]};assert.equal(encounterReady(s),true);s.placements.push({item:'bench',x:30,y:50});assert.equal(routeReport(s).blocked,true);assert.equal(encounterReady(s),false);});
 test('reading discoveries are unique and do not accept unknown objects',()=>assert.deepEqual(normalizeEncounterSnapshot('reading',{kind:'reading',found:['book','book','ball']}).found,['book']));
 test('writing persists personal text and requires a visible message',()=>{const s=normalizeEncounterSnapshot('writing',{kind:'writing',text:'Welcome, friends!'});assert.equal(s.text,'Welcome, friends!');assert.equal(encounterReady(s),true);assert.equal(encounterReady({...s,text:'  '}),false);});
@@ -360,4 +360,21 @@ test('lower-grade controllers never restore upper-grade activity shapes', async 
       assert.doesNotThrow(() => controller.opening(opened.state, opened.ui, grade));
     }
   }
+});
+
+test('writing readiness follows word, sentence and describing goals in each grade', async () => {
+ const { encounterOpeningDialogue } = await import('../src/encounters.js');
+ const { signReady, signOpening } = await import('../src/sign-rules.js');
+ for (const grade of [0, 1, 2, 3, 4, 5]) {
+  const readyText = grade === 0 ? 'Hello friend!' : grade < 3 ? 'Hello!' : 'Welcome, neighbors! The lanterns are bright.';
+  const s = normalizeEncounterSnapshot('writing', { kind: 'writing', text: readyText }, grade, grade ? 1 : 0);
+  assert.equal(s.text, readyText); assert.equal(encounterReady(s), true); assert.equal(signReady(s), true);
+  assert.equal(encounterOpeningDialogue(s), signOpening(s));
+  const unfinished = grade === 0 ? ['Hello'] : grade < 3 ? ['hello!', 'Hello', 'Hello?', 'Hello! More']
+   : ['Bright lights!', 'Hello! Come play.', 'Hello? Bright lights.', 'Hello! bright lights.'];
+  for (const text of ['', ...unfinished]) {
+   const next = { ...s, text }; assert.equal(encounterReady(next), false, `grade ${grade}: ${text}`);
+   assert.equal(encounterOpeningDialogue(next), signOpening(next));
+  }
+ }
 });

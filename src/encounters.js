@@ -52,32 +52,9 @@ export function normalizeEncounterSnapshot(kind, input = {}, grade = 1, chapter 
   return {...base,...normalizeCommunityMap(s)};
 }
 
-// Shared by the writing activity and save validation. A 120-character sign fits at most 60 tiles.
-export function signWords(grade) {
-  return grade === 0 ? ['Hello', 'friend!', 'Welcome', '♡']
-    : grade < 3 ? ['Welcome', 'to', 'our', 'festival!', 'Come', 'play', 'with', 'us.']
-    : ['Welcome, neighbors!', 'Come explore', 'our summer festival.', 'Everyone belongs here.', 'Please keep the path clear.'];
-}
-
-// Keep the newest whole tiles that still form a suffix at a word boundary.
-export function reconcileTiles(tiles, text) {
-  const end = text.trimEnd();
-  let kept = tiles.slice(-60);
-  while (kept.length) {
-    const run = kept.join(' ');
-    if (end === run || (end.endsWith(run) && /\s$/.test(end.slice(0, -run.length)))) break;
-    kept = kept.slice(1);
-  }
-  return kept;
-}
-
-export function normalizeSign(input, grade) {
-  const text = typeof input.text === 'string' ? input.text.slice(0, 120) : '';
-  if (!Object.hasOwn(input, 'tiles')) return { text }; // legacy: the activity can infer a trailing tile run
-  const tiles = Array.isArray(input.tiles) ? input.tiles.slice(-60) : [];
-  const words = signWords(grade);
-  return { text, tiles: tiles.every(tile => words.includes(tile)) ? reconcileTiles(tiles, text) : [] };
-}
+import { bannerReady, bannerOpening } from './banner-rules.js';
+import { normalizeSign, signReady, signOpening } from './sign-rules.js';
+export { signWords, reconcileTiles, normalizeSign } from './sign-rules.js';
 // Taro's cart starts with crates on the left so the child has something to match. The right side is always empty.
 export function startingCargo(grade) {
   const band = gradeBand(grade);
@@ -129,9 +106,9 @@ export function encounterReady(s) {
 
   if(s.kind==='math')return s.rolled&&cartBalance(s).balanced;
   if(s.kind==='science')return s.time>=10&&s.canopy!=='none';
-  if(s.kind==='art')return s.stamps.length>0;
+  if (s.kind === 'art') return bannerReady(s);
   if(s.kind==='reading')return normalizeReadingFound(s.found).length===READING_ITEMS.length;
-  if(s.kind==='writing')return s.text.trim().length>0;
+  if (s.kind === 'writing') return signReady(s);
   const r=routeReport(s), band=gradeBand(s.grade);
   return s.tried===true&&!r.blocked&&r.rest&&(band<1||r.quiet)&&(band<3||r.signed);
 }
@@ -194,7 +171,7 @@ export function encounterOpeningDialogue(state) {
  if(encounterReady(state)&&state.kind==='math')return 'Your balanced cart is ready to send. You can still change the crates.';
  if(encounterReady(state)&&state.kind==='science')return 'Your ice test is ready. Serve ice, or try fresh ice.';
  if(encounterReady(state)&&state.kind==='reading')return 'Your story bag is ready. Share it, or start over.';
- return {math:mathOpening(state,band),science:SCIENCE_OPENING[band],art:'Tap the cloth to add a stamp.',reading:'Help me pack three things for the festival.',writing:'Choose words for your welcome sign.',community:COMMUNITY_OPENING[band]}[state.kind];
+ return {math:mathOpening(state,band),science:SCIENCE_OPENING[band],art:bannerOpening(state),reading:'Help me pack three things for the festival.',writing:signOpening(state),community:COMMUNITY_OPENING[band]}[state.kind];
 }
 export function writingControlAvailability(text) {
  return {canPublish:text.trim().length>0,canRemove:text.length>0};
