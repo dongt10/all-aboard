@@ -1,29 +1,21 @@
 // Fumi's sign (writing): a wooden sign built from word tiles; grades 1–5 can also type on it.
-import { encounterReady, encounterOpeningDialogue, normalizeEncounterSnapshot, signWords, reconcileTiles } from '../../encounters.js';
-export { signWords, reconcileTiles };
+import { normalizeEncounterSnapshot } from '../../encounters.js';
+import { signWords, signTileGroups, reconcileTiles, signReady, signOpening, signHelp, signHint, signReport, SIGN_RULE_LINES } from '../../sign-rules.js';
+import { gridMove, keyIntent } from '../input.js';
+export { signWords, signHelp, reconcileTiles } from '../../sign-rules.js';
 
 const KIND = 'writing';
 const MAX = 120;
 const PAGE = 56;   // one dialogue page with Bigger words on; every sentence below fits it
 
 export const SIGN_LINES = Object.freeze({
-  ready: 'Your sign is ready. Add words, or put it up.',
+  ready: SIGN_RULE_LINES.ready,
   readyNow: 'Ready! Choose Put up sign.',
   full: 'The sign is full. Remove a word first.',
   cleared: 'The sign is empty. Tap words to add them.',
   empty: 'The sign is empty.',
   typed: 'You wrote it. Add more, or choose Put up sign.',
 });
-
-// Help per grade: Kindergarten has no typing box, so its help never mentions typing.
-export function signHelp(grade) {
-  return [
-    grade === 0 ? 'Tap words to add them.' : 'Tap words to add them, or type your own.',
-    'Remove word takes one tile back.',
-    'Clear sign starts again.',
-    'Choose Put up sign.',
-  ];
-}
 
 // "Added: Welcome, neighbors!" — a sentence of at most 56 characters, so it never breaks mid-word on a page.
 const endsSentence = word => /[.!?…]$/.test(word);
@@ -36,7 +28,6 @@ export function reactionLine(verb, word) {
 const withText = (state, text, tiles) => ({ ...state, text: text.slice(0, MAX), tiles });
 const joined = (text, word) => [text.trim(), word].filter(Boolean).join(' ');
 const lastWord = text => text.trimEnd().match(/\S+$/)?.[0] ?? '';
-const wordCount = text => text.trim().split(/\s+/).filter(Boolean).length;
 
 // Old saves have only text. Recover whole grade tiles from its end without cutting typed words.
 function legacyTiles(text, grade) {
@@ -62,7 +53,8 @@ function act(state, ui, action) {
     const word = tile ?? lastWord(state.text);
     const trimmed = state.text.trimEnd();
     const next = withText(state, trimmed.slice(0, trimmed.length - word.length).trimEnd(), tile ? tiles.slice(0, -1) : tiles);
-    const line = reactionLine('Removed', word) + (next.text.trim() ? '' : ` ${SIGN_LINES.empty}`);
+    const hint = signHint(next);
+    const line = reactionLine('Removed', word) + (hint ? ` ${hint}` : '');
     return reply(next, withTiles(ui, next.tiles), line);
   }
   if (action?.type === 'command' && action.id === 'clear') {
@@ -70,20 +62,23 @@ function act(state, ui, action) {
     return reply(withText(state, '', []), withTiles(ui, []), SIGN_LINES.cleared);
   }
   if (action?.type === 'field' && typeof action.word === 'string') {
+    if (!signWords(state.grade).includes(action.word)) return { state, ui };
     const text = joined(state.text, action.word);
-    if (text.length > MAX) return reply(state, withTiles(ui, tiles), SIGN_LINES.full);   // refused whole: never cut mid-word
+    if (text.length > MAX) return reply(state, ui, SIGN_LINES.full);   // refused whole: never cut mid-word
     const next = withText(state, text, [...tiles, action.word]);
-    const line = reactionLine('Added', action.word) + (!encounterReady(state) && encounterReady(next) ? ` ${SIGN_LINES.readyNow}` : '');
+    const line = `${reactionLine('Added', action.word)} ${signReady(next) ? SIGN_LINES.readyNow : signHint(next)}`;
     return reply(next, withTiles(ui, next.tiles), line);
   }
-  if (action?.type === 'field' && typeof action.typed === 'string') {
+  if (action?.type === 'field' && state.grade > 0 && typeof action.typed === 'string') {
     const text = action.typed.slice(0, MAX);
     const next = withText(state, text, reconcileTiles(tiles, text));
-    if (next.text === state.text) return { state, ui: withTiles(ui, tiles) };
-    // One line per typed word (not per keystroke), so the last reaction never goes stale; the frame says the flip to empty.
+    if (next.text === state.text) return { state, ui };
+    // Speak for a new word or a readiness change, including punctuation without a new word.
     // The textarea's maxLength already stops typing at 120, so the overflow line is only a guard for programmatic input.
+    const shouldSpeak = signReport(next.text, next.grade).words !== signReport(state.text, state.grade).words
+      || signReady(state) !== signReady(next);
     const line = action.typed.length > MAX ? SIGN_LINES.full
-      : wordCount(next.text) !== wordCount(state.text) && encounterReady(next) ? SIGN_LINES.typed : undefined;
+      : shouldSpeak ? (signReady(next) ? SIGN_LINES.typed : signHint(next)) : undefined;
     return reply(next, withTiles(ui, next.tiles), line);
   }
   return { state, ui };
@@ -94,7 +89,7 @@ function commands(state) {
   return [
     { id: 'remove', label: 'Remove word', icon: 'back', disabled: empty },
     { id: 'clear', label: 'Clear sign', icon: 'trash', disabled: !state.text },
-    { id: 'finish', label: 'Put up sign', icon: 'check', finish: true, disabled: !encounterReady(state) },
+    { id: 'finish', label: 'Put up sign', icon: 'check', finish: true, disabled: !signReady(state) },
   ];
 }
 
@@ -103,31 +98,74 @@ function mountField(host, { grade, dispatch }) {
   const el = (tag, className) => Object.assign(doc.createElement(tag), className ? { className } : {});
   const root = el('div', grade >= 3 ? 'sign-field sign-field--phrases' : 'sign-field');
   const board = el('div', 'sign-board');
-  let face;
+  const face = el(grade > 0 ? 'textarea' : 'p', grade > 0 ? 'sign-face sign-input' : 'sign-face sign-display');
+  const onInput = () => dispatch({ type: 'field', typed: face.value });
   if (grade > 0) {
-    face = el('textarea', 'sign-face sign-input');
     face.maxLength = MAX; face.rows = 3; face.spellcheck = false;
     face.setAttribute('aria-label', 'Write your festival sign');
     face.placeholder = 'Type your own words';
-    face.addEventListener('input', () => dispatch({ type: 'field', typed: face.value }));
-  } else {
-    face = el('p', 'sign-face sign-display');
-    face.setAttribute('aria-live', 'polite');
-  }
+    face.addEventListener('input', onInput);
+  } else face.setAttribute('aria-live', 'polite');
   board.append(face);
   const post = el('div', 'sign-post');
-  const tiles = el('div', 'sign-tiles');
-  tiles.setAttribute('role', 'group'); tiles.setAttribute('aria-label', 'Word tiles');
-  const tileButtons = new Map();
-  for (const word of signWords(grade)) {
-    const tile = el('button', 'px-button sign-tile');
-    tile.type = 'button'; tile.textContent = word;
-    tile.addEventListener('click', () => dispatch({ type: 'field', word }));
-    tiles.append(tile);
-    tileButtons.set(word, tile);
-  }
-  root.append(board, post, tiles);
+  const groups = [], tileButtons = new Map();
+  const makeTiles = (words, className, label, columns) => {
+    const container = el('div', `sign-tiles ${className}`);
+    container.setAttribute('role', 'group'); container.setAttribute('aria-label', label);
+    const buttons = words.map((word, i) => {
+      const tile = el('button', 'px-button sign-tile');
+      tile.type = 'button'; tile.textContent = word; tile.dataset.word = word; tile.tabIndex = i === 0 ? 0 : -1;
+      container.append(tile); tileButtons.set(word, tile);
+      return tile;
+    });
+    const group = { container, buttons, columns, cursor: 0 };
+    groups.push(group);
+    return group;
+  };
+  const words = signTileGroups(grade);
+  const phrases = makeTiles(words.phrases, 'sign-tiles--phrases', grade >= 3 ? 'Phrase tiles' : 'Word tiles', grade >= 3 ? 1 : 4);
+  let describing;
+  if (grade >= 3) {
+    describing = makeTiles(words.describing, 'sign-tiles--describing', 'Describing words', 2);
+    const work = el('div', 'sign-work');
+    work.append(board, describing.container);
+    root.append(work, phrases.container);
+  } else root.append(board, post, phrases.container);
   host.append(root);
+
+  const focusTile = (group, i) => {
+    group.buttons[group.cursor].tabIndex = -1;
+    group.cursor = i; group.buttons[i].tabIndex = 0; group.buttons[i].focus();
+  };
+  const groupOf = button => groups.find(group => group.buttons.includes(button));
+  const onFocus = event => {
+    const group = groupOf(event.target);
+    if (group) {
+      group.buttons[group.cursor].tabIndex = -1;
+      group.cursor = group.buttons.indexOf(event.target); event.target.tabIndex = 0;
+    }
+  };
+  const onClick = event => {
+    const button = event.target.closest('button');
+    const group = groupOf(button);
+    if (!group) return;
+    focusTile(group, group.buttons.indexOf(button));
+    dispatch({ type: 'field', word: button.dataset.word });
+  };
+  const onKey = event => {
+    const intent = keyIntent(event), group = groupOf(event.target);
+    if (!group || !['left', 'right', 'up', 'down'].includes(intent)) return;
+    const index = group.buttons.indexOf(event.target), next = gridMove(index, intent, group.columns, group.buttons.length);
+    if (next !== index) focusTile(group, next);
+    else if (group === describing && intent === 'right') focusTile(phrases, Math.floor(index / 2));
+    else if (describing && group === phrases && intent === 'left') focusTile(describing, Math.min(index, 2) * 2 + 1);
+    else if (grade > 0 && intent === 'up') face.focus();
+    else return; // The bottom edge lets the encounter frame reach its command menu.
+    event.preventDefault(); event.stopPropagation();
+  };
+  root.addEventListener('click', onClick);
+  root.addEventListener('focusin', onFocus);
+  root.addEventListener('keydown', onKey);
   return {
     update(state, ui) {
       const text = state.text || '';
@@ -136,8 +174,7 @@ function mountField(host, { grade, dispatch }) {
         face.textContent = text || 'Your words go here';
         face.classList.toggle('sign-placeholder', !text);
       }
-      board.classList.toggle('sign-board--ready', encounterReady(state));
-      // Tiles already on the sign look pressed in (and say so to a screen reader), so a child can see what Remove word will take back.
+      board.classList.toggle('sign-board--ready', signReady(state));
       const used = new Set(reconcileTiles(ui?.tiles ?? [], text));
       for (const [word, tile] of tileButtons) {
         tile.classList.toggle('sign-tile--used', used.has(word));
@@ -145,7 +182,13 @@ function mountField(host, { grade, dispatch }) {
         else tile.removeAttribute('aria-description');
       }
     },
-    destroy() { root.remove(); },
+    destroy() {
+      face.removeEventListener('input', onInput);
+      root.removeEventListener('click', onClick);
+      root.removeEventListener('focusin', onFocus);
+      root.removeEventListener('keydown', onKey);
+      root.remove();
+    },
   };
 }
 
@@ -158,10 +201,10 @@ export default {
   notReadyLine: SIGN_LINES.empty,
   start(snapshot, { chapter = 0, grade = 1 } = {}) {
     const state = normalizeEncounterSnapshot(KIND, snapshot ?? {}, grade, chapter);
-    const tiles = state.tiles ?? legacyTiles(state.text, grade);
+    const tiles = state.tiles ?? (grade < 3 ? legacyTiles(state.text, grade) : []);
     return { state: { ...state, tiles }, ui: { tiles: [...tiles] } };
   },
-  opening(state) { return encounterReady(state) ? SIGN_LINES.ready : encounterOpeningDialogue(state); },
+  opening: signOpening,
   commands,
   act,
   mountField,

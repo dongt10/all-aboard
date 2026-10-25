@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import banner, { stampPosition, stampAt, BANNER_SHAPES, BANNER_LINES } from '../src/ui/activities/banner.js';
 import { cleanCreation } from '../src/progress.js';
+import { Doc, Event } from './helpers/dom.js';
+import { controlStyle, declarations } from './helpers/css.js';
+import { ICON_NAMES } from '../src/ui/icons.js';
+import { arrangeCommands } from '../src/ui/menu.js';
+import { PATTERN_CELLS, expectedAt, bannerHelp, bannerReady, BANNER_RULE_LINES } from '../src/banner-rules.js';
 
 const field = (s, action, grade) => banner.act(s.state, s.ui, { type: 'field', ...action }, grade);
 const cmd = (s, id, grade = 1) => banner.act(s.state, s.ui, { type: 'command', id }, grade);
@@ -44,13 +49,14 @@ test('turning cycles in 45° steps, fill paints the cloth, and undo needs someth
 test('the banner names itself and opens with Yuki', () => {
   const s = banner.start(null, { chapter: 1, grade: 2 });
   assert.equal(banner.kind, 'art'); assert.equal(banner.title, 'Your colors, flying high');
-  assert.deepEqual(banner.help, ['Pick a paint and a stamp.', 'Tap the cloth to stamp it.', 'Turn, Fill cloth or Undo any time.', 'Choose Hang banner.']);
+  assert.deepEqual(banner.help, bannerHelp(1));
+  assert.equal(banner.helpFor, bannerHelp);
   assert.equal(banner.notReadyLine, 'Nothing on the cloth yet.');
   assert.deepEqual(s.ui, { color: '#e96163', shape: 'star', rotation: 0, history: [] });
   assert.deepEqual([s.state.kind, s.state.grade, s.state.chapter, s.state.background, s.state.stamps], ['art', 2, 1, '#fff1cf', []]);
-  assert.equal(banner.opening(s.state, s.ui, 2), 'Tap the cloth to add a stamp.');
+  assert.equal(banner.opening(s.state, s.ui, 2), BANNER_RULE_LINES.openingPattern);
 });
-test('commands: Turn carries no number, and the finish is last, shown from the start and disabled until a stamp lands', () => {
+test('commands: Turn carries no number, and the finish waits for four mirror stamps at grade 3', () => {
   let s = banner.start(null, { chapter: 1, grade: 3 });
   const list = banner.commands(s.state, s.ui, 3);
   assert.deepEqual(list.map(c => [c.id, c.icon, c.label]), [['undo', 'undo', 'Undo'], ['turn', 'turn', 'Turn'], ['fill', 'fill', 'Fill cloth'], ['finish', 'check', 'Hang banner']]);
@@ -60,11 +66,13 @@ test('commands: Turn carries no number, and the finish is last, shown from the s
   assert.equal(s.ui.rotation, 315);
   assert.equal(banner.commands(s.state, s.ui, 3)[1].label, 'Turn');
   s = field(s, { cell: 3 }, 3);
+  assert.equal(banner.commands(s.state, s.ui)[3].disabled, true);
+  for (const cell of [2, 6, 11]) s = field(s, { cell }, 3);
   const ready = banner.commands(s.state, s.ui, 3);
   assert.deepEqual([ready[0].disabled, ready[3].disabled], [false, false]);
 });
 test('every pick and command speaks a short line a dialogue page can hold', () => {
-  const s0 = banner.start(null, { chapter: 1, grade: 1 });
+  const s0 = banner.start(null, { chapter: 1, grade: 0 });
   assert.equal(field(s0, { color: '#e96163' }, 1).line, 'Coral paint.');
   assert.equal(field(s0, { color: '#9d7fbd' }, 1).line, 'Lavender paint.');
   assert.equal(field(s0, { shape: 'star' }, 1).line, 'Star stamp.');
@@ -79,7 +87,7 @@ test('every pick and command speaks a short line a dialogue page can hold', () =
   for (const line of lines) for (const sentence of sentences(line)) assert.ok(sentence.length <= 56, `"${sentence}" fits a Bigger-words page`);
 });
 test('stamping, undo and fill speak the brief lines and stay pure', () => {
-  const s0 = banner.start(null, { chapter: 1, grade: 1 });
+  const s0 = banner.start(null, { chapter: 1, grade: 0 });
   const s1 = field(s0, { cell: 7 }, 1);
   assert.equal(s1.line, 'Keep stamping, or hang your banner.');
   assert.equal(s0.state.stamps.length, 0);
@@ -105,7 +113,7 @@ test('tapping an occupied cell swaps the stamp instead of stacking', () => {
 });
 test('undo reverses Fill cloth too, in order, and the history stays in ui', () => {
   let s = banner.start(null, { chapter: 1, grade: 2 });
-  s = field(s, { cell: 0 }, 2);
+  s = field(s, { cell: 6 }, 2);
   s = field(s, { color: '#6dbea0' }, 2);
   s = cmd(s, 'fill', 2);
   assert.equal(s.state.background, '#6dbea0');
@@ -117,7 +125,7 @@ test('undo reverses Fill cloth too, in order, and the history stays in ui', () =
   s = cmd(s, 'undo', 2);
   assert.deepEqual([s.state.background, s.state.stamps.length, s.line], ['#fff1cf', 1, 'Undone.']);
   s = cmd(s, 'undo', 2);
-  assert.deepEqual([s.state.stamps.length, s.ui.history.length, s.line], [0, 0, 'Undone. Nothing on the cloth yet.']);
+  assert.deepEqual([s.state.stamps.length, s.ui.history.length, s.line], [0, 0, 'Undone.']);
   assert.equal(banner.commands(s.state, s.ui, 2)[0].disabled, true);
   assert.equal(cmd(s, 'undo', 2).state, s.state);
   assert.ok(!('history' in s.state), 'history never enters the saved snapshot');
@@ -147,7 +155,7 @@ test('a saved banner comes back as it was, and Undo still lifts its last stamp',
   const s = banner.start(snapshot, { chapter: 1, grade: 4 });
   assert.equal(s.state.background, '#f4bf4f'); assert.equal(s.state.stamps.length, 2);
   assert.deepEqual(s.ui.history, []);
-  assert.equal(banner.commands(s.state, s.ui, 4)[3].disabled, false);
+  assert.equal(banner.commands(s.state, s.ui, 4)[3].disabled, true);
   assert.equal(banner.commands(s.state, s.ui, 4)[0].disabled, false);
   const undone = cmd(s, 'undo', 4);
   assert.deepEqual([undone.state.stamps.length, undone.state.stamps[0].shape, undone.line], [1, 'flower', 'Undone.']);
@@ -161,23 +169,23 @@ test('resumed Undo lifts the last replacement and keeps the untouched cell at gr
   for (const grade of [0, 1, 2]) {
     const scope = { grade, chapter: grade === 0 ? 0 : 1 };
     let s = banner.start(null, scope);
-    s = field(s, { cell: 0 }, grade);
-    s = field(s, { cell: 1 }, grade);
+    s = field(s, { cell: 6 }, grade);
+    s = field(s, { cell: 7 }, grade);
     const before = s;
-    s = field(field(s, { shape: 'flower' }, grade), { cell: 0 }, grade);
-    assert.equal(s.state.stamps[stampAt(s.state, 0)].shape, 'flower');
+    s = field(field(s, { shape: 'flower' }, grade), { cell: 6 }, grade);
+    assert.equal(s.state.stamps[stampAt(s.state, 6)].shape, 'flower');
     assert.deepEqual(cmd(s, 'undo', grade).state, before.state, 'live history restores the replaced stamp');
     s = banner.start(JSON.parse(JSON.stringify(cleanCreation('art', s.state))), scope);
     assert.deepEqual(s.ui.history, []);
     s = cmd(s, 'undo', grade);
-    assert.equal(stampAt(s.state, 0), -1, 'the most recently edited cell is undone');
-    assert.equal(s.state.stamps[stampAt(s.state, 1)].shape, 'star', 'the older untouched cell remains');
+    assert.equal(stampAt(s.state, 6), -1, 'the most recently edited cell is undone');
+    assert.equal(s.state.stamps[stampAt(s.state, 7)].shape, 'star', 'the older untouched cell remains');
   }
 });
 test('a stacked save from earlier today: a tap swaps the stamp on top, the one the kid can see', () => {
   const under = { shape: 'leaf', color: '#6dbea0', rotation: 0, ...stampPosition(0) };
   const over = { shape: 'circle', color: '#9d7fbd', rotation: 90, ...stampPosition(0) };
-  const s = banner.start({ kind: 'art', background: '#fff1cf', stamps: [under, over, { shape: 'star', color: '#e96163', rotation: 0, ...stampPosition(4) }] }, { chapter: 1, grade: 2 });
+  const s = banner.start({ kind: 'art', background: '#fff1cf', stamps: [under, over, { shape: 'star', color: '#e96163', rotation: 0, ...stampPosition(4) }] }, { chapter: 1, grade: 0 });
   assert.equal(s.state.stamps.length, 3);
   assert.equal(stampAt(s.state, 0), 1, 'the last stamp drawn on the cell is the one found');
   const next = field(s, { cell: 0 }, 2);
@@ -188,7 +196,7 @@ test('a stacked save from earlier today: a tap swaps the stamp on top, the one t
   assert.equal(next.ui.history.length, 1);
 });
 test('the very same stamp on the same cell changes nothing and leaves Undo nothing to take back', () => {
-  let s = banner.start(null, { chapter: 1, grade: 1 });
+  let s = banner.start(null, { chapter: 1, grade: 0 });
   s = field(s, { cell: 12 }, 1);
   const again = field(s, { cell: 12 }, 1);
   assert.equal(again.state, s.state, 'no new state');
@@ -222,52 +230,14 @@ test('field stamps wear the ink outline and the turn chip holds no number', () =
   assert.doesNotMatch(js, /°/, 'the visible turn chip holds no degree text');
 });
 
-// A few lines of fake DOM so the field can be mounted without a browser (the story test's pattern, plus
-// dataset, style, listeners and focus, which the banner field uses).
-function fakeDocument() {
-  const focused = { el: null };
-  const make = tag => {
-    const el = {
-      tagName: tag, children: [], attrs: {}, classes: new Set(), dataset: {}, style: {}, listeners: {}, _text: '', _html: '', tabIndex: 0,
-      get className() { return [...el.classes].join(' '); }, set className(v) { el.classes = new Set(v.split(/\s+/).filter(Boolean)); },
-      get textContent() { return el._text; }, set textContent(v) { el._text = String(v); el.children = []; },
-      get innerHTML() { return el._html; }, set innerHTML(v) { el._html = String(v); el.children = parse(String(v)); },
-      setAttribute: (k, v) => { el.attrs[k] = String(v); }, getAttribute: k => el.attrs[k] ?? null,
-      append: (...kids) => el.children.push(...kids), remove() {},
-      querySelector: sel => el.querySelectorAll(sel)[0] ?? null,
-      querySelectorAll: sel => all(el).filter(n => n !== el && n.classes.has(sel.slice(1))),
-      addEventListener: (type, fn) => { el.listeners[type] = fn; }, removeEventListener: type => { delete el.listeners[type]; },
-      contains: node => all(el).includes(node), closest: sel => (sel === 'button' && el.tagName === 'button' ? el : null),
-      focus: () => { focused.el = el; },
-    };
-    return el;
-  };
-  const all = el => [el, ...el.children.flatMap(all)];
-  function parse(html) {
-    const stack = [{ children: [] }];
-    for (const m of html.matchAll(/<(\/?)([a-z]+)([^>]*)>([^<]*)/g)) {
-      const [, close, tag, attrs, text] = m;
-      if (close) { if (stack.length > 1) stack.pop(); if (text.trim()) stack.at(-1).children.at(-1)._text += text; continue; }
-      const el = make(tag);
-      const cls = /class="([^"]*)"/.exec(attrs);
-      if (cls) el.className = cls[1];
-      el._text = text;
-      stack.at(-1).children.push(el);
-      stack.push(el);
-    }
-    return stack[0].children;
-  }
-  return { createElement: make, focused };
-}
-
 test('cloth cells describe empty spaces and the top stamp after replacing, undoing and reopening', () => {
   const previous = globalThis.document;
-  globalThis.document = fakeDocument();
+  globalThis.document = new Doc();
   try {
-    const host = document.createElement('div');
+    const host = document.createElement('div'); document.body.append(host);
     const view = banner.mountField(host, { dispatch() {} });
     const cells = host.querySelector('.banner-grid').children;
-    let s = banner.start(null, { grade: 1 });
+    let s = banner.start(null, { grade: 0 });
     view.update(s.state, s.ui);
     assert.equal(cells[0].getAttribute('aria-label'), 'Row 1, column 1. Empty. Tap to stamp.');
     s = field(s, { cell: 0 });
@@ -287,7 +257,7 @@ test('cloth cells describe empty spaces and the top stamp after replacing, undoi
     assert.match(cells[0].getAttribute('aria-label'), /Coral star, rotated 0 degrees/);
     // Old saves can stack stamps; announce the one drawn on top.
     const stacked = { ...before.state, stamps: [...before.state.stamps, { ...before.state.stamps[1], ...stampPosition(0) }] };
-    s = banner.start(stacked, { grade: 1 });
+    s = banner.start(stacked, { grade: 0 });
     view.update(s.state, s.ui);
     assert.match(cells[0].getAttribute('aria-label'), /Mint leaf, rotated 45 degrees/);
     view.destroy();
@@ -295,22 +265,22 @@ test('cloth cells describe empty spaces and the top stamp after replacing, undoi
 });
 
 test('the field draws outlined stamps, marks the turned preview without a number, and taps dispatch cells', () => {
-  globalThis.document = fakeDocument();
+  globalThis.document = new Doc();
   try {
     const dispatched = [];
-    const host = globalThis.document.createElement('div');
+    const host = globalThis.document.createElement('div'); document.body.append(host);
     const mounted = banner.mountField(host, { dispatch: a => dispatched.push(a) });
     const root = host.children[0];
-    let s = banner.start(null, { chapter: 1, grade: 1 });
+    let s = banner.start(null, { chapter: 1, grade: 0 });
     mounted.update(s.state, s.ui);
     const unturned = root.querySelector('.banner-shape-pic').innerHTML;
     s = cmd(s, 'turn'); s = field(s, { cell: 7 }, 1);
     mounted.update(s.state, s.ui);
 
     const layer = root.querySelector('.banner-stamps');
-    assert.match(layer.innerHTML, /class="banner-stamp"/, 'field stamps carry the outlined class');
-    assert.match(layer.innerHTML, /shape-rendering="crispEdges"/);
-    assert.match(layer.innerHTML, /fill="#1f2147"/, 'the closed pixel outline is ink');
+    assert.match(layer.querySelectorAll('.banner-stamp-spot').filter(s => !s.hidden).map(s => s.innerHTML).join(''), /class="banner-stamp"/, 'field stamps carry the outlined class');
+    assert.match(layer.querySelectorAll('.banner-stamp-spot').filter(s => !s.hidden).map(s => s.innerHTML).join(''), /shape-rendering="crispEdges"/);
+    assert.match(layer.querySelectorAll('.banner-stamp-spot').filter(s => !s.hidden).map(s => s.innerHTML).join(''), /fill="#1f2147"/, 'the closed pixel outline is ink');
     assert.equal(layer.getAttribute('aria-label'), 'Your banner, Cream cloth, 1 stamp');
 
     const options = root.querySelector('.banner-shapes').children;
@@ -325,7 +295,7 @@ test('the field draws outlined stamps, marks the turned preview without a number
     assert.equal(flower.querySelector('.banner-option__turn').innerHTML, '');
     const turned = star.querySelector('.banner-shape-pic').innerHTML;
     assert.notEqual(turned, unturned, 'Turn changes the pixels of the preview');
-    assert.ok(layer.innerHTML.includes(turned), 'the cloth stamp has the same turn as its preview');
+    assert.ok(layer.querySelectorAll('.banner-stamp-spot').some(s => !s.hidden && s.innerHTML === turned), 'the cloth stamp has the same turn as its preview');
     assert.doesNotMatch(turned, /transform:|<circle|<path/, 'turned pixels stay on the grid instead of rotating in CSS');
 
     // Back at 0° the chip empties again.
@@ -336,33 +306,129 @@ test('the field draws outlined stamps, marks the turned preview without a number
 
     // Tapping a cell dispatches it and moves the roving focus there.
     const cells = root.querySelector('.banner-grid').children;
-    root.listeners.click({ target: cells[13] });
+    cells[13].click();
     assert.deepEqual(dispatched.at(-1), { type: 'field', cell: 13 });
-    assert.equal(globalThis.document.focused.el, cells[13]); assert.equal(cells[13].tabIndex, 0); assert.equal(cells[0].tabIndex, -1);
+    assert.equal(globalThis.document.activeElement, cells[13]); assert.equal(cells[13].tabIndex, 0); assert.equal(cells[0].tabIndex, -1);
     // Paint and stamp picks dispatch too.
     const pot = root.querySelector('.banner-paints').children[2];
-    root.listeners.click({ target: pot });
+    pot.click();
     assert.deepEqual(dispatched.at(-1), { type: 'field', color: pot.dataset.value });
     assert.equal(pot.dataset.value, '#6dbea0', 'the third pot is Mint');
-    root.listeners.click({ target: flower });
+    flower.click();
     assert.deepEqual(dispatched.at(-1), { type: 'field', shape: 'flower' });
 
     // Arrow keys: right from the cloth's last column lands on the chosen stamp; down on a rail picks the next option.
     let prevented = 0;
-    const key = (target, k) => root.listeners.keydown({ target, key: k, preventDefault: () => prevented++, stopPropagation() {} });
+    const key = (target, k) => { const event = new Event('keydown', { key: k }); target.dispatchEvent(event); if (event.defaultPrevented) prevented++; };
     key(cells[13], 'ArrowRight'); key(cells[14], 'ArrowRight'); key(cells[15], 'ArrowRight'); key(cells[16], 'ArrowRight');
-    assert.equal(globalThis.document.focused.el, cells[17]);
+    assert.equal(globalThis.document.activeElement, cells[17]);
     key(cells[17], 'ArrowRight');
-    assert.equal(globalThis.document.focused.el, star, 'past the last column the chosen stamp takes focus');
+    assert.equal(globalThis.document.activeElement, star, 'past the last column the chosen stamp takes focus');
     key(star, 'ArrowDown');
-    assert.equal(globalThis.document.focused.el, flower);
+    assert.equal(globalThis.document.activeElement, flower);
     assert.deepEqual(dispatched.at(-1), { type: 'field', shape: 'flower' });
     assert.ok(prevented >= 6);
-    root.listeners.click({ target: cells[2] });
+    cells[2].click();
     key(cells[2], 'ArrowUp');
-    assert.equal(globalThis.document.focused.el, cells[2], 'the cloth\'s top edge leaves the key to the frame');
+    assert.equal(globalThis.document.activeElement, cells[2], 'the cloth\'s top edge leaves the key to the frame');
 
     mounted.destroy();
-    assert.deepEqual(root.listeners, {});
+    assert.ok(Object.values(root.listeners).every(list => list.length === 0));
+    assert.equal(host.children.length, 0);
   } finally { delete globalThis.document; }
+});
+
+for (const grade of [1, 2]) test(`grade ${grade}: complete the pattern, reject a wrong stamp, and undo readiness`, () => {
+  let s = banner.start(null, { chapter: 1, grade });
+  const contract = () => {
+    const commands = banner.commands(s.state, s.ui);
+    assert.equal(commands.length, 4); assert.equal(new Set(commands.map(c => c.id)).size, 4);
+    assert.equal(commands.filter(c => c.finish).length, 1); assert.equal(arrangeCommands(commands)[3], commands.at(-1));
+    assert.equal(commands.at(-1).disabled, !bannerReady(s.state));
+    assert.ok(commands.every(c => c.label.length <= 12 && ICON_NAMES.includes(c.icon)));
+  };
+  contract();
+  Object.freeze(s.state.stamps); Object.freeze(s.state); Object.freeze(s.ui.history); Object.freeze(s.ui);
+  for (const cell of [0, 1, 2]) {
+    const refused = field(s, { cell }); assert.equal(refused.state, s.state); assert.equal(refused.ui, s.ui);
+    assert.equal(refused.line, BANNER_RULE_LINES.yuki);
+  }
+  const wrong = field(s, { cell: 3 });
+  assert.equal(wrong.state, s.state); assert.equal(wrong.ui, s.ui); assert.equal(wrong.line, BANNER_RULE_LINES.wrong);
+  s = field(s, { cell: 8 }); assert.equal(s.line, BANNER_RULE_LINES.free);
+  for (const cell of PATTERN_CELLS) {
+    const expected = expectedAt(grade, cell);
+    s = field(field(s, { color: expected.color }), { shape: expected.shape });
+    s = cmd(s, 'turn'); s = field(s, { cell });
+    assert.equal(s.line, cell === 5 ? BANNER_RULE_LINES.patternDone : BANNER_RULE_LINES.fits);
+    contract();
+  }
+  assert.equal(bannerReady(s.state), true); assert.equal(s.state.stamps.length, 4, 'Yuki adds no saved stamps');
+  const before = s.state;
+  s = field(s, { color: '#6dbea0' });
+  const refused = field(s, { cell: 5 }); assert.equal(refused.state, before); assert.equal(refused.ui, s.ui);
+  assert.equal(bannerReady(refused.state), true, 'a wrong replacement keeps the correct row');
+  s = cmd(s, 'undo');
+  assert.equal(s.line, `Undone. ${BANNER_RULE_LINES.patternAgain}`); assert.equal(bannerReady(s.state), false); contract();
+});
+
+for (const grade of [3, 4, 5]) test(`grade ${grade}: mirror feedback follows pairs, count, colors and undo`, () => {
+  let s = banner.start(null, { grade, chapter: 1 });
+  s = field(s, { cell: 6 }); assert.equal(s.line, BANNER_RULE_LINES.mirror);
+  s = field(s, { cell: 11 }); assert.equal(s.line, grade === 3 ? BANNER_RULE_LINES.pair : BANNER_RULE_LINES.pairColors);
+  for (const cell of [7, 10]) s = field(s, { cell });
+  if (grade >= 4) {
+    assert.equal(bannerReady(s.state), false);
+    for (const cell of [12, 17]) s = field(s, { cell });
+    assert.equal(s.line, BANNER_RULE_LINES.secondColor);
+    s = field(s, { color: '#559fc7' }); s = field(s, { shape: 'circle' });
+    s = field(s, { cell: 12 }); assert.equal(s.line, BANNER_RULE_LINES.mirror);
+    s = field(s, { cell: 17 });
+  }
+  assert.equal(s.line, BANNER_RULE_LINES.mirrorDone); assert.equal(banner.commands(s.state, s.ui).at(-1).disabled, false);
+  const reopened = banner.start(cleanCreation('art', s.state), { grade, chapter: 1 });
+  assert.deepEqual(reopened.state, s.state); assert.equal(banner.opening(reopened.state), BANNER_RULE_LINES.readyOpening);
+  s = cmd(s, 'undo');
+  assert.equal(s.line, `Undone. ${BANNER_RULE_LINES.mirrorAgain}`); assert.equal(bannerReady(s.state), false);
+});
+
+test('mounted banner keeps controls and stamp slots, shows Yuki tags and updates mirror outlines', () => {
+  const previous = globalThis.document, doc = new Doc(); globalThis.document = doc;
+  try {
+    const host = doc.createElement('div'); doc.body.append(host);
+    let s = banner.start(null, { grade: 1, chapter: 1 });
+    const view = banner.mountField(host, { dispatch: action => { s = banner.act(s.state, s.ui, action); view.update(s.state, s.ui); } });
+    view.update(s.state, s.ui);
+    const cells = host.querySelectorAll('.banner-cell'), spots = host.querySelectorAll('.banner-stamp-spot');
+    assert.equal(host.querySelectorAll('.banner-stamp-spot--yuki').filter(spot => !spot.hidden).length, 3);
+    assert.equal(cells[0].getAttribute('aria-label'), 'Row 1, column 1. Yuki’s Coral star. Part of the pattern.');
+    assert.ok(cells.slice(0, 3).every(cell => cell.classList.contains('banner-cell--yuki')));
+    cells[0].click(); assert.equal(s.state.stamps.length, 0); assert.equal(s.line, BANNER_RULE_LINES.yuki);
+    assert.equal(host.querySelector('.banner-fold').hidden, true);
+    s = banner.start(null, { grade: 3, chapter: 1 });
+    s = field(s, { cell: 6 }); view.update(s.state, s.ui);
+    assert.equal(host.querySelector('.banner-fold').hidden, false);
+    assert.ok(cells[6].classList.contains('banner-cell--lonely')); assert.match(cells[6].getAttribute('aria-label'), /Needs its mirror\./);
+    assert.ok(cells.every(cell => !cell.classList.contains('banner-cell--yuki')));
+    s = field(s, { cell: 11 }); view.update(s.state, s.ui);
+    assert.ok(cells.every(cell => !cell.classList.contains('banner-cell--lonely')));
+    assert.deepEqual(host.querySelectorAll('.banner-cell'), cells); assert.deepEqual(host.querySelectorAll('.banner-stamp-spot'), spots);
+    cells[24].click(); const down = new Event('keydown', { key: 'ArrowDown' }); cells[24].dispatchEvent(down);
+    assert.equal(down.defaultPrevented, false, 'bottom edge can reach the menu');
+    view.destroy(); assert.equal(host.children.length, 0);
+  } finally { globalThis.document = previous; }
+});
+
+test('banner names keep the small font token and its grade cues add no text width', () => {
+  const css = readFileSync(new URL('../src/ui/activities/banner.css', import.meta.url), 'utf8');
+  const kit = readFileSync(new URL('../src/ui/tokens.css', import.meta.url), 'utf8');
+  assert.equal(declarations(css, '.banner-field').width, '520px'); assert.equal(declarations(css, '.banner-field').height, '268px');
+  assert.equal(declarations(css, '.banner-fold').left, '50%');
+  const tag = declarations(css, '.banner-stamp-spot--yuki::after'); assert.equal(tag.width, '4px'); assert.equal(tag.height, '4px');
+  const doc = new Doc(), stage = doc.createElement('div'), button = doc.createElement('button');
+  button.className = 'banner-option'; stage.append(button); doc.body.append(stage);
+  for (const large of [false, true]) {
+    stage.className = large ? 'large-text' : '';
+    assert.equal(controlStyle(button, `${kit}\n${css}`)['font-size'], large ? '20px' : '16px');
+  }
 });

@@ -89,7 +89,12 @@ export function creationMarkup(id, s = {}) {
   if (id === 'community' && s.activity === 'helpday') return helpdayCreationMarkup(s);
   if (id === 'reading' && s.activity === 'tales' && solvedCount(s) > 0) return talesCreationMarkup(s);
   if (id === 'art') {
-    const stamps = Array.isArray(s.stamps) ? s.stamps : [];
+    // Yuki's starting row belongs to the grade, never to the saved stamps.
+    const pattern = s.grade === 1 ? [{ shape: 'star', color: '#e96163' }, { shape: 'circle', color: '#e96163' }]
+      : s.grade === 2 ? [{ shape: 'flower', color: '#e96163' }, { shape: 'flower', color: '#559fc7' }] : null;
+    const yuki = pattern ? [0, 1, 2].map(cell => ({ ...pattern[cell % 2], x: 8.33 + cell * 16.66, y: 10, rotation: 0 })) : [];
+    const stamps = [...yuki, ...(Array.isArray(s.stamps) ? s.stamps : [])];
+    const fold = s.grade >= 3 ? `<g class="creation-banner-fold">${Array.from({ length: 9 }, (_, i) => rect(49, 3 + i * 6, 2, 3, INK)).join('')}</g>` : '';
     const fill = color(s.background, PAPER_SHADE), [light, shade] = paintSteps(fill);
     // A stepped, sewn hem: each 12px pennant ends at the same height as the original cloth.
     const hem = Array.from({ length: 100 }, (_, x) => 58 + Math.floor((6 - Math.abs(((x - 10 + 108) % 12) - 6)) / 2) * 2);
@@ -99,7 +104,7 @@ export function creationMarkup(id, s = {}) {
       + hem.map((bottom, x) => rect(x, 56, 1, bottom - 55, INK)
         + (x > 0 && x < 99 ? rect(x, 56, 1, Math.max(1, Math.min(bottom, hem[x - 1], hem[x + 1]) - 56), shade) : '')).join('')
       + Array.from({ length: 16 }, (_, i) => rect(3 + i * 6, 54, 3, 1, light)).join('');
-    return `<svg class="creation creation--art" viewBox="0 0 100 65" shape-rendering="crispEdges" aria-label="Your painted festival banner">${cloth}${stamps.slice(0, 60).map(t => {
+    return `<svg class="creation creation--art" viewBox="0 0 100 65" shape-rendering="crispEdges" aria-label="Your painted festival banner">${cloth}${fold}${stamps.slice(0, 60).map(t => {
       const x = Math.round(Math.max(5, Math.min(95, Number(t?.x) || 0))), y = Math.round(Math.max(5, Math.min(52, (Number(t?.y) || 0) * 0.55)));
       return `<g transform="translate(${x} ${y})">${stampShape(t?.shape, color(t?.color, LANTERN), Number(t?.rotation) || 0)}</g>`;
     }).join('')}${rect(0, 0, 100, 1, INK)}${rect(0, 1, 1, 57, INK)}${rect(99, 1, 1, 57, INK)}</svg>`;

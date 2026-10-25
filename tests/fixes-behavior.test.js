@@ -121,19 +121,19 @@ test('sign: B in the empty textarea moves to Village, and a second B leaves', as
 });
 
 // ---- Frame: a readiness flip with no line from the activity still gets a line ----
-test('encounter: typing the sign empty says the activity\'s not-ready line, and a word says the sign\'s own line', () => {
+test('encounter: typing the sign empty says the activity\'s not-ready line, and a sentence says the sign\'s own line', () => {
   const ctx = fakeCtx(grade2());
   const scene = createEncounterScene(ctx, { id: 'writing' });
   scene.mount();
   const face = ctx.stage.querySelector('textarea');
   const text = () => ctx.stage.querySelector('.enc__dialogue').querySelector('.dlg__text').textContent;
-  face.value = 'Hello';
-  face.dispatchEvent(new Event('input'));          // the sign speaks for itself when a word lands
+  face.value = 'Hello!';
+  face.dispatchEvent(new Event('input'));          // a complete sentence enables the sign
   assert.equal(text(), 'You wrote it. Add more, or choose Put up sign.');
   assert.equal(slot(ctx.stage, 'finish').disabled, false, 'Put up sign is enabled');
   face.value = '';
-  face.dispatchEvent(new Event('input'));          // sign.js returns no line here; the frame says notReadyLine
-  assert.equal(text(), 'The sign is empty.');
+  face.dispatchEvent(new Event('input'));          // the sign supplies its next sentence hint
+  assert.equal(text(), 'Start with a capital letter.');
   assert.equal(slot(ctx.stage, 'finish').disabled, true, 'Put up sign is disabled again');
   scene.destroy();
 });
@@ -490,6 +490,7 @@ test('app: Escape then A cannot activate Finish or its target handlers during ei
   try {
     await app.go('encounter', { id: 'writing' });
     press('Enter'); // Hello
+    press('ArrowRight'); press('Enter'); // friend!
     const finish = slot(app.stage, 'finish');
     assert.equal(finish.disabled, false);
     finish.focus();
@@ -524,12 +525,13 @@ test('app: stale tabs refuse saves even after a storage event, preserving the ne
   try {
     await appA.go('encounter', { id: 'writing' });
     press('Enter');
+    press('ArrowRight'); press('Enter');
     slot(appA.stage, 'finish').click();
     appA.stage.querySelector('.item-get__go').click();
     await tick();
     assert.equal(appA.saveOk, true);
     const saved = storage.getItem(STORAGE_KEY);
-    assert.equal(getCreations(loadState(storage)).writing.text, 'Hello');
+    assert.equal(getCreations(loadState(storage)).writing.text, 'Hello friend!');
     window.fire(new Event('storage', { key: STORAGE_KEY, newValue: saved, storageArea: storage }));
     appB.commit({ ...appB.getState(), settings: { ...appB.getState().settings, largeText: true } });
     assert.equal(appB.saveOk, false, 'the stale snapshot is not reported as saved');
@@ -628,6 +630,7 @@ test('sign: removing the last word returns focus to a usable field control', asy
       await app.go('encounter', { id: 'writing' });
       const tile = app.stage.querySelector('.sign-tile');
       tile.focus(); press('Enter'); press('ArrowDown');
+      if (state.chapter === 1) press('ArrowDown'); // leave the second row of word tiles
       assert.ok(doc.activeElement === slot(app.stage, 'remove'));
       press('Enter');
       const field = app.stage.querySelector('.enc__field');
@@ -635,10 +638,10 @@ test('sign: removing the last word returns focus to a usable field control', asy
       assert.equal(slot(app.stage, 'finish').disabled, true);
       assert.ok(doc.activeElement === (field.querySelector('textarea') ?? field.querySelector('button:not(:disabled)')));
       if (state.chapter === 0) {
-        press('ArrowRight'); press('z');
+        press('z'); press('ArrowRight'); press('z');
         assert.equal(slot(app.stage, 'finish').disabled, false, 'the child can add another word without Tab');
       } else {
-        doc.activeElement.value = 'Hello'; doc.activeElement.dispatchEvent(new Event('input'));
+        doc.activeElement.value = 'Hello!'; doc.activeElement.dispatchEvent(new Event('input'));
         assert.equal(slot(app.stage, 'finish').disabled, false);
       }
     } finally { app.destroy(); }

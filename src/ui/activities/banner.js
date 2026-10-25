@@ -1,12 +1,17 @@
 // Yuki's banner (art): stamp shapes in festival paints onto a 6×5 cloth.
 // start, opening, commands and act are pure; mountField builds the field once and updates it in place.
-import { ENCOUNTER_COLORS, ENCOUNTER_COLOR_NAMES, normalizeEncounterSnapshot, encounterReady, encounterOpeningDialogue } from '../../encounters.js';
+import { ENCOUNTER_COLORS, ENCOUNTER_COLOR_NAMES, normalizeEncounterSnapshot } from '../../encounters.js';
+import {
+  COLUMNS, ROWS, YUKI_CELLS, PATTERN_CELLS, patternFor, yukiStamps, expectedAt, patternReport,
+  stampPosition, stampAt, symmetryReport, bannerReady, bannerOpening, bannerHelp, BANNER_RULE_LINES,
+} from '../../banner-rules.js';
+export { stampPosition, stampAt } from '../../banner-rules.js';
 import { keyIntent, gridMove } from '../input.js';
 import { icon } from '../icons.js';
 import { INK, PAPER } from '../palette.js';
 
 export const BANNER_SHAPES = ['star', 'flower', 'leaf', 'circle'];
-const COLUMNS = 6, ROWS = 5, CELLS = COLUMNS * ROWS, MAX_STAMPS = 30, HISTORY = 40;
+const CELLS = COLUMNS * ROWS, MAX_STAMPS = 30, HISTORY = 40;
 const FULL_LINE = 'The cloth has 30 stamps. Undo one to make room, or hang your banner.';
 const NOT_READY_LINE = 'Nothing on the cloth yet.';
 export const BANNER_LINES = {
@@ -19,16 +24,6 @@ export const BANNER_LINES = {
   filled: color => `The cloth is ${ENCOUNTER_COLOR_NAMES[color]} now.`,
 };
 
-export function stampPosition(cell) {
-  return { x: 8.33 + (cell % COLUMNS) * 16.66, y: 10 + Math.floor(cell / COLUMNS) * 20 };
-}
-// The stamp already sitting on a cell, if any (saved stamps keep the same positions). A save from earlier
-// today may stack two stamps on one cell; the last one drawn is the one on top, so that is the one found.
-const sameSpot = (stamp, at) => Math.abs(stamp.x - at.x) < 1e-6 && Math.abs(stamp.y - at.y) < 1e-6;
-export function stampAt(state, cell) {
-  const at = stampPosition(cell);
-  return state.stamps.findLastIndex(s => sameSpot(s, at));
-}
 const sameStamp = (a, b) => a.shape === b.shape && a.color === b.color && a.rotation === b.rotation;
 
 // Hand-picked light/shadow steps of the festival's coral, lantern, mint, sea, lavender and paper paints.
@@ -104,7 +99,7 @@ function start(snapshot, { chapter = 0, grade = 1 } = {}) {
   return { state: normalizeEncounterSnapshot('art', snapshot, grade, chapter), ui: { color: ENCOUNTER_COLORS[0], shape: 'star', rotation: 0, history: [] } };
 }
 
-const opening = state => encounterOpeningDialogue(state);
+const opening = bannerOpening;
 
 const canUndo = (state, ui) => (ui.history?.length || 0) > 0 || state.stamps.length > 0;
 const remember = (ui, state) => ({ ...ui, history: [...(ui.history || []), state].slice(-HISTORY) });
@@ -114,8 +109,23 @@ function commands(state, ui) {
     { id: 'undo', icon: 'undo', label: 'Undo', disabled: !canUndo(state, ui) },
     { id: 'turn', icon: 'turn', label: 'Turn' },
     { id: 'fill', icon: 'fill', label: 'Fill cloth' },
-    { id: 'finish', icon: 'check', label: 'Hang banner', finish: true, disabled: !encounterReady(state) },
+    { id: 'finish', icon: 'check', label: 'Hang banner', finish: true, disabled: !bannerReady(state) },
   ];
+}
+
+function stampedLine(state, cell) {
+  if (patternFor(state.grade)) {
+    if (patternReport(state).complete) return BANNER_RULE_LINES.patternDone;
+    return PATTERN_CELLS.includes(cell) ? BANNER_RULE_LINES.fits : BANNER_RULE_LINES.free;
+  }
+  if (state.grade >= 3) {
+    const report = symmetryReport(state);
+    if (!report.symmetric) return BANNER_RULE_LINES.mirror;
+    if (bannerReady(state)) return BANNER_RULE_LINES.mirrorDone;
+    if (state.grade >= 4 && report.count >= 6 && report.colors.size < 2) return BANNER_RULE_LINES.secondColor;
+    return state.grade >= 4 ? BANNER_RULE_LINES.pairColors : BANNER_RULE_LINES.pair;
+  }
+  return BANNER_LINES.stamped;
 }
 
 function act(state, ui, action) {
@@ -124,7 +134,10 @@ function act(state, ui, action) {
       const history = ui.history || [];
       // A saved banner arrives with stamps but no history: Undo still lifts the last stamp.
       const before = history.length ? history.at(-1) : { ...state, stamps: state.stamps.slice(0, -1) };
-      const line = before.stamps.length ? BANNER_LINES.undone : `${BANNER_LINES.undone} ${NOT_READY_LINE}`;
+      const hint = bannerReady(state) && !bannerReady(before)
+        ? patternFor(state.grade) ? BANNER_RULE_LINES.patternAgain : state.grade >= 3 ? BANNER_RULE_LINES.mirrorAgain : NOT_READY_LINE
+        : !before.stamps.length && !(state.grade > 0) ? NOT_READY_LINE : '';
+      const line = BANNER_LINES.undone + (hint ? ` ${hint}` : '');
       return { state: before, ui: { ...ui, history: history.slice(0, -1) }, line };
     }
     if (action.id === 'turn') return { state, ui: { ...ui, rotation: (ui.rotation + 45) % 360 }, line: BANNER_LINES.turned };
@@ -139,18 +152,25 @@ function act(state, ui, action) {
   if (ENCOUNTER_COLORS.includes(action.color)) return { state, ui: { ...ui, color: action.color }, line: BANNER_LINES.paint(action.color) };
   if (BANNER_SHAPES.includes(action.shape)) return { state, ui: { ...ui, shape: action.shape }, line: BANNER_LINES.stamp(action.shape) };
   if (Number.isInteger(action.cell) && action.cell >= 0 && action.cell < CELLS) {
+    if (patternFor(state.grade)) {
+      if (YUKI_CELLS.includes(action.cell)) return { state, ui, line: BANNER_RULE_LINES.yuki };
+      const expected = expectedAt(state.grade, action.cell);
+      if (expected && (expected.shape !== ui.shape || expected.color !== ui.color)) return { state, ui, line: BANNER_RULE_LINES.wrong };
+    }
     const stamp = { shape: ui.shape, color: ui.color, rotation: ui.rotation, ...stampPosition(action.cell) };
     const index = stampAt(state, action.cell);
     // Tapping a cell that already holds a stamp swaps it for the new one instead of piling up.
     if (index >= 0) {
       // The very same stamp again changes nothing, so there is nothing for Undo to take back.
-      if (sameStamp(state.stamps[index], stamp)) return { state, ui, line: BANNER_LINES.stamped };
+      if (sameStamp(state.stamps[index], stamp)) return { state, ui, line: stampedLine(state, action.cell) };
       // Keep saved stamps in edit order for Undo after reopening without live history.
       const stamps = [...state.stamps.filter((_, i) => i !== index), stamp];
-      return { state: { ...state, stamps }, ui: remember(ui, state), line: BANNER_LINES.stamped };
+      const next = { ...state, stamps };
+      return { state: next, ui: remember(ui, state), line: stampedLine(next, action.cell) };
     }
     if (state.stamps.length >= MAX_STAMPS) return { state, ui, line: FULL_LINE };
-    return { state: { ...state, stamps: [...state.stamps, stamp] }, ui: remember(ui, state), line: BANNER_LINES.stamped };
+    const next = { ...state, stamps: [...state.stamps, stamp] };
+    return { state: next, ui: remember(ui, state), line: stampedLine(next, action.cell) };
   }
   return { state, ui };
 }
@@ -186,6 +206,17 @@ function mountField(host, { dispatch }) {
   const layer = document.createElement('div');
   layer.className = 'banner-stamps';
   layer.setAttribute('role', 'img');
+  const makeSpots = (count, isYuki) => Array.from({ length: count }, () => {
+    const spot = document.createElement('span');
+    spot.className = `banner-stamp-spot${isYuki ? ' banner-stamp-spot--yuki' : ''}`;
+    spot.hidden = true;
+    layer.append(spot);
+    return spot;
+  });
+  const yukiSpots = makeSpots(3, true), childSpots = makeSpots(MAX_STAMPS, false);
+  const fold = document.createElement('div');
+  fold.className = 'banner-fold'; fold.hidden = true;
+  fold.setAttribute('aria-hidden', 'true');
   const grid = document.createElement('div');
   grid.className = 'banner-grid';
   grid.setAttribute('role', 'group');
@@ -198,7 +229,7 @@ function mountField(host, { dispatch }) {
     grid.append(b);
     return b;
   });
-  cloth.append(layer, grid);
+  cloth.append(layer, fold, grid);
   const pole = document.createElement('div');
   pole.className = 'banner-pole';
   const middle = document.createElement('div');
@@ -255,18 +286,35 @@ function mountField(host, { dispatch }) {
     b.tabIndex = on ? 0 : -1;
   });
 
+  const drawStamps = (spots, values) => spots.forEach((spot, i) => {
+    const stamp = values[i];
+    spot.hidden = !stamp;
+    if (!stamp) return;
+    spot.style.left = `${stamp.x}%`; spot.style.top = `${stamp.y}%`;
+    const html = stampSVG(stamp.shape, stamp.color, stamp.rotation);
+    if (spot.innerHTML !== html) spot.innerHTML = html;
+  });
+
   function update(state, ui) {
     if (state !== current.state) {
       const [light, shade] = PAINT_STEPS[state.background] || PAINT_STEPS['#fff1cf'];
       cloth.setAttribute('style', `background:${state.background};--cloth-light:${light};--cloth-shade:${shade}`);
-      layer.innerHTML = state.stamps.map(s => `<span class="banner-stamp-spot" style="left:${s.x}%;top:${s.y}%">${stampSVG(s.shape, s.color, s.rotation)}</span>`).join('');
+      const yuki = yukiStamps(state.grade);
+      drawStamps(yukiSpots, yuki);
+      drawStamps(childSpots, state.stamps);
+      fold.hidden = !(state.grade >= 3);
+      const lonely = new Set(state.grade >= 3 ? symmetryReport(state).unmatched : []);
       layer.setAttribute('aria-label', `Your banner, ${ENCOUNTER_COLOR_NAMES[state.background]} cloth, ${state.stamps.length} ${state.stamps.length === 1 ? 'stamp' : 'stamps'}`);
       cells.forEach((cell, i) => {
         const stamp = state.stamps[stampAt(state, i)];
-        const contents = stamp
+        const contents = yuki[i]
+          ? `Yuki’s ${ENCOUNTER_COLOR_NAMES[yuki[i].color]} ${yuki[i].shape}. Part of the pattern.${stamp ? ` Your ${ENCOUNTER_COLOR_NAMES[stamp.color]} ${stamp.shape} is on top.` : ''}`
+          : stamp
           ? `${ENCOUNTER_COLOR_NAMES[stamp.color]} ${stamp.shape}, rotated ${stamp.rotation} degrees. Tap to replace.`
           : 'Empty. Tap to stamp.';
-        cell.setAttribute('aria-label', `Row ${Math.floor(i / COLUMNS) + 1}, column ${(i % COLUMNS) + 1}. ${contents}`);
+        cell.classList.toggle('banner-cell--yuki', Boolean(yuki[i]));
+        cell.classList.toggle('banner-cell--lonely', lonely.has(i));
+        cell.setAttribute('aria-label', `Row ${Math.floor(i / COLUMNS) + 1}, column ${(i % COLUMNS) + 1}. ${contents}${lonely.has(i) ? ' Needs its mirror.' : ''}`);
       });
     }
     if (ui !== current.ui) {
@@ -298,7 +346,8 @@ function mountField(host, { dispatch }) {
 export default {
   kind: 'art',
   title: 'Your colors, flying high',
-  help: ['Pick a paint and a stamp.', 'Tap the cloth to stamp it.', 'Turn, Fill cloth or Undo any time.', 'Choose Hang banner.'],
+  help: bannerHelp(1),
+  helpFor: bannerHelp,
   notReadyLine: NOT_READY_LINE,
   start, opening, commands, act, mountField,
 };
