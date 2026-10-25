@@ -3,7 +3,7 @@ import { cleanChainCreation } from './chain.js';
 import { cleanHelpdayCreation } from './helpday.js';
 import { cleanTalesCreation } from './tales.js';
 import { CHARACTERS } from './data.js';
-import { TEMPOS, FORMS } from './audio.js';
+import { TEMPOS, FORMS, normalizePreset } from './audio.js';
 import { normalizeCommunityMap, normalizeSign } from './encounters.js';
 
 export const STORAGE_KEY = 'all-aboard-demo-v2';
@@ -17,7 +17,7 @@ const safeColor = value => artColors.includes(value) ? value : '#fff1cf';
 const scopes = ['chapter-0', ...[1, 2, 3, 4, 5].map(grade => `chapter-1-grade-${grade}`)];
 
 export function createState() {
-  return { version: 2, hasStarted: false, chapter: 0, grade: 1, avatar: 'boy', settings: { largeText: false, reducedMotion: false, autoRead: false }, progress: {}, drafts: {} };
+  return { version: 2, hasStarted: false, chapter: 0, grade: 1, avatar: 'boy', settings: { largeText: false, reducedMotion: false, autoRead: false, musicAutoplay: true }, progress: {}, drafts: {} };
 }
 
 export function scopeKey(chapter, grade) {
@@ -46,7 +46,7 @@ export function cleanCreation(subjectId, input) {
   if (subjectId === 'writing') return { ...base, ...normalizeSign(input, base.grade) };
   if (subjectId === 'community') return { ...base, ...normalizeCommunityMap(input) };
   const trackIds = ['bass', 'voice', 'melody', 'percussion'];
-  return { ...base, tempo: TEMPOS.includes(input.tempo) ? input.tempo : 90, form: FORMS.includes(input.form) ? input.form : 'A', masterVolume: finite(input.masterVolume, 0, 1, 0.45), tracks: trackIds.map(id => {
+  return { ...base, preset: normalizePreset(input.preset), tempo: TEMPOS.includes(input.tempo) ? input.tempo : 90, form: FORMS.includes(input.form) ? input.form : 'A', masterVolume: finite(input.masterVolume, 0, 1, 0.45), tracks: trackIds.map(id => {
     const track = Array.isArray(input.tracks) ? input.tracks.find(item => isObject(item) && item.id === id) : null;
     return { id, enabled: track?.enabled === true, pattern: track?.pattern === 1 ? 1 : 0, notes: Array.from({ length: 8 }, (_, index) => { const note = track?.notes?.[index]; return Number.isInteger(note) && note >= 0 && note <= 4 ? note : null; }), volume: finite(track?.volume, 0, 1, 0.65) };
   }) };

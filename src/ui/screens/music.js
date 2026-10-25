@@ -1,4 +1,4 @@
-import { createBandEngine, sanitizeBandSnapshot, applyBeatChanges, notesForBeat, phraseLength } from '../../audio.js';
+import { createBandEngine, sanitizeBandSnapshot, applyBeatChanges, notesForBeat, phraseLength, normalizePreset, BAND_PRESETS } from '../../audio.js';
 import { createPlaybackController, bandPlaybackMessage, CAST } from '../../music.js';
 import { getDraft, getCreations, saveDraft, publishCreation } from '../../progress.js';
 import {
@@ -16,6 +16,7 @@ import { withScope } from '../save.js';
 import { creationMarkup } from '../creations.js';
 import { showItemGet } from './item-get.js';
 import { openSoundsWindow } from './sounds.js';
+import { openWindow } from '../window.js';
 
 // Kiko's Sound Garden: four musicians on floating pedestals, eight lanterns that edit the grade's lead
 // musician, a Speed sign (plus Echo at grade 2 and Form at grades 4–5), and the 2×2 menu.
@@ -25,6 +26,12 @@ const BOX = { width: 160, top: 132 };        // each musician button, relative t
 const LANTERN_GAP = 48;                      // lantern i sits at rail x = i * LANTERN_GAP
 const NOTE_STEP = 19, REST_STEP = 96;        // staircase: La hangs at the string, each pitch down adds a step, rests hang lowest
 const PART = { bass: 'Bass', voice: 'Singer', melody: 'Whistle', percussion: 'Rhythm' };
+const PIANO_PART = {
+  bass: { part: 'Low', sound: 'low piano', line: 'I play the low piano notes.' },
+  voice: { part: 'Middle', sound: 'middle piano', line: 'I play the middle piano notes.' },
+  melody: { part: 'High', sound: 'high piano', line: 'I play the high piano notes.' },
+  percussion: { part: 'Rhythm', sound: 'soft drum rhythm', line: 'I add a soft drum beat.' },
+};
 const LESSON = {
   0: 'Slow and fast · high and low',
   1: 'Cricket’s rhythm · sound and rest',
@@ -49,17 +56,19 @@ const trackOf = (band, id) => band.tracks.find(t => t.id === id);
 export const lanternStep = note => (note === null || note === undefined ? REST_STEP : (4 - note) * NOTE_STEP);
 
 export function createMusicScene(ctx) {
-  let root = null, menu = null, dialogue = null, engine = null, playback = null, sounds = null;
+  let root = null, menu = null, dialogue = null, engine = null, playback = null, sounds = null, presetWindow = null;
   let band = null, grade = 0, lead = null, selected = 'melody';
   let quiet = false, quietTimer = null, quietBand = null, quietBeat = 0, playedOnce = false;
   let echo = null, echoCount = 0, echoToken = 0;   // echo: { mask, phase: 'demo' | 'copy', beat, timer }
   let destroyed = false, finishing = false;
+  let presetUndo = null, audition = false, muteDialogue = false, suppressPlaybackLine = 0;
   let reward = null;
   const $ = selector => root.querySelector(selector);
   const settings = () => ctx.getState().settings ?? {};
   const say = (speaker, words) => { if (!destroyed) dialogue.say(speaker, words); };
   const lanterns = () => [...root.querySelectorAll('.music-lantern')];
   const edited = () => playedOnce || isEdited(band, grade);
+  const musicianSound = c => normalizePreset(band.preset) === 'minecraft' ? PIANO_PART[c.id] : { part: PART[c.id], sound: c.sound, line: c.line };
 
   // ---- Stage ----
   function musicianMarkup(c, i) {
@@ -78,7 +87,7 @@ export function createMusicScene(ctx) {
           <span class="music-zzz" aria-hidden="true">z<i>z</i></span>
         </span>
         ${c.id === 'percussion' ? '<span class="px-chip music-badge" aria-hidden="true">steady part</span>' : ''}
-        <span class="px-chip music-name" aria-hidden="true"><i class="music-swatch"></i>${c.name} · ${PART[c.id]}</span>
+        <span class="px-chip music-name" aria-hidden="true"><i class="music-swatch"></i><span class="music-name__text">${c.name} · ${musicianSound(c).part}</span></span>
       </button>`;
   }
   function lanternMarkup(i) {
@@ -105,7 +114,11 @@ export function createMusicScene(ctx) {
         ${Array.from({ length: 9 }, (_, i) => `<i class="music-flower" style="--x:${40 + i * 108}px;--y:${352 + (i % 3) * 8}px;--petal:var(${['--art', '--lantern', '--writing'][i % 3]})"></i>`).join('')}</div>
       <button type="button" class="px-button music-back">${icon('back')}<span>Village</span></button>
       <p class="px-chip music-lesson"><span>${LESSON[Math.max(0, Math.min(5, grade))]}</span></p>
-      <p class="px-chip px-name music-title">${icon('music')}<span>Kiko’s Sound Garden</span></p>
+      <div class="music-example">
+        <button type="button" class="px-button music-preset">${icon('music')}<span class="music-preset__name"></span>${icon('turn')}</button>
+        <span class="music-example__credit"></span>
+        <span class="sr-only music-playback-status" aria-live="polite" aria-atomic="true"></span>
+      </div>
       ${signsMarkup()}
       <div class="music-lanterns" role="${lead ? 'group' : 'img'}" aria-label="${lead ? `${leadName}’s lanterns. Beat ${lead === 'percussion' ? 'sounds and rests' : 'notes'}.` : 'Eight beat lanterns'}"${lead ? ` style="--lead:${MUSICIAN_COLORS[lead]}"` : ''}><i class="music-string"></i>${Array.from({ length: 8 }, (_, i) => lanternMarkup(i)).join('')}</div>
       <div class="music-band">${CAST.map(musicianMarkup).join('')}</div>
@@ -119,7 +132,8 @@ export function createMusicScene(ctx) {
       button.classList.toggle('is-resting', !on);
       button.classList.toggle('is-lead', c.id === lead);
       button.setAttribute('aria-pressed', String(on));
-      button.setAttribute('aria-label', `${c.name}, ${c.sound}, ${on ? 'in the band. Tap to rest.' : 'resting. Tap to invite.'}${c.id === lead ? ' Edit on the lanterns above.' : ''}`);
+      button.querySelector('.music-name__text').textContent = `${c.name} · ${musicianSound(c).part}`;
+      button.setAttribute('aria-label', `${c.name}, ${musicianSound(c).sound}, ${on ? 'in the band. Tap to rest.' : 'resting. Tap to invite.'}${c.id === lead ? ' Edit on the lanterns above.' : ''}`);
     }
   }
   // The lanterns show the lead's eight beats: sound/rest glyphs for Cricket, a note staircase for Kiko.
@@ -178,29 +192,50 @@ export function createMusicScene(ctx) {
 
   // ---- Sound ----
   function refreshMenu() { menu?.set(musicCommands({ playing: Boolean(playback?.active), quiet, edited: edited() })); }
+  function paintPreset() {
+    const id = normalizePreset(band.preset), example = BAND_PRESETS[id];
+    $('.music-preset__name').textContent = example.name;
+    $('.music-preset').setAttribute('aria-label', `${example.name} preset. Choose a starting tune.`);
+    $('.music-example__credit').textContent = id === 'minecraft' ? 'C418 · editable example' : 'An original band tune';
+  }
+  function rememberAutoplay(enabled) {
+    const state = ctx.getState();
+    ctx.commit({ ...state, settings: { ...state.settings, musicAutoplay: enabled } });
+  }
+  function sayPlayback(words) {
+    // Transport feedback must not read itself aloud and cancel the music it just started.
+    muteDialogue = true;
+    try { say('Kiko', words); } finally { muteDialogue = false; }
+  }
   function stopQuiet() { clearInterval(quietTimer); quietTimer = null; quiet = false; quietBand = null; }
-  function stopEchoTimers() {
+  function stopEchoTimers({ silent = false } = {}) {
     echoToken++;
     if (!echo) return;
     clearInterval(echo.timer); echo.timer = null;
     if (echo.phase === 'demo') {   // a copy in progress survives Play and See beat; a cut demo says so
       echo = null;
-      say('Kiko', ECHO_LINES.stopped);   // whoever cut it (Play, a tap, Echo again) says its own line next
+      if (!silent) say('Kiko', ECHO_LINES.stopped);   // whoever cut it says its own line next
     }
     $('[data-sign="echo"]')?.classList.remove('is-busy');
   }
-  // Stops the band, See beat and the echo demo. Used by Stop, pause(), leaving, saving and destroy().
-  function stopAll() {
-    stopQuiet();
-    stopEchoTimers();
-    if (playback?.active) playback.stop(); else engine?.stop();
-    clearBeats();
-    paintPhrase(null);
-    refreshMenu();
+  // Stops every listening mode. None resumes automatically after a pause, window or hidden tab.
+  function stopAll({ silent = false } = {}) {
+    if (silent) suppressPlaybackLine++;
+    try {
+      stopQuiet();
+      stopEchoTimers({ silent });
+      if (playback?.active) playback.stop(); else engine?.stop();
+      clearBeats();
+      paintPhrase(null);
+      refreshMenu();
+    } finally { if (silent) suppressPlaybackLine--; }
   }
   function togglePlay() {
-    if (playback.active) { stopAll(); return; }
-    stopAll();
+    audition = false;
+    if (playback.active) { rememberAutoplay(false); stopAll(); return; }
+    stopAll({ silent: true });
+    stopSpeaking();
+    rememberAutoplay(true);
     playedOnce = true;
     void playback.toggle(band);
   }
@@ -217,12 +252,14 @@ export function createMusicScene(ctx) {
     quietTimer = setInterval(tick, 60000 / band.tempo);
   }
   function toggleQuiet() {
+    rememberAutoplay(false);
+    audition = false;
     if (quiet) { stopAll(); say('Kiko', 'See beat stopped. Your song is safe.'); return; }
     stopAll();
     quiet = true; quietBeat = 0; quietBand = sanitizeBandSnapshot(band); playedOnce = true;
     startQuietTicker();
     refreshMenu();
-    say('Kiko', bandPlaybackMessage(band, { quiet: true }));
+    sayPlayback(bandPlaybackMessage(band, { quiet: true }));
   }
 
   // ---- Saving and editing ----
@@ -234,6 +271,7 @@ export function createMusicScene(ctx) {
     interruptDemo();
     band = next;
     engine.update(band);
+    paintPreset();
     if (save) saveNow();
     paintMusicians();
     paintRail();
@@ -245,7 +283,7 @@ export function createMusicScene(ctx) {
   function tapMusician(id) {
     selected = id;
     const next = toggleMusician(band, id), c = castOf(id), on = trackOf(next, id).enabled;
-    edit(next, { line: [c.name, on ? `${c.name} joins on the next beat. ${c.line}` : `${c.name} rests for now. Tap again to invite them back.`] });
+    edit(next, { line: [c.name, on ? `${c.name} joins on the next beat. ${musicianSound(c).line}` : `${c.name} rests for now. Tap again to invite them back.`] });
   }
   function tapLantern(beat) {
     if (!lead) return;
@@ -276,7 +314,7 @@ export function createMusicScene(ctx) {
     const mask = echo?.mask ?? pickEcho(echoCount), token = echoToken;
     echo = { mask, phase: 'demo', beat: 0, timer: null };
     $('[data-sign="echo"]')?.classList.add('is-busy');
-    say('Kiko', ECHO_LINES.listen);
+    sayPlayback(ECHO_LINES.listen);
     // One-off band: only Cricket sounds, and only on the picked beats.
     const demo = {
       ...sanitizeBandSnapshot(band), form: 'A',
@@ -311,6 +349,59 @@ export function createMusicScene(ctx) {
     echo.phase = 'copy';
     $('[data-sign="echo"]')?.classList.remove('is-busy');
     edit(setTrackNotes(band, 'percussion', []), { line: ['Kiko', ECHO_LINES.copy] });
+  }
+
+  // Presets are editable band scores. Switching keeps the child's volume and chosen form; one Undo
+  // restores the entire previous score and whether it had already been played for the finish gate.
+  function choosePreset(id) {
+    const preset = normalizePreset(id);
+    if (preset === normalizePreset(band.preset)) return;
+    presetUndo = { band: sanitizeBandSnapshot(band), playedOnce };
+    playedOnce = false;
+    const next = { ...defaultBandFor(grade, preset), masterVolume: band.masterVolume, form: band.form };
+    edit(next);
+    sayPlayback(`${BAND_PRESETS[preset].name} is your starting tune. Tap a friend or a lantern to make it yours.`);
+    auditionBand();
+  }
+  function undoPreset() {
+    if (!presetUndo) return;
+    const previous = presetUndo;
+    presetUndo = null;
+    playedOnce = previous.playedOnce;
+    edit(previous.band);
+    sayPlayback('Your previous band is back. Your edits are safe.');
+  }
+  function auditionBand() {
+    if (band.masterVolume === 0 || document.hidden || destroyed) return;
+    audition = true;
+    stopSpeaking();
+    void playback.toggle(band);
+  }
+  function openPresets() {
+    if (ctx.scenes?.busy || presetWindow || sounds || finishing) return;
+    stopAll({ silent: true });
+    stopSpeaking();
+    const current = normalizePreset(band.preset), body = document.createElement('div');
+    body.className = 'music-presets';
+    body.innerHTML = `<p class="music-presets__intro">Choose a starting tune. Then make it yours.</p>
+      <div class="music-presets__choices">${['minecraft', 'meadow'].map(id => `<button type="button" class="px-button music-presets__choice" data-preset="${id}" aria-pressed="${id === current}">
+        ${icon(id === current ? 'check' : 'music')}<span>${BAND_PRESETS[id].name}</span><small>${id === 'minecraft' ? 'C418 · editable example' : 'Our original band tune'}</small>
+      </button>`).join('')}</div>
+      <p class="music-presets__note">A new tune replaces these notes. Undo brings them back.</p>
+      <button type="button" class="px-button music-presets__undo" data-undo-preset${presetUndo ? '' : ' disabled'}>${icon('undo')}<span>Undo preset</span></button>`;
+    body.addEventListener('click', event => {
+      const button = event.target.closest('button');
+      if (!button || !body.contains(button)) return;
+      if (button.dataset.preset) {
+        const id = button.dataset.preset;
+        presetWindow?.close();
+        choosePreset(id);
+      } else if ('undoPreset' in button.dataset) {
+        presetWindow?.close();
+        undoPreset();
+      }
+    });
+    presetWindow = openWindow(ctx.stage, { title: 'Starting tune', body, initialFocus: `[data-preset="${current}"]`, onClose: () => { presetWindow = null; } });
   }
 
   // ---- Sounds window (another module owns it; it talks back through these callbacks) ----
@@ -358,6 +449,7 @@ export function createMusicScene(ctx) {
     else if (id === 'save') void finish();
   }
   const onHidden = () => { if (document.hidden) stopAll(); };
+  const onPageHide = () => stopAll();
 
   // Arrow keys walk a row of buttons the way they walk the musicians; the ends stop, they never wrap.
   function stepAlong(buttons, current, intent) {
@@ -365,8 +457,8 @@ export function createMusicScene(ctx) {
     buttons[Math.max(0, Math.min(buttons.length - 1, i + (intent === 'right' ? 1 : -1)))]?.focus();
     return true;
   }
-  // The top row, left to right: the Village button, then the signs (Speed, Echo, Form) that can be pressed.
-  const topRow = () => [$('.music-back'), ...root.querySelectorAll('.music-sign')].filter(b => b && !b.disabled);
+  // The upper controls: Village, the available lesson signs, then the separate listening clip.
+  const topRow = () => [$('.music-back'), ...root.querySelectorAll('.music-sign'), $('.music-preset')].filter(b => b && !b.disabled);
   const firstLantern = () => root.querySelector('button.music-lantern');
   // Up from the band or the rail lands on the row above; down from the top row lands on the rail, or the menu at K.
   function focusTopRow() { ($('.music-sign:not(:disabled)') ?? $('.music-back'))?.focus(); return true; }
@@ -383,10 +475,10 @@ export function createMusicScene(ctx) {
       selected = lead ?? 'melody';
       build();
       dialogue = createDialogue($('.music-dialogue'), {
-        speak: text => ctx.speak(text),
-        onHelp: () => ctx.open.help('Kiko’s Sound Garden', helpLines(grade)),
+        speak: text => { stopAll({ silent: true }); return ctx.speak(text); },
+        onHelp: () => { stopAll({ silent: true }); ctx.open.help('Kiko’s Sound Garden', helpLines(grade)); },
         isLarge: () => settings().largeText,
-        autoRead: () => settings().autoRead,
+        autoRead: () => settings().autoRead && !muteDialogue,
       });
       menu = createCommandMenu($('.music-menu'), { onChoose: choose });
       engine = createBandEngine({
@@ -394,18 +486,21 @@ export function createMusicScene(ctx) {
         onStatus: status => {
           if (destroyed) return;
           if (status === 'stopped') { playback?.engineStopped(); if (!quiet) { clearBeats(); paintPhrase(null); } }
-          if (status === 'interrupted') { stopEchoTimers(); say('Kiko', 'Sound was interrupted. Press Play to start again.'); }
+          if (status === 'interrupted') { stopEchoTimers(); say('Kiko', 'Sound was interrupted. Press Play band to start again.'); }
         },
       });
       playback = createPlaybackController(engine, {
         onState: (state, reason) => {
           if (destroyed) return;
           refreshMenu();
-          say('Kiko', reason === 'unavailable' ? 'Sound is unavailable. Try See beat to see your band.'
+          $('.music-playback-status').textContent = reason === 'unavailable' ? 'Press Play band to listen. Or try See beat.' : state === 'playing' ? 'Your band is playing.' : '';
+          if (audition || suppressPlaybackLine) return;
+          sayPlayback(reason === 'unavailable' ? 'Sound is unavailable. Try Play band or See beat.'
             : state === 'starting' ? 'Waking up the band…' : state === 'playing' ? bandPlaybackMessage(band) : 'Band stopped. Your song is safe.');
         },
       });
       engine.update(band);
+      $('.music-preset').addEventListener('click', openPresets);
       $('.music-band').addEventListener('click', event => {
         const button = event.target.closest('.music-musician');
         if (button) tapMusician(button.dataset.id);
@@ -422,13 +517,16 @@ export function createMusicScene(ctx) {
       });
       $('.music-back').addEventListener('click', () => { void leave(); });
       document.addEventListener('visibilitychange', onHidden);
+      window.addEventListener('pagehide', onPageHide);
       paintMusicians();
       paintRail();
       paintSpeed();
       paintForm();
       refreshMenu();
-      say('Kiko', openingLine(grade));
+      paintPreset();
+      say('Kiko', openingLine(grade, band.preset));
       menu.focus();
+      if (settings().musicAutoplay !== false && !settings().autoRead) auditionBand();
     },
     handleIntent(intent) {
       if (finishing) return intent === 'b';   // the item-get card handles its own A; B waits
@@ -436,7 +534,7 @@ export function createMusicScene(ctx) {
       if (intent === 'a') { if (dialogue.next()) return true; menu.focus(); return true; }
       const active = document.activeElement;
       const lantern = active?.closest?.('button.music-lantern'), musician = active?.closest?.('.music-musician');
-      const top = active?.closest?.('.music-sign, .music-back');
+      const top = active?.closest?.('.music-sign, .music-back, .music-preset');
       if (top && (intent === 'left' || intent === 'right')) return stepAlong(topRow(), top, intent);
       if (top && intent === 'down') return focusBelowTopRow();
       if (top && intent === 'up') return true;   // the top row is the top
@@ -457,12 +555,15 @@ export function createMusicScene(ctx) {
       reward?.cancel();
       reward = null;
       document.removeEventListener('visibilitychange', onHidden);
+      window.removeEventListener('pagehide', onPageHide);
       engine?.destroy();
       dialogue?.destroy();
       menu?.destroy();
       root?.remove();
       sounds?.close();
       sounds = null;
+      presetWindow?.close();
+      presetWindow = null;
     },
   };
 }

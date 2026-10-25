@@ -50,7 +50,7 @@ test('K: lanterns are pictures, Speed sign shows, no Echo/Form, Send band disabl
   assert.equal(ctx.stage.querySelector('[data-sign="form"]'), null);
   assert.match(ctx.stage.querySelector('.music').innerHTML, /Slow and fast · high and low/);
   assert.equal(slot(ctx.stage, 'save').disabled, true);
-  assert.match(text(ctx), /Who sings low/);
+  assert.match(text(ctx), /Who plays low/);
   slot(ctx.stage, 'quiet').click();
   assert.equal(slot(ctx.stage, 'save').disabled, false, 'See beat counts as played');
   assert.equal(slot(ctx.stage, 'quiet').querySelector('.cmd-slot__label').textContent, 'Stop');
@@ -98,7 +98,8 @@ test('K: the opening instruction describes resting and rejoining the fresh band'
       assert.match(text(ctx), /^Tap a friend to rest or join\./);
       if (largeText) assert.ok(text(ctx).length <= 56);
       const friends = ctx.stage.querySelectorAll('.music-musician');
-      assert.ok(friends.every(friend => friend.getAttribute('aria-pressed') === 'true'));
+      assert.ok(friends.slice(0, 3).every(friend => friend.getAttribute('aria-pressed') === 'true'));
+      assert.equal(friends[3].getAttribute('aria-pressed'), 'false', 'Cricket starts resting in the quiet example at K');
       const kiko = friends.find(friend => friend.dataset.id === 'melody');
       kiko.click();
       assert.equal(kiko.getAttribute('aria-pressed'), 'false');
@@ -140,11 +141,11 @@ test('a completed default band stays ready after storage reload at every grade',
 test('grade 3: lanterns cycle Kiko notes, hang by pitch, Kiko names the shape', () => {
   const ctx = fakeCtx(at(3)), scene = createMusicScene(ctx); scene.mount();
   const ls = ctx.stage.querySelectorAll('button.music-lantern');
-  assert.equal(ls[0].querySelector('b').textContent, '–');   // melody default beat 1 is a rest
-  assert.equal(ls[0].style['--step'], '96px');
-  assert.equal(ls[1].querySelector('b').textContent, 'La'); assert.equal(ls[1].style['--step'], '0px');
-  ls[0].click();
-  assert.equal(ls[0].querySelector('b').textContent, 'Do'); assert.equal(ls[0].style['--step'], '76px');
+  assert.equal(ls[0].querySelector('b').textContent, 'Mi');
+  assert.equal(ls[0].style['--step'], '38px');
+  assert.equal(ls[1].querySelector('b').textContent, '–'); assert.equal(ls[1].style['--step'], '96px');
+  ls[1].click();
+  assert.equal(ls[1].querySelector('b').textContent, 'Do'); assert.equal(ls[1].style['--step'], '76px');
   assert.match(text(ctx), /Up and down|goes/);
   assert.equal(lanternStep(2), 38);
   assert.ok(ctx.stage.querySelector('.music-musician[data-id="melody"]').classList.contains('is-lead'));
@@ -155,7 +156,7 @@ test('grade 3: lanterns cycle Kiko notes, hang by pitch, Kiko names the shape', 
   speed.click();
   assert.equal(speed.querySelector('.music-sign__word').textContent, 'Fast');
   assert.match(text(ctx), /Fast/);
-  assert.equal(ctx.getState().drafts?.music?.tempo ?? JSON.stringify(ctx.getState()).includes('120'), true);
+  assert.equal(getDraft(ctx.getState(), 'music').tempo, 120);
   scene.destroy();
 });
 
@@ -176,6 +177,25 @@ test('grade 4: Form chip disabled at A B, steady badge; grade 5 cycles form and 
   assert.match(text(ctx), /Just tune A/);
   assert.equal(slot(ctx.stage, 'save').disabled, false);
   scene.destroy();
+});
+
+test('musician names describe the selected piano or Meadow sounds after a preset switch', () => {
+  const state = at(3); state.settings.musicAutoplay = false;
+  const ctx = fakeCtx(state), scene = createMusicScene(ctx); scene.mount();
+  try {
+    const nori = ctx.stage.querySelector('.music-musician[data-id="voice"]');
+    const kiko = ctx.stage.querySelector('.music-musician[data-id="melody"]');
+    assert.match(nori.getAttribute('aria-label'), /middle piano/);
+    assert.equal(nori.querySelector('.music-name__text').textContent, 'Nori · Middle');
+    assert.match(kiko.getAttribute('aria-label'), /high piano/);
+    ctx.stage.querySelector('.music-preset').click();
+    ctx.stage.querySelector('[data-preset="meadow"]').click();
+    assert.match(nori.getAttribute('aria-label'), /Doo-doo singer/);
+    assert.equal(nori.querySelector('.music-name__text').textContent, 'Nori · Singer');
+    assert.match(kiko.getAttribute('aria-label'), /Whistling bird/);
+    nori.click(); nori.click();
+    assert.match(text(ctx), /I sing in the middle/);
+  } finally { scene.destroy(); }
 });
 
 // Fake intervals and a monotonic clock drive silent Echo and See beat without real waits.
@@ -396,8 +416,10 @@ test('keyboard: up from the rail reaches the signs, arrows walk Village and the 
   scene.handleIntent('right');
   assert.equal(doc.activeElement, form);
   scene.handleIntent('right');
-  assert.equal(doc.activeElement, form, 'stops at the end');
-  scene.handleIntent('left'); scene.handleIntent('left');
+  assert.equal(doc.activeElement, ctx.stage.querySelector('.music-preset'), 'preset choices are reachable with the arrow keys');
+  scene.handleIntent('right');
+  assert.equal(doc.activeElement, ctx.stage.querySelector('.music-preset'), 'stops at the end');
+  scene.handleIntent('left'); scene.handleIntent('left'); scene.handleIntent('left');
   assert.equal(doc.activeElement, back, 'Village is the left end of the top row');
   scene.handleIntent('up');
   assert.equal(doc.activeElement, back, 'nothing above the top row');

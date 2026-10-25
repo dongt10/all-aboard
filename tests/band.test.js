@@ -5,7 +5,7 @@ import {
   leadTrack, TEMPO_NAMES, cycleTempo, setTempo, formLabel, cycleForm, setForm, defaultBandFor, setTrackNotes, isEdited,
   melodyShape, shapeLine, ECHO_PATTERNS, pickEcho, echoMatches, patternGlyphs, restsLine, openingLine, helpLines,
 } from '../src/ui/band.js';
-import { createDefaultBand, PATTERNS } from '../src/audio.js';
+import { createDefaultBand, createBandPreset, patternsFor, PATTERNS } from '../src/audio.js';
 import { cleanCreation } from '../src/progress.js';
 import { INK, contrastRatio } from '../src/ui/palette.js';
 
@@ -62,11 +62,15 @@ test('each grade starts from the default band, with A B at grade 4 and A B A at 
   assert.deepEqual(GRADES.map(g => defaultBandFor(g).form), ['A', 'A', 'A', 'A', 'AB', 'ABA']);
   assert.equal(defaultBandFor('k').form, 'A');
   assert.equal(defaultBandFor('5').form, 'ABA');
-  const base = createDefaultBand();
+  const base = createBandPreset('minecraft');
   for (const g of GRADES) {
     const band = defaultBandFor(g);
-    assert.deepEqual(band.tracks, base.tracks);
+    assert.deepEqual(band.tracks.slice(0, 3), base.tracks.slice(0, 3));
+    assert.equal(band.tracks[3].enabled, [1, 2, 4, 5].includes(g), 'Cricket supports rhythm and steady-part lessons');
+    assert.equal(band.tracks[3].volume, .28);
     assert.equal(band.tempo, 90);
+    assert.equal(band.preset, 'minecraft');
+    assert.deepEqual(defaultBandFor(g, 'meadow').tracks, createDefaultBand().tracks);
   }
 });
 test('a band counts as edited once a track, the speed or the form changes', () => {
@@ -92,6 +96,20 @@ test('a default band saved today reads as untouched after the progress round tri
     assert.equal(isEdited(noTempo, g), false, `grade ${g} without a tempo field`);
     assert.equal(isEdited(cleanCreation('music', { ...toggleMusician(saved, 'voice'), chapter: g ? 1 : 0, grade: g }), g), true, `grade ${g} edit survives`);
   }
+});
+test('preset editing and restored rests keep the selected example’s notes', () => {
+  const minecraft = defaultBandFor(3);
+  const tune = setPattern(minecraft, 'bass', 1);
+  assert.deepEqual(tune.tracks[0].notes, patternsFor('minecraft').bass[1]);
+  assert.notDeepEqual(tune.tracks[0].notes, PATTERNS.bass[1]);
+  const rest = toggleBeat(minecraft, 'bass', 3);
+  assert.equal(rest.tracks[0].notes[3], null);
+  assert.equal(toggleBeat(rest, 'bass', 3).tracks[0].notes[3], 0, 'Minecraft restores Do here, not Meadow’s Mi');
+  assert.equal(patternGlyphs('melody', 0, minecraft), '♪ – ♪ – – ♪ – –');
+  assert.equal(minecraft.preset, 'minecraft');
+  const { preset, ...legacy } = createDefaultBand();
+  assert.equal(isEdited(legacy, 3), false, 'a legacy Meadow draft is not silently compared to Minecraft');
+  assert.equal(isEdited({ ...legacy, form: 'ABA' }, 5), false);
 });
 test('band volume alone counts as edited, with the default used for older saves', () => {
   for (const grade of GRADES) {
@@ -159,6 +177,7 @@ test('pattern glyphs and rest counts use kid words', () => {
 test('Kiko opens each grade with the planned line and four help steps that fit a Bigger-words page', () => {
   assert.equal(openingLine(0), 'Tap a friend to rest or join. Who sings low? Who whistles high? Try Slow and Fast!');
   assert.equal(openingLine('k'), openingLine(0));
+  assert.equal(openingLine(0, 'minecraft'), 'Tap a friend to rest or join. Who plays low? Who plays high? Try Slow and Fast!');
   assert.equal(openingLine(1), 'Tap a lantern: sound or rest. Rests are part of the rhythm too!');
   assert.equal(openingLine(2), 'Press Echo. I play a rhythm, then you copy it on the lanterns!');
   assert.equal(openingLine(3), 'Tap a lantern to climb: Do, Re, Mi, Sol, La. Does your tune go up or down?');
@@ -173,7 +192,7 @@ test('Kiko opens each grade with the planned line and four help steps that fit a
     }
     assert.match(help.at(-1), /Send band/);
     const all = help.join(' ');
-    for (const label of ['Play', 'See beat', 'Sounds', 'Send band']) assert.ok(all.includes(label), `grade ${g} help names ${label}`);
+    for (const label of ['Play band', 'See beat', 'Sounds', 'Send band']) assert.ok(all.includes(label), `grade ${g} help names ${label}`);
     assert.match(help[2], /Sounds picks a tune/, 'help says Sounds picks a tune, not only loud or soft');
   }
   helpLines(2).push('x');
@@ -181,7 +200,7 @@ test('Kiko opens each grade with the planned line and four help steps that fit a
 });
 test('music keeps four short commands with icons, and Send band waits for an edit', () => {
   const idle = musicCommands({ playing: false, quiet: false });
-  assert.deepEqual(idle.map(c => c.label), ['Play', 'See beat', 'Sounds', 'Send band']);
+  assert.deepEqual(idle.map(c => c.label), ['Play band', 'See beat', 'Sounds', 'Send band']);
   assert.deepEqual(idle.map(c => c.id), ['play', 'quiet', 'tunes', 'save']);
   assert.deepEqual(idle.map(c => c.icon), ['play', 'quiet', 'music', 'check']);
   assert.deepEqual(musicCommands({ playing: true, quiet: true }).map(c => c.label), ['Stop', 'Stop', 'Sounds', 'Send band']);

@@ -1,4 +1,5 @@
-// Original Meadow Band score and synthesis. No recordings or borrowed melodies.
+// Editable scores and synthesis. Meadow is original; Minecraft is a short teaching
+// arrangement of C418's opening motif. Playback and exports use synthesized notes.
 export const TRACK_IDS = ['bass', 'voice', 'melody', 'percussion'];
 export const PATTERNS = {
   bass: [[0,null,null,2,0,null,3,null],[0,null,2,null,3,null,2,null]],
@@ -6,24 +7,42 @@ export const PATTERNS = {
   melody: [[null,4,null,3,null,2,null,3],[null,2,3,null,4,null,3,2]],
   percussion: [[0,null,1,null,0,1,1,null],[0,1,null,1,0,null,1,1]],
 };
+const MINECRAFT_PATTERNS = {
+  bass: [[3,null,null,0,null,2,null,null],[3,null,null,0,null,null,null,null]],
+  voice: [[0,null,null,4,null,null,null,null],[0,null,null,4,null,3,null,null]],
+  melody: [[2,null,1,null,null,0,null,null],[2,null,1,null,null,null,null,null]],
+  // An optional rhythm layer for children to add; it is not part of C418's piano motif.
+  percussion: PATTERNS.percussion.map(notes=>[...notes]),
+};
+export const BAND_PRESETS = Object.freeze({
+  meadow: Object.freeze({id:'meadow',name:'Meadow',credit:null}),
+  minecraft: Object.freeze({id:'minecraft',name:'Minecraft',credit:'Short editable example from “Minecraft” by C418'}),
+});
+export const normalizePreset = value => value === 'minecraft' ? 'minecraft' : 'meadow';
+export function patternsFor(presetOrBand) {
+  const preset = typeof presetOrBand === 'string' ? presetOrBand : presetOrBand?.preset;
+  return normalizePreset(preset) === 'minecraft' ? MINECRAFT_PATTERNS : PATTERNS;
+}
 // Speeds in beats per minute (Slow, Steady, Fast) and the phrase forms a band can take.
 export const TEMPOS = [60, 90, 120];
 export const FORMS = ['A', 'AB', 'ABA'];
 const clamp = (value, fallback) => Number.isFinite(value) ? Math.max(0,Math.min(1,value)) : fallback;
-export function createDefaultBand() {
-  return {kind:'music',tempo:90,form:'A',masterVolume:.65,tracks:TRACK_IDS.map((id,i)=>({id,enabled:true,pattern:0,notes:[...PATTERNS[id][0]],volume:[.8,.65,.55,.6][i]}))};
+export function createBandPreset(value) {
+  const preset=normalizePreset(value),minecraft=preset==='minecraft',patterns=patternsFor(preset);
+  return {kind:'music',preset,tempo:90,form:'A',masterVolume:.65,tracks:TRACK_IDS.map((id,i)=>({id,enabled:!minecraft||id!=='percussion',pattern:0,notes:[...patterns[id][0]],volume:(minecraft?[.65,.55,.8,.28]:[.8,.65,.55,.6])[i]}))};
 }
+export const createDefaultBand = () => createBandPreset('meadow');
 export function sanitizeBandSnapshot(value) {
-  const band = createDefaultBand();
+  const band = createBandPreset(value?.preset),patterns=patternsFor(band);
   if(!value || typeof value!=='object') return band;
-  band.tempo=TEMPOS.includes(value.tempo)?value.tempo:90;
+  band.tempo=TEMPOS.includes(value.tempo)?value.tempo:band.tempo;
   band.form=FORMS.includes(value.form)?value.form:'A';
   band.masterVolume=clamp(value.masterVolume,band.masterVolume);
   band.tracks=band.tracks.map(base=>{
     const track=Array.isArray(value.tracks)?value.tracks.find(t=>t?.id===base.id):null;
     if(!track) return base;
     const pattern=track.pattern===1?1:0;
-    return {...base,enabled:typeof track.enabled==='boolean'?track.enabled:base.enabled,pattern,volume:clamp(track.volume,base.volume),notes:Array.isArray(track.notes)&&track.notes.length===8?track.notes.map(n=>Number.isInteger(n)&&n>=0&&n<=4?n:null):[...PATTERNS[base.id][pattern]]};
+    return {...base,enabled:typeof track.enabled==='boolean'?track.enabled:base.enabled,pattern,volume:clamp(track.volume,base.volume),notes:Array.isArray(track.notes)&&track.notes.length===8?track.notes.map(n=>Number.isInteger(n)&&n>=0&&n<=4?n:null):[...patterns[base.id][pattern]]};
   });
   return band;
 }
@@ -35,18 +54,18 @@ export function phraseAt(band,beat) {
   const form=FORMS.includes(band?.form)?band.form:'A';
   return form[Math.floor(beat/8)%form.length];
 }
-export function phraseNotes(track,letter) {
+export function phraseNotes(track,letter,preset='meadow') {
   if(letter!=='B'||track.id==='percussion') return [...track.notes];
-  return [...PATTERNS[track.id][(track.pattern===1?1:0)^1]];
+  return [...patternsFor(preset)[track.id][(track.pattern===1?1:0)^1]];
 }
 export function notesForBeat(band,beat) {
   const letter=phraseAt(band,beat);
-  return band.tracks.filter(t=>t.enabled&&t.volume>0).map(t=>({id:t.id,pitch:phraseNotes(t,letter)[beat%8],volume:t.volume})).filter(n=>n.pitch!==null);
+  return band.tracks.filter(t=>t.enabled&&t.volume>0).map(t=>({id:t.id,pitch:phraseNotes(t,letter,band.preset)[beat%8],volume:t.volume,preset:normalizePreset(band.preset)})).filter(n=>n.pitch!==null);
 }
 // Mute, volume and tempo change on the very next beat; notes, patterns and form wait
 // for the start of a phrase so a tune never changes mid-sentence.
 export function applyBeatChanges(current,pending,beat) {
-  return {...pending,form:beat%8===0?pending.form:current.form,tracks:pending.tracks.map(t=>{
+  return {...pending,preset:normalizePreset(beat%8===0?pending.preset:current.preset),form:beat%8===0?pending.form:current.form,tracks:pending.tracks.map(t=>{
     const old=current.tracks.find(x=>x.id===t.id);
     return beat%8===0?{...t,notes:[...t.notes]}:{...t,pattern:old.pattern,notes:[...old.notes]};
   })};
@@ -66,11 +85,32 @@ export function createBandMix(context,destination) {
   input.connect(compressor);compressor.connect(headroom);headroom.connect(destination);
   return {input,destroy(){input.disconnect();compressor.disconnect();headroom.disconnect();}};
 }
-// Exported seam also accepts OfflineAudioContext for rendering/listening to a score.
-export function playBandNote(context,destination,{id,pitch,volume},time,register=()=>{}) {
+export function bandNoteFrequency(id,pitch,preset='meadow') {
   const scale=[0,2,4,7,9];
-  const base={bass:130.8128,voice:261.6256,melody:523.2511,percussion:110}[id];
-  const frequency=base*2**(scale[pitch]/12);
+  const minecraft=normalizePreset(preset)==='minecraft';
+  const base=(minecraft?{bass:65.4064,voice:130.8128,melody:261.6256,percussion:110}:{bass:130.8128,voice:261.6256,melody:523.2511,percussion:110})[id];
+  return base*2**((scale[pitch]+(minecraft&&id!=='percussion'?6:0))/12);
+}
+function playPianoNote(context,destination,{id,pitch,volume,preset},time,register) {
+  const frequency=bandNoteFrequency(id,pitch,preset),amplitude=volume*{bass:.09,voice:.065,melody:.07}[id];
+  if(amplitude<=0)return;
+  // A quick hammer attack and independently decaying harmonics make a soft piano
+  // voice. Every part is synthesized; no recording plays beneath the editable notes.
+  for(const [multiple,weight,duration] of [[1,.76,2.4],[2,.16,1.8],[3,.06,1.25],[4,.02,.85]]) {
+    const oscillator=context.createOscillator(),envelope=context.createGain();
+    oscillator.type='sine';oscillator.frequency.setValueAtTime(frequency*multiple,time);
+    envelope.gain.setValueAtTime(0,time);
+    envelope.gain.linearRampToValueAtTime(amplitude*weight,time+.006);
+    envelope.gain.exponentialRampToValueAtTime(.00001,time+duration);
+    oscillator.connect(envelope);envelope.connect(destination);register(oscillator);
+    oscillator.start(time);oscillator.stop(time+duration+.025);
+    oscillator.onended=()=>{oscillator.disconnect();envelope.disconnect();};
+  }
+}
+// Exported seam also accepts OfflineAudioContext for rendering/listening to a score.
+export function playBandNote(context,destination,{id,pitch,volume,preset='meadow'},time,register=()=>{}) {
+  if(normalizePreset(preset)==='minecraft'&&id!=='percussion')return playPianoNote(context,destination,{id,pitch,volume,preset},time,register);
+  const frequency=bandNoteFrequency(id,pitch,'meadow');
   const envelope=context.createGain();
   envelope.connect(destination);
   const duration=id==='bass'?.48:id==='voice'?.6:id==='melody'?.28:.13;
@@ -122,7 +162,8 @@ export async function renderBandPreview(snapshot,{phrases=2,sampleRate=44100}={}
   // `phrases` counts 8-beat phrases, rounded up to whole runs of the form so every letter
   // is heard: "A" and "AB" render 16 beats for phrases:2, "ABA" renders 24.
   const period=phraseLength(band),count=Math.ceil(Math.max(1,Math.min(8,Math.floor(phrases)||2))*8/period)*period,step=60/band.tempo;
-  const context=new Offline(2,Math.ceil((count*step+1)*sampleRate),sampleRate),master=context.createGain();
+  const tail=band.preset==='minecraft'?3:1;
+  const context=new Offline(2,Math.ceil((count*step+tail)*sampleRate),sampleRate),master=context.createGain();
   master.gain.value=band.masterVolume;master.connect(context.destination);
   const mix=createBandMix(context,master);
   for(let beat=0;beat<count;beat++)for(const note of notesForBeat(band,beat))playBandNote(context,mix.input,note,.05+beat*step);

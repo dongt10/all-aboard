@@ -36,7 +36,7 @@ test('chapter and grade changes keep independent drafts and creations', () => {
 
 test('published creations and settings round-trip through local storage', () => {
   const storage=memoryStorage(); let state=publishCreation(createState(),'music',createDefaultBand());
-  state=publishCreation(state,'art',banner);state.settings={largeText:true,reducedMotion:true,autoRead:true};state.avatar='girl';
+  state=publishCreation(state,'art',banner);state.settings={largeText:true,reducedMotion:true,autoRead:true,musicAutoplay:false};state.avatar='girl';
   assert.equal(saveState(state,storage),true);
   assert.deepEqual(loadState(storage),state);
   const read=getCreations(state);read.art.stamps[0].color='#000';
@@ -345,11 +345,48 @@ test('the deployed v2 storage key loads an independent save and receives new wri
   const loaded = loadState(storage);
   assert.equal(getCreations(loaded).writing?.text, 'Hello!');
   assert.equal(loaded.avatar, 'girl');
-  assert.deepEqual(loaded.settings, fixture.settings);
+  assert.deepEqual(loaded.settings, { ...fixture.settings, musicAutoplay: true });
   loaded.settings.reducedMotion = true;
   assert.equal(saveState(loaded, storage), true);
   assert.deepEqual(writes, ['all-aboard-demo-v2']);
   const saved = JSON.parse(values.get('all-aboard-demo-v2'));
   assert.equal(saved.settings.reducedMotion, true);
   assert.equal(saved.progress['chapter-0'].writing.creation.text, 'Hello!');
+});
+
+test('Band autoplay defaults on for old saves and remembers an explicit stop', () => {
+  const storage = memoryStorage();
+  for (const version of [1, 2]) {
+    assert.equal(normalizeState({ version, settings: {} }).settings.musicAutoplay, true);
+  }
+  const state = createState();
+  state.settings.musicAutoplay = false;
+  assert.equal(saveState(state, storage), true);
+  assert.equal(loadState(storage).settings.musicAutoplay, false);
+  for (const invalid of ['false', 0, null]) {
+    assert.equal(normalizeState({ version: 2, settings: { musicAutoplay: invalid } }).settings.musicAutoplay, true);
+  }
+});
+
+test('editable presets round-trip with the child’s notes, form and zero volumes intact', () => {
+  const storage = memoryStorage();
+  const state = { ...createState(), chapter: 1, grade: 5 };
+  const band = { ...createDefaultBand(), preset: 'minecraft', chapter: 1, grade: 5, tempo: 60, form: 'ABA', masterVolume: 0 };
+  band.tracks[0].notes = [4, null, 2, null, 0, 1, null, 3];
+  band.tracks[1].volume = 0;
+  band.tracks[3].enabled = false;
+  const drafted = saveDraft(state, 'music', band);
+  assert.equal(saveState(drafted, storage), true);
+  assert.deepEqual(getDraft(loadState(storage), 'music'), band);
+  const published = publishCreation(loadState(storage), 'music', band);
+  assert.equal(saveState(published, storage), true);
+  assert.deepEqual(getCreations(loadState(storage)).music, band);
+});
+
+test('old and unknown presets remain Meadow without inventing audible parts', () => {
+  for (const preset of [undefined, null, 'unknown', { id: 'minecraft' }]) {
+    const band = cleanCreation('music', { kind: 'music', preset, chapter: 0, grade: 0 });
+    assert.equal(band.preset, 'meadow');
+    assert.ok(band.tracks.every(track => !track.enabled && track.notes.every(note => note === null)));
+  }
 });

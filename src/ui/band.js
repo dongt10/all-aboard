@@ -1,4 +1,4 @@
-import { PATTERNS, createDefaultBand, TEMPOS, FORMS } from '../audio.js';
+import { patternsFor, createBandPreset, normalizePreset, TEMPOS, FORMS } from '../audio.js';
 
 // Pure helpers for Kiko's Sound Garden. No DOM here, so everything runs under node --test.
 export const PITCH_NAMES = ['Do', 'Re', 'Mi', 'Sol', 'La'];
@@ -32,12 +32,12 @@ export const toggleMusician = (band, id) => editTrack(band, id, track => ({ ...t
 
 export function setPattern(band, id, pattern) {
   const p = pattern === 1 ? 1 : 0;
-  return editTrack(band, id, track => ({ ...track, pattern: p, notes: [...PATTERNS[id][p]] }));
+  return editTrack(band, id, track => ({ ...track, pattern: p, notes: [...patternsFor(band)[id][p]] }));
 }
 
 export function toggleBeat(band, id, beat) {
   return editTrack(band, id, track => {
-    track.notes[beat] = track.notes[beat] === null ? PATTERNS[id][track.pattern][beat] ?? 0 : null;
+    track.notes[beat] = track.notes[beat] === null ? patternsFor(band)[id][track.pattern][beat] ?? 0 : null;
     return track;
   });
 }
@@ -71,17 +71,21 @@ export const cycleForm = form => FORMS[(FORMS.indexOf(form) + 1) % FORMS.length]
 export const setForm = (band, form) => ({ ...copyBand(band), form: FORMS.includes(form) ? form : 'A' });
 
 // The band a grade starts from. Grade 4 opens with A B, grade 5 with A B A.
-export function defaultBandFor(grade) {
+export function defaultBandFor(grade, preset = 'minecraft') {
   const g = gradeNumber(grade);
-  return { ...createDefaultBand(), form: g === 5 ? 'ABA' : g === 4 ? 'AB' : 'A' };
+  const band = { ...createBandPreset(preset), form: g === 5 ? 'ABA' : g === 4 ? 'AB' : 'A' };
+  if (band.preset === 'minecraft' && [1, 2, 4, 5].includes(g)) {
+    band.tracks = band.tracks.map(track => track.id === 'percussion' ? { ...track, enabled: true, volume: .28 } : track);
+  }
+  return band;
 }
 
 // Tolerates a saved track with missing fields: the finish gate must never throw.
 const trackKey = track => JSON.stringify({ id: track.id, enabled: track.enabled, pattern: track.pattern, notes: (track.notes ?? []).map(cleanNote), volume: track.volume });
 // Send band stays off until the child changed something: a track, volume, speed, or form.
 export function isEdited(band, grade) {
-  const base = defaultBandFor(grade), tracks = Array.isArray(band?.tracks) ? band.tracks : [];
-  if ((band?.tempo ?? 90) !== base.tempo || (band?.form ?? 'A') !== base.form) return true;
+  const base = defaultBandFor(grade, normalizePreset(band?.preset)), tracks = Array.isArray(band?.tracks) ? band.tracks : [];
+  if ((band?.tempo ?? base.tempo) !== base.tempo || (band?.form ?? 'A') !== base.form) return true;
   if ((band?.masterVolume ?? base.masterVolume) !== base.masterVolume) return true;
   return base.tracks.some(track => trackKey(track) !== trackKey(tracks.find(t => t?.id === track.id) ?? track));
 }
@@ -121,7 +125,7 @@ export const pickEcho = index => ECHO_PATTERNS[((Math.trunc(index) % ECHO_PATTER
 // Only sound versus rest counts, never which pitch.
 export const echoMatches = (notes, mask) => mask.length === 8 && mask.every((on, i) => Boolean(on) === (notes?.[i] !== null && notes?.[i] !== undefined));
 
-export const patternGlyphs = (id, p) => (PATTERNS[id]?.[p === 1 ? 1 : 0] ?? []).map(n => (n === null ? '–' : '♪')).join(' ');
+export const patternGlyphs = (id, p, preset = 'meadow') => (patternsFor(preset)[id]?.[p === 1 ? 1 : 0] ?? []).map(n => (n === null ? '–' : '♪')).join(' ');
 
 const NUMBER_WORDS = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight'];
 const capital = word => word[0].toUpperCase() + word.slice(1);
@@ -142,7 +146,7 @@ const OPENING = {
   4: 'Cricket repeats the steady part. Change my tune above it!',
   5: 'Make tune A, then tap Form for A B A. Which part comes back?',
 };
-const MENU_HELP = 'Play starts the band. See beat lights the lanterns. Sounds picks a tune, loud or soft.';
+const MENU_HELP = 'Play band starts your song. See beat lights lanterns. Sounds picks a tune, loud or soft.';
 const HELP = {
   0: ['Tap a friend to join or rest.', 'Tap Speed: Slow, Steady, or Fast.', MENU_HELP, 'Tap Send band when your band is ready.'],
   1: ['Tap a lantern: sound or rest.', 'Tap a friend to join or rest.', MENU_HELP, 'Tap Send band when your rhythm is ready.'],
@@ -152,13 +156,15 @@ const HELP = {
   5: ['Tap a lantern to make tune A.', 'Tap Form for A B or A B A. Listen for the part that comes back.', MENU_HELP, 'Tap Send band when your tune is ready.'],
 };
 const gradeKey = grade => Math.max(0, Math.min(5, gradeNumber(grade)));
-export const openingLine = grade => OPENING[gradeKey(grade)];
+export const openingLine = (grade, preset = 'meadow') => gradeKey(grade) === 0 && normalizePreset(preset) === 'minecraft'
+  ? 'Tap a friend to rest or join. Who plays low? Who plays high? Try Slow and Fast!'
+  : OPENING[gradeKey(grade)];
 export const helpLines = grade => [...HELP[gradeKey(grade)]];
 
 // The same four commands at every grade. Labels stay at 9 characters so the icon survives Bigger words.
 export function musicCommands({ playing = false, quiet = false, edited = false } = {}) {
   return [
-    { id: 'play', label: playing ? 'Stop' : 'Play', icon: playing ? 'stop' : 'play', pressed: Boolean(playing) },
+    { id: 'play', label: playing ? 'Stop' : 'Play band', icon: playing ? 'stop' : 'play', pressed: Boolean(playing) },
     { id: 'quiet', label: quiet ? 'Stop' : 'See beat', icon: quiet ? 'stop' : 'quiet', pressed: Boolean(quiet) },
     { id: 'tunes', label: 'Sounds', icon: 'music' },
     { id: 'save', label: 'Send band', icon: 'check', finish: true, disabled: !edited },

@@ -78,7 +78,11 @@ On the title screen and in **Comfort** (top right in the village):
 
 ### Kiko’s music stage, by grade
 
-Choose Kiko to open the Sound Garden. The four commands are the same at every grade: **Play** (then **Stop**), **See beat** (lights the lanterns with no sound, then **Stop**), **Sounds** (opens the window below), and **Send band**, the finish, which stays gray until you change a friend’s part, volume, Speed or Form, or start Play or See beat once. Tap a friend to invite or rest them. The **Speed** sign in the top row cycles **Slow · Steady · Fast** at every grade. What the eight lanterns do depends on the grade:
+Choose Kiko to open the Sound Garden. A fresh band starts with the **Minecraft preset**, a short, editable piano-style example based on C418’s “Minecraft.” It repeats through the same band engine as the child’s own music: change the lantern notes, invite or rest friends, adjust their volumes, and try different speeds. Grades 1–2 and 4–5 start with Cricket’s rhythm enabled for their rhythm and steady-part lessons; Kindergarten and grade 3 can invite Cricket. Existing saved tunes keep their notes and sounds.
+
+The **preset button** at the top right offers **Minecraft** and the original **Meadow Band** as starting tunes. A preset choice keeps the current Band volume and Form; **Undo preset** restores the previous score if the child changes their mind. A new stage starts playing when sound is allowed. **Stop** and **See beat** remember the preference for silent entry; **Play band** enables playback again. Read to me and saved zero volume keep entry silent. If the browser blocks playback, press Play band.
+
+The four learning commands are the same at every grade: **Play band** (then **Stop**), **See beat** (lights the lanterns with no sound, then **Stop**), **Sounds** (opens the window below), and **Send band**, the finish, which stays gray until you change a friend’s part, volume, Speed or Form, or explicitly start Play band or See beat once. Automatic playback and choosing an unchanged example do not complete the lesson. Tap a friend to invite or rest them. The **Speed** sign in the top row cycles **Slow · Steady · Fast** at every grade. What the eight lanterns do depends on the grade:
 
 | Grade | What the child does on the stage | Kiko’s opening line |
 | :--- | :--- | :--- |
@@ -93,7 +97,9 @@ Choose Kiko to open the Sound Garden. The four commands are the same at every gr
 
 **Sounds window:** one tab per friend. Each tab has that friend’s volume. Friends not edited on the lanterns also have **Tune 1 / Tune 2**, with a small preview of the beats. Kindergarten gets **Loud / Soft** buttons instead of a slider and no beat grid. From grade 1, a friend who is not on the lanterns gets a beat editor in the window: sound or rest at grades 1–2 (and always for Cricket), the note staircase for Sora and Nori at grades 3–5. The friend who is on the lanterns (Cricket at 1–2, Kiko at 3–5) gets “Edit Cricket’s rhythm on the lanterns.” or “Edit Kiko’s tune on the lanterns.” instead of tune buttons or a beat editor. A **Band volume** slider controls the whole band at every grade.
 
-**Recording:** the WAV download is no longer in the kid’s window. Open the **Guide**, choose **Kiko**, and once a band has been sent, **Save recording** downloads `my-festival-band.wav`: two runs of A, one run of A B, or one run of A B A, following the saved form.
+**Recording:** open the **Guide**, choose **Kiko**, and once a band has been sent, **Save song** downloads `my-festival-band.wav`: two runs of A, one run of A B, or one run of A B A, following the saved form. The saved preset’s sounds and the child’s edits are included.
+
+**Musical reference:** [“Minecraft” by C418 (Daniel Rosenfeld), from Minecraft – Volume Alpha](https://c418.bandcamp.com/track/minecraft). The preset is a simplified eight-step teaching arrangement of its opening motif, using the reference’s G-flat pentatonic pitch set, a slower starting tempo, and synthesized piano tones. It is editable score data; no C418 recording is bundled. Its accompaniment and optional rhythm are adapted for the four friends and grade activities. The child’s exported WAV and parade play their saved arrangement, including edits and the selected preset’s sounds.
 
 ### What changes by grade
 

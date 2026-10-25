@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { createDefaultBand, PATTERNS } from '../src/audio.js';
+import { createDefaultBand, createBandPreset, PATTERNS } from '../src/audio.js';
 import { CAST } from '../src/music.js';
-import { setTrackNotes, toggleBeat, cycleNote, noteLabel } from '../src/ui/band.js';
+import { setTrackNotes, toggleBeat, cycleNote, noteLabel, setPattern } from '../src/ui/band.js';
 import { LEVELS, levelOf, noteStep, LEAD_LINES, leadLine, soundsPlan, soundsHeight, BODY_BUDGET, hintLine, tuneLine, beatLine, levelLine, playsPattern, soundsPanelMarkup, focusKey, keepFocus, nextTabId, levelEdit } from '../src/ui/screens/sounds.js';
 import { declarations, withoutComments, resolveVars } from './helpers/css.js';
 import { creationMarkup } from '../src/ui/creations.js';
@@ -188,6 +188,20 @@ test('a Tune button is pressed only while the track still plays that preset', ()
   assert.equal(count(html, /icon-check|"check"/g), 0);
   const climbed = cycleNote(setTrackNotes(band, 'voice', [...PATTERNS.voice[1]]), 'voice', 0).tracks[1];
   assert.equal(playsPattern({ ...climbed, pattern: 1 }, 1), false);
+});
+
+test('Sounds uses the selected Minecraft score for pressed tunes and rhythm previews', () => {
+  const band = createBandPreset('minecraft'), bass = band.tracks[0];
+  assert.equal(playsPattern(bass, 0, band), true);
+  assert.equal(playsPattern(bass, 0), false, 'the old Meadow example has different notes');
+  let html = soundsPanelMarkup(band, 0, 'bass');
+  assert.match(html, /data-pattern="0" aria-pressed="true"/);
+  assert.match(html, /♪ – – ♪ – ♪ – –/);
+  const other = setPattern(band, 'bass', 1);
+  html = soundsPanelMarkup(other, 0, 'bass');
+  assert.match(html, /data-pattern="1" aria-pressed="true"/);
+  assert.equal(playsPattern(other.tracks[0], 1, other), true);
+  assert.match(html, /♪ – – ♪ – – – –/);
 });
 
 test('K panel: Tune 1 / Tune 2 with glyph previews, Loud / Soft pressed by volume, the band slider, no beat grid', () => {

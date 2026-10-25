@@ -1,7 +1,7 @@
 import { openWindow } from '../window.js';
 import { icon } from '../icons.js';
 import { CAST } from '../../music.js';
-import { PATTERNS } from '../../audio.js';
+import { patternsFor } from '../../audio.js';
 import { MUSICIAN_COLORS, leadTrack, editorMode, setPattern, toggleBeat, cycleNote, noteLabel, patternGlyphs } from '../band.js';
 
 // The Sounds window: one tab per musician, Tune 1 / Tune 2, the beat editor for the
@@ -59,12 +59,12 @@ const castOf = id => CAST.find(c => c.id === id) ?? CAST[0];
 const trackOf = (band, id) => band.tracks.find(t => t.id === id) ?? band.tracks[0];
 
 // A Tune button is pressed only while the track still plays that preset; once a beat is edited, neither is.
-export const playsPattern = (track, p) => track.pattern === p && Array.isArray(track.notes) && track.notes.every((n, i) => n === (PATTERNS[track.id]?.[p] ?? [])[i]);
+export const playsPattern = (track, p, preset = 'meadow') => track.pattern === p && Array.isArray(track.notes) && track.notes.every((n, i) => n === (patternsFor(preset)[track.id]?.[p] ?? [])[i]);
 
-function patternsMarkup(id, track) {
+function patternsMarkup(id, track, band) {
   return `<div class="sounds-patterns" role="group" aria-label="Tune">${[0, 1].map(p => {
-    const on = playsPattern(track, p);
-    return `<button type="button" class="px-button sounds-pattern" data-pattern="${p}" aria-pressed="${on}">${icon(on ? 'check' : 'music', { size: 20 })}<span class="sounds-pattern__text"><span>Tune ${p + 1}</span><small aria-hidden="true">${patternGlyphs(id, p)}</small></span></button>`;
+    const on = playsPattern(track, p, band);
+    return `<button type="button" class="px-button sounds-pattern" data-pattern="${p}" aria-pressed="${on}">${icon(on ? 'check' : 'music', { size: 20 })}<span class="sounds-pattern__text"><span>Tune ${p + 1}</span><small aria-hidden="true">${patternGlyphs(id, p, band)}</small></span></button>`;
   }).join('')}</div>`;
 }
 function beatsMarkup(track, mode) {
@@ -90,7 +90,7 @@ export function soundsPanelMarkup(band, grade, selected) {
   const editor = plan.editor === 'beats' || plan.editor === 'notes' ? beatsMarkup(t, plan.editor) : '';
   return `<div class="sounds-editor" style="--musician:${MUSICIAN_COLORS[c.id]}">
       <p class="sounds-hint${plan.editor === 'lead' ? ' sounds-hint--lead' : ''}"><span class="sounds-hint__icon" aria-hidden="true">${c.icon}</span> ${hintLine(c, plan)}</p>
-      ${plan.editor === 'lead' ? '' : patternsMarkup(c.id, t)}${editor}
+      ${plan.editor === 'lead' ? '' : patternsMarkup(c.id, t, band)}${editor}
       ${levelMarkup(c, t, plan)}
       <label class="sounds-slider"><span>Band volume</span><input type="range" data-master min="0" max="1" step=".05" value="${band.masterVolume}"></label>
     </div>`;
