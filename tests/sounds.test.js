@@ -4,7 +4,8 @@ import { readFileSync } from 'node:fs';
 import { createDefaultBand, PATTERNS } from '../src/audio.js';
 import { CAST } from '../src/music.js';
 import { setTrackNotes, toggleBeat, cycleNote, noteLabel } from '../src/ui/band.js';
-import { LEVELS, levelOf, noteStep, LEAD_LINES, leadLine, soundsPlan, soundsHeight, ROW_HEIGHTS, BODY_BUDGET, hintLine, tuneLine, beatLine, levelLine, playsPattern, soundsPanelMarkup, focusKey, keepFocus, nextTabId, levelEdit } from '../src/ui/screens/sounds.js';
+import { LEVELS, levelOf, noteStep, LEAD_LINES, leadLine, soundsPlan, soundsHeight, BODY_BUDGET, hintLine, tuneLine, beatLine, levelLine, playsPattern, soundsPanelMarkup, focusKey, keepFocus, nextTabId, levelEdit } from '../src/ui/screens/sounds.js';
+import { declarations, withoutComments, resolveVars } from './helpers/css.js';
 import { creationMarkup } from '../src/ui/creations.js';
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -79,22 +80,61 @@ test('the per-tab plan by grade: K has no beat grid and Loud/Soft; 1–2 edit Cr
   }
 });
 
-test('every tab fits the Bigger-words body budget, and the CSS carries the same numbers', () => {
-  let tallest = 0;
-  for (const g of [0, 1, 2, 3, 4, 5]) {
-    for (const c of CAST) {
-      const h = soundsHeight(g, c.id);
-      assert.ok(h <= BODY_BUDGET, `grade ${g} ${c.id}: ${h}px`);
-      tallest = Math.max(tallest, h);
-    }
+function declaredSoundsHeights(rawCSS) {
+  const css = withoutComments(rawCSS), kit = read('src/ui/kit.css');
+  const tokens = declarations(read('src/ui/tokens.css'), '.large-text');
+  const rule = selector => declarations(css, selector);
+  const px = (value, label) => {
+    const resolved = resolveVars(value, tokens);
+    assert.match(resolved, /^\d+(?:\.\d+)?px$/, label);
+    return Number.parseFloat(resolved);
+  };
+  const vertical = value => {
+    const parts = value.trim().split(/\s+/).map(v => px(v, 'vertical spacing'));
+    return parts.length < 3 ? 2 * parts[0] : parts[0] + parts[2];
+  };
+  const border = value => 2 * px(value.split(' ')[0], 'border');
+  const button = declarations(kit, '.px-button'), chip = declarations(kit, '.px-chip');
+  const edge = border(button.border);
+  const text = selector => px(rule(selector)['font-size'], selector);
+  const height = (selector, content, fallback) => {
+    const r = rule(selector);
+    return Math.max(px(r['min-height'] ?? fallback['min-height'], selector), content + vertical(r.padding ?? fallback.padding) + edge);
+  };
+  const beat = rule('.sounds-beat');
+  const beatBox = Math.max(px(beat['min-height'], 'beat minimum'),
+    (text('.sounds-beat b') + text('.sounds-beat span')) * Number(beat['line-height']) + vertical(beat.padding) + border(beat.border));
+  const step = rule('.sounds-beat--note')['margin-bottom'].match(/^calc\(var\(--step, 0\) \* (\d+)px\)$/);
+  assert.ok(step, 'staircase margin remains measurable');
+  assert.equal(rule('.sounds-beats--stairs')['padding-top'], undefined);
+  const pattern = (px(button['font-size'], 'command') + text('.sounds-pattern__text small')) * Number(rule('.sounds-pattern__text')['line-height']);
+  return {
+    tabs: height('.sounds-tab', text('.sounds-tab') * Number(chip['line-height']), chip),
+    hint: Math.ceil(text('.sounds-hint') * Number(rule('.sounds-hint')['line-height'])),
+    tunes: height('.sounds-pattern', pattern, button),
+    beats: beatBox, stairs: beatBox + 5 * Number(step[1]),
+    buttons: height('.sounds-level', px(button['font-size'], 'command') * Number(button['line-height']), button),
+    slider: Math.max(px(rule('.sounds-slider input')['min-height'], 'slider'), Math.ceil(text('.sounds-slider') * Number(declarations(read('src/ui/interaction.css'), '.win__body')['line-height']))),
+    gap: px(rule('.sounds')['gap'], 'outer gap'), editorGap: px(rule('.sounds-editor')['gap'], 'editor gap'),
+  };
+}
+function assertSoundsBudget(css) {
+  const h = declaredSoundsHeights(css);
+  for (const grade of [0, 1, 2, 3, 4, 5]) for (const { id } of CAST) {
+    const html = soundsPanelMarkup(createDefaultBand(), grade, id);
+    const rows = [h.hint, html.includes('sounds-levels') ? h.buttons : h.slider, h.slider];
+    if (html.includes('sounds-patterns')) rows.push(h.tunes);
+    if (html.includes('sounds-beats')) rows.push(html.includes('sounds-beats--stairs') ? h.stairs : h.beats);
+    const height = h.tabs + h.gap + rows.reduce((sum, row) => sum + row, 0) + (rows.length - 1) * h.editorGap;
+    assert.ok(height <= 400, `grade ${grade} ${id}: declared layout needs ${height}px of the 400px body`);
+    assert.ok(soundsHeight(grade, id) <= BODY_BUDGET, 'the public estimate also stays within budget');
   }
-  assert.equal(tallest, soundsHeight(3, 'bass'), 'the staircase tab is the tallest');
-  assert.equal(soundsHeight(3, 'bass'), 44 + 31 + 60 + 96 + 32 + 32 + 5 * 8);
-  assert.ok(soundsHeight(3, 'melody') < soundsHeight(3, 'bass'), 'the lead’s tab is shorter: no Tune buttons, no grid');
+}
+
+test('every Sounds tab fits Bigger words using actual CSS declarations, including the tallest La note', () => {
   const css = read('src/ui/screens/sounds.css');
-  assert.doesNotMatch(css, /sounds-beats--stairs[^}]*padding-top/, 'the staircase row has no extra padding');
-  assert.match(css, new RegExp(`staircase ${ROW_HEIGHTS.stairs}`));
-  assert.match(css, /= 335\./);
+  assertSoundsBudget(css);
+  assert.throws(() => assertSoundsBudget(css.replace('min-height: 52px', 'min-height: 520px')), /declared layout needs/);
 });
 
 test('eight sound labels fit the Sounds window width at Bigger words', () => {

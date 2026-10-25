@@ -149,17 +149,14 @@ function mountField(host, { grade, dispatch }) {
   };
 }
 
-// The help window reads `help` without a grade, so it follows the grade of the last start().
-let helpGrade = 1;
-
+// The frame asks helpFor(grade) for the grade's steps; `help` is the grade-1 fallback and never changes.
 export default {
   kind: KIND,
   title: 'A sign from you',
-  get help() { return signHelp(helpGrade); },
+  help: signHelp(1),
   helpFor: signHelp,
   notReadyLine: SIGN_LINES.empty,
   start(snapshot, { chapter = 0, grade = 1 } = {}) {
-    helpGrade = grade;
     const state = normalizeEncounterSnapshot(KIND, snapshot ?? {}, grade, chapter);
     const tiles = state.tiles ?? legacyTiles(state.text, grade);
     return { state: { ...state, tiles }, ui: { tiles: [...tiles] } };

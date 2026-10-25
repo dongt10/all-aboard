@@ -51,7 +51,7 @@ body.game {
 .px-button:active:not(:disabled) { transform: translateY(2px); }
 .px-button:disabled { --fill: var(--paper-shade); --light: var(--paper-shade); --shade: #e2cfa5; color: var(--ink-soft); cursor: default; }
 .px-button--finish { --fill: var(--finish); --light: var(--finish-light); --shade: var(--finish-shade); color: var(--paper); }
-.px-button--finish:hover:not(:disabled) { --fill: #238a60; }
+.px-button--finish:hover:not(:disabled) { --fill: #207d57; }   /* paper text stays at 4.8:1 */
 .px-button--finish:disabled { color: var(--ink-soft); }
 
 .px-chip {

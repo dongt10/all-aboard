@@ -56,7 +56,8 @@ function roll(state, ui) {
   const result = balanced ? 'smooth' : 'wobble';
   const next = { ...ui, lastRoll: result, rolls: (ui.rolls ?? 0) + 1 };
   const line = balanced ? LINES.smooth : LINES.wobble(left > right ? 'left' : 'right', Math.abs(left - right));
-  return { state: { ...state, rolled: true }, ui: next, line };
+  // A roll that changes nothing in the saved cart returns the same state object (the no-op identity rule).
+  return { state: state.rolled ? state : { ...state, rolled: true }, ui: next, line };
 }
 
 const isSaved = snapshot => Boolean(snapshot) && typeof snapshot === 'object' && snapshot.kind === 'math' && snapshot.activity === undefined && snapshot.game === undefined;

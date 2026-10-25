@@ -327,3 +327,29 @@ test('writing tile runs are grade-validated, bounded, independent and preserved 
   const legacy = { ...snapshot }; delete legacy.tiles;
   assert.equal(Object.hasOwn(cleanCreation('writing', legacy), 'tiles'), false, 'missing history stays distinct from typed text');
 });
+
+test('the deployed v2 storage key loads an independent save and receives new writes', () => {
+  const fixture = {
+    version: 2, hasStarted: true, chapter: 0, grade: 1, avatar: 'girl',
+    settings: { largeText: true, reducedMotion: false, autoRead: true },
+    progress: { 'chapter-0': { writing: {
+      activityId: 'writing-festival', completedAt: '2026-10-24T10:00:00.000Z',
+      creation: { kind: 'writing', chapter: 0, grade: 0, text: 'Hello!' },
+    } } }, drafts: {},
+  };
+  const values = new Map([['all-aboard-demo-v2', JSON.stringify(fixture)]]), writes = [];
+  const storage = {
+    getItem: key => values.get(key) ?? null,
+    setItem(key, value) { writes.push(key); values.set(key, value); },
+  };
+  const loaded = loadState(storage);
+  assert.equal(getCreations(loaded).writing?.text, 'Hello!');
+  assert.equal(loaded.avatar, 'girl');
+  assert.deepEqual(loaded.settings, fixture.settings);
+  loaded.settings.reducedMotion = true;
+  assert.equal(saveState(loaded, storage), true);
+  assert.deepEqual(writes, ['all-aboard-demo-v2']);
+  const saved = JSON.parse(values.get('all-aboard-demo-v2'));
+  assert.equal(saved.settings.reducedMotion, true);
+  assert.equal(saved.progress['chapter-0'].writing.creation.text, 'Hello!');
+});

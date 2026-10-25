@@ -1,139 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-// A tiny fake DOM: just enough tree, markup parsing, focus, events and selectors to mount the real
-// scenes under node. Focus follows browser rules: hidden, inert, disabled or detached elements lose it.
-const FOCUSABLE_TAGS = new Set(['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT']);
-const camel = name => name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-
-function attrOf(el, name) {
-  if (name.startsWith('data-')) return el.dataset[camel(name.slice(5))] ?? null;
-  if (name === 'tabindex') return el._tabIndex === undefined ? null : String(el._tabIndex);
-  return el.attrs.get(name) ?? null;
-}
-function matchCompound(el, compound) {
-  let rest = compound;
-  const tag = rest.match(/^[a-z]+/i)?.[0];
-  if (tag && el.tagName !== tag.toUpperCase()) return false;
-  rest = rest.slice(tag?.length ?? 0);
-  while (rest) {
-    let m;
-    if ((m = rest.match(/^\.([\w-]+)/))) { if (!el.classList.contains(m[1])) return false; }
-    else if ((m = rest.match(/^\[([\w-]+)(?:="([^"]*)")?\]/))) { const v = attrOf(el, m[1]); if (v === null || (m[2] !== undefined && v !== m[2])) return false; }
-    else if ((m = rest.match(/^:not\((.+?\]?)\)/))) { if (matchCompound(el, m[1])) return false; }
-    else if ((m = rest.match(/^:disabled/))) { if (!el.disabled) return false; }
-    else throw new Error(`fake DOM: unsupported selector ${compound}`);
-    rest = rest.slice(m[0].length);
-  }
-  return true;
-}
-function matches(el, selector) {
-  return selector.split(',').some(part => {
-    const chain = part.trim().split(/\s+/);
-    if (!matchCompound(el, chain.at(-1))) return false;
-    let at = el.parentElement;
-    for (let i = chain.length - 2; i >= 0; i--) {
-      while (at && !matchCompound(at, chain[i])) at = at.parentElement;
-      if (!at) return false;
-      at = at.parentElement;
-    }
-    return true;
-  });
-}
-
-const VOID = new Set(['input', 'br', 'img', 'hr', 'meta']);
-function parseInto(host, html) {
-  const stack = [host];
-  for (const [, close, tag, attrs, selfClose] of html.replace(/<!--[\s\S]*?-->/g, '').matchAll(/<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>/g)) {
-    if (close) { const i = stack.findLastIndex(el => el.tagName === tag.toUpperCase()); if (i > 0) stack.length = i; continue; }
-    const el = new El(tag, host.ownerDocument);
-    for (const [, k, v = ''] of attrs.matchAll(/([\w:-]+)(?:="([^"]*)")?/g)) {
-      if (k === 'class') el.className = v;
-      else if (k.startsWith('data-')) el.dataset[camel(k.slice(5))] = v;
-      else if (k === 'hidden' || k === 'disabled') el[k] = true;
-      else el.setAttribute(k, v);
-    }
-    stack.at(-1).append(el);
-    if (!selfClose && !VOID.has(tag.toLowerCase())) stack.push(el);
-  }
-}
-
-class Event {
-  constructor(type, init = {}) { Object.assign(this, { type, bubbles: true, defaultPrevented: false, repeat: false }, init); }
-  preventDefault() { this.defaultPrevented = true; }
-  stopPropagation() { this.stopped = true; }
-}
-class Target {
-  constructor() { this.listeners = {}; }
-  addEventListener(type, fn, options) { (this.listeners[type] ??= []).push({ fn, once: options?.once, capture: options === true || Boolean(options?.capture) }); }
-  removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] ?? []).filter(l => l.fn !== fn); }
-  fire(event, capture = false) {
-    for (const l of [...(this.listeners[event.type] ?? [])]) { if (l.capture !== capture) continue; if (l.once) this.removeEventListener(event.type, l.fn); l.fn(event); }
-  }
-}
-class El extends Target {
-  constructor(tag, doc) {
-    super();
-    Object.assign(this, { tagName: tag.toUpperCase(), ownerDocument: doc, children: [], parentElement: null, dataset: {}, attrs: new Map(), hidden: false, inert: false, disabled: false, textContent: '', value: '', _html: '' });
-    const set = this._classes = new Set();
-    this.classList = { add: (...n) => n.forEach(c => set.add(c)), remove: (...n) => n.forEach(c => set.delete(c)), contains: c => set.has(c), toggle: (c, on = !set.has(c)) => { if (on) set.add(c); else set.delete(c); return on; } };
-    this.style = { setProperty(k, v) { this[k] = v; } };
-  }
-  get className() { return [...this._classes].join(' '); }
-  set className(v) { this._classes.clear(); String(v).split(/\s+/).filter(Boolean).forEach(c => this._classes.add(c)); }
-  get tabIndex() { return this._tabIndex ?? (FOCUSABLE_TAGS.has(this.tagName) ? 0 : -1); }
-  set tabIndex(v) { this._tabIndex = v; }
-  get type() { return this.getAttribute('type'); }
-  set type(v) { this.setAttribute('type', v); }
-  get innerHTML() { return this._html; }
-  set innerHTML(v) { this.children.forEach(c => { c.parentElement = null; }); this.children = []; this._html = String(v); parseInto(this, this._html); }
-  get firstElementChild() { return this.children[0] ?? null; }
-  get isConnected() { let at = this; while (at.parentElement) at = at.parentElement; return at === this.ownerDocument.body; }
-  setAttribute(k, v) { if (k === 'tabindex') this._tabIndex = Number(v); else this.attrs.set(k, String(v)); }
-  getAttribute(k) { return attrOf(this, k); }
-  removeAttribute(k) { this.attrs.delete(k); }
-  toggleAttribute(k, on = !this.attrs.has(k)) { if (on) this.attrs.set(k, ''); else this.attrs.delete(k); return on; }
-  append(...nodes) { for (const n of nodes) if (typeof n !== 'string') { n.remove(); n.parentElement = this; this.children.push(n); } }
-  after(...nodes) { const p = this.parentElement; nodes.forEach(n => p?.append(n)); }
-  remove() { const p = this.parentElement; if (p) p.children = p.children.filter(c => c !== this); this.parentElement = null; }
-  contains(other) { for (let at = other; at; at = at.parentElement) if (at === this) return true; return false; }
-  closest(selector) { for (let at = this; at; at = at.parentElement) if (matches(at, selector)) return at; return null; }
-  matches(selector) { return matches(this, selector); }
-  querySelectorAll(selector) {
-    const out = [];
-    const walk = el => el.children.forEach(c => { if (matches(c, selector)) out.push(c); walk(c); });
-    walk(this);
-    return out;
-  }
-  querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null; }
-  focusable() {
-    if (this.disabled || !(FOCUSABLE_TAGS.has(this.tagName) || this._tabIndex !== undefined)) return false;
-    for (let at = this; at; at = at.parentElement) if (at.hidden || at.inert) return false;
-    return this.isConnected;
-  }
-  focus() { if (this.focusable()) { this.ownerDocument._active = this; this.dispatchEvent(new Event('focusin')); } }
-  blur() { if (this.ownerDocument._active === this) this.ownerDocument._active = null; }
-  click() { if (!this.disabled) this.dispatchEvent(new Event('click')); }
-  dispatchEvent(event) {
-    event.target ??= this;
-    const path = [];
-    for (let at = this; at; at = at.parentElement) path.push(at);
-    if (this.isConnected) path.push(this.ownerDocument);
-    for (const at of path.reverse()) { if (event.stopped) break; at.fire(event, true); }
-    for (let at = this; at && !event.stopped; at = at.parentElement) at.fire(event);
-    if (!event.stopped && this.isConnected) this.ownerDocument.fire(event);
-    return !event.defaultPrevented;
-  }
-  getClientRects() { return this.focusable() ? [{}] : []; }
-  getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: 0 }; }
-}
-class Doc extends Target {
-  constructor() { super(); this.hidden = false; this._active = null; this.body = new El('body', this); }
-  createElement(tag) { return new El(tag, this); }
-  // Like a browser: a removed, hidden or inert element can't hold focus, so it falls back to <body>.
-  get activeElement() { return this._active?.focusable() ? this._active : this.body; }
-  dispatchEvent(event) { event.target ??= this; this.fire(event, true); if (!event.stopped) this.fire(event); }
-}
+import { Doc, El, Event, Target, pressKey } from './helpers/dom.js';
 
 const doc = new Doc();
 doc.fonts = new Target();
@@ -347,13 +215,17 @@ test('app: a held Enter or Space on a button acts once', async () => {
   const button = app.stage.querySelector('.cmd');
   let clicks = 0;
   button.addEventListener('click', () => clicks++);
-  const first = new Event('keydown', { key: 'Enter' });
-  button.dispatchEvent(first);
-  assert.equal(first.defaultPrevented, false, 'the first press is left to the browser');
   for (const key of ['Enter', ' ']) {
-    const held = new Event('keydown', { key, repeat: true });
-    button.dispatchEvent(held);
-    assert.equal(held.defaultPrevented, true, `a repeated ${JSON.stringify(key)} is swallowed`);
+    clicks = 0;
+    const first = pressKey(button, 'keydown', key);
+    assert.equal(first.defaultPrevented, false, 'the first press is left to the browser');
+    assert.equal(clicks, key === 'Enter' ? 1 : 0, 'Enter activates on down; Space waits for release');
+    for (let repeat = 0; repeat < 3; repeat++) {
+      const held = pressKey(button, 'keydown', key, { repeat: true });
+      assert.equal(held.defaultPrevented, true, `a repeated ${JSON.stringify(key)} is swallowed`);
+    }
+    pressKey(button, 'keyup', key);
+    assert.equal(clicks, 1, `one complete held ${JSON.stringify(key)} press activates exactly once`);
   }
   const area = doc.createElement('textarea');
   app.stage.append(area);
@@ -603,11 +475,12 @@ function realApp(state = createState(), storage = memoryStorage(state)) {
   return createApp(host, { storage, scenes: { encounter: createEncounterScene, music: createMusicScene, village: createVillageScene } });
 }
 function deferredAnimations() {
+  const original = El.prototype.animate;
   const pending = [];
   El.prototype.animate = () => ({ finished: new Promise(resolve => pending.push(resolve)) });
   return {
     async phase() { pending.splice(0).forEach(resolve => resolve()); await tick(); },
-    async restore() { El.prototype.animate = () => ({ finished: Promise.resolve() }); pending.splice(0).forEach(resolve => resolve()); await tick(); delete El.prototype.animate; },
+    async restore() { El.prototype.animate = () => ({ finished: Promise.resolve() }); pending.splice(0).forEach(resolve => resolve()); await tick(); El.prototype.animate = original; },
   };
 }
 
@@ -789,4 +662,151 @@ test('app: destruction during cover never mounts Music or leaves its global list
     assert.deepEqual(counts(), [before[0] - 1, before[1], before[2]]);
     assert.equal(await app.go('music'), false);
   } finally { app.destroy(); await animation?.restore(); }
+});
+
+const { createCommandMenu } = await import('../src/ui/menu.js');
+const { wipe } = await import('../src/ui/scenes.js');
+
+test('menu: focusing command two synchronizes the cursor and A chooses two', () => {
+  const { stage } = fakeCtx(), chosen = [];
+  const menu = createCommandMenu(stage, { onChoose: id => chosen.push(id) });
+  menu.set([{ id: 'one', label: 'One', icon: 'play' }, { id: 'two', label: 'Two', icon: 'stop' }]);
+  menu.focus();
+  slot(stage, 'two').focus();
+  assert.deepEqual(stage.querySelectorAll('.cmd-slot').map(b => b.tabIndex), [-1, 0, -1, -1]);
+  assert.equal(menu.handleIntent('a'), true);
+  assert.deepEqual(chosen, ['two']);
+  menu.destroy();
+});
+
+test('shared focus emits focus/blur at the target and focusin/focusout on ancestors', () => {
+  const { stage } = fakeCtx(), events = [];
+  const one = doc.createElement('button'), two = doc.createElement('button');
+  stage.append(one, two);
+  for (const [name, el] of [['one', one], ['two', two], ['stage', stage]]) {
+    for (const type of ['focus', 'blur', 'focusin', 'focusout']) el.addEventListener(type, e => events.push([name, e.type, e.relatedTarget]));
+  }
+  one.focus(); events.length = 0;
+  two.focus(); two.focus(); // focusing the active element emits nothing
+  assert.deepEqual(events, [
+    ['one', 'blur', two], ['one', 'focusout', two], ['stage', 'focusout', two],
+    ['two', 'focus', one], ['two', 'focusin', one], ['stage', 'focusin', one],
+  ]);
+  events.length = 0; two.blur();
+  assert.deepEqual(events, [['two', 'blur', null], ['two', 'focusout', null], ['stage', 'focusout', null]]);
+});
+
+for (const mode of ['normal', 'setting', 'ancestor', 'device']) {
+  test(`wipe: real ${mode} animation covers, swaps, uncovers and removes its curtain`, async () => {
+    const { stage } = fakeCtx(), priorMedia = globalThis.matchMedia;
+    doc.animations.calls = []; doc.animations.manual = true;
+    let swaps = 0, releaseSwap;
+    if (mode === 'ancestor') doc.body.classList.add('calm');
+    globalThis.matchMedia = query => { assert.equal(query, '(prefers-reduced-motion: reduce)'); return { matches: mode === 'device' }; };
+    try {
+      const pending = wipe(stage, { calm: () => mode === 'setting' })(async () => {
+        swaps++; assert.ok(stage.querySelector('.wipe'));
+        await new Promise(resolve => { releaseSwap = resolve; });
+      });
+      const count = mode === 'normal' ? 10 : 1;
+      const curtain = stage.querySelector('.wipe');
+      assert.ok(curtain); assert.equal(swaps, 0);
+      assert.equal(curtain.classList.contains('wipe--fade'), mode !== 'normal');
+      assert.equal(doc.animations.calls.length, count);
+      for (const [i, call] of doc.animations.calls.entries()) {
+        assert.deepEqual(call.options, mode === 'normal'
+          ? { fill: 'both', easing: 'linear', duration: 210, delay: i * 10 }
+          : { fill: 'both', easing: 'linear', duration: 75 });
+        assert.deepEqual(call.keyframes, mode === 'normal'
+          ? [{ transform: 'translateY(-100%)' }, { transform: 'translateY(0)' }]
+          : [{ opacity: 0 }, { opacity: 1 }]);
+      }
+      doc.animations.calls.slice(0, -1).forEach(c => c.resolve());
+      await tick(); assert.equal(swaps, 0, 'all covering animations must finish');
+      doc.animations.calls.at(-1).resolve(); await tick();
+      assert.equal(swaps, 1); assert.equal(doc.animations.calls.length, count, 'uncover waits for async mount');
+      releaseSwap(); await tick();
+      assert.equal(doc.animations.calls.length, count * 2);
+      for (const call of doc.animations.calls.slice(count)) {
+        assert.deepEqual(call.keyframes, mode === 'normal'
+          ? [{ transform: 'translateY(0)' }, { transform: 'translateY(100%)' }]
+          : [{ opacity: 1 }, { opacity: 0 }]);
+        call.resolve();
+      }
+      await pending;
+      assert.equal(stage.querySelector('.wipe'), null);
+      assert.equal(curtain.isConnected, false);
+    } finally {
+      doc.animations.manual = false; doc.body.classList.remove('calm');
+      if (priorMedia === undefined) delete globalThis.matchMedia; else globalThis.matchMedia = priorMedia;
+    }
+  });
+}
+
+test('wipe: rejected animations settle and a rejected swap always removes the curtain', async () => {
+  for (const failSwap of [false, true]) {
+    const { stage } = fakeCtx(); doc.animations.calls = []; doc.animations.manual = true;
+    let swaps = 0;
+    try {
+      const pending = wipe(stage, { calm: () => true })(() => { swaps++; if (failSwap) throw new Error('mount failed'); });
+      const outcome = failSwap ? assert.rejects(pending, /mount failed/) : pending;
+      doc.animations.calls[0].reject(new Error('cancelled cover'));
+      await tick(); assert.equal(swaps, 1);
+      if (!failSwap) { assert.equal(doc.animations.calls.length, 2); doc.animations.calls[1].reject(new Error('cancelled uncover')); }
+      await outcome;
+      assert.equal(stage.querySelector('.wipe'), null);
+    } finally { doc.animations.manual = false; }
+  }
+});
+
+test('app: real wipe blocks input and another scene change through both animation phases', async () => {
+  const { app, log } = fakeApp(); await app.go('title');
+  doc.animations.calls = []; doc.animations.manual = true;
+  try {
+    const pending = app.go('village');
+    const checkBlocked = () => {
+      const button = app.stage.querySelector('.cmd'); let clicks = 0;
+      const click = () => clicks++; button.addEventListener('click', click);
+      for (const key of ['Enter', ' ', 'z', 'Escape', 'ArrowRight']) {
+        assert.equal(pressKey(button, 'keydown', key).defaultPrevented, true, key);
+        pressKey(button, 'keyup', key);
+      }
+      assert.equal(clicks, 0); assert.deepEqual(log.intents, []);
+      button.removeEventListener('click', click);
+    };
+    checkBlocked(); assert.equal(await app.go('title'), false);
+    doc.animations.calls.forEach(c => c.resolve()); await tick();
+    assert.equal(doc.animations.calls.length, 20); checkBlocked();
+    assert.equal(await app.go('title'), false);
+    doc.animations.calls.slice(10).forEach(c => c.resolve()); await pending;
+    assert.equal(app.stage.querySelector('.wipe'), null);
+    pressKey(app.stage.querySelector('.cmd'), 'keydown', 'ArrowRight');
+    assert.deepEqual(log.intents, ['right']);
+  } finally { doc.animations.manual = false; app.destroy(); }
+});
+
+test('wipe: hidden documents and unavailable animation swap directly without a curtain', async () => {
+  for (const mode of ['hidden', 'unavailable']) {
+    const { stage } = fakeCtx(); doc.animations.calls = [];
+    if (mode === 'hidden') doc.hidden = true; else stage.animate = undefined;
+    try {
+      let swaps = 0;
+      await wipe(stage)(() => { swaps++; });
+      assert.equal(swaps, 1);
+      assert.equal(doc.animations.calls.length, 0);
+      assert.equal(stage.querySelector('.wipe'), null);
+    } finally { doc.hidden = false; }
+  }
+});
+
+test('wipe: the same transition reads the current Calm motion setting each time', async () => {
+  const { stage } = fakeCtx(); let calm = false;
+  const transition = wipe(stage, { calm: () => calm });
+  doc.animations.calls = [];
+  await transition(() => {});
+  assert.equal(doc.animations.calls.length, 20);
+  calm = true; doc.animations.calls = [];
+  await transition(() => {});
+  assert.equal(doc.animations.calls.length, 2);
+  assert.ok(doc.animations.calls.every(call => call.options.duration === 75));
 });

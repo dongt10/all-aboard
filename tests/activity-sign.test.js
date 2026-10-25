@@ -152,9 +152,7 @@ test('the activity names, commands, help and lines follow the brief', () => {
   for (const grade of [1, 2, 3, 4, 5]) assert.deepEqual(signHelp(grade), ['Tap words to add them, or type your own.', 'Remove word takes one tile back.', 'Clear sign starts again.', 'Choose Put up sign.']);
   assert.ok(signHelp(0).every(step => !/typ/i.test(step)), 'K help never mentions typing');
   assert.equal(sign.helpFor, signHelp);
-  // `help` follows the grade of the last start, since the help window has no grade of its own.
-  sign.start(null, { chapter: 0, grade: 0 }); assert.deepEqual(sign.help, signHelp(0));
-  sign.start(null, { chapter: 1, grade: 2 }); assert.deepEqual(sign.help, signHelp(2));
+  for (const grade of [0, 2, 5, 0, 1]) assert.deepEqual(sign.helpFor(grade), signHelp(grade));
   const s = sign.start(null, { chapter: 1, grade: 2 });
   assert.equal(sign.opening(s.state, s.ui, 2), 'Choose words for your welcome sign.');
   const ready = sign.start({ kind: 'writing', text: 'Welcome' }, { chapter: 1, grade: 2 });
@@ -307,4 +305,18 @@ test('legacy sign recovery uses only whole grade tiles; explicit typed runs stay
   assert.equal(command(s, 'remove', 5).state.text, 'Everyone belongs');
   assert.deepEqual(sign.start({ kind: 'writing', text: 'Come bus.' }, { chapter: 1, grade: 1 }).ui.tiles, []);
   assert.deepEqual(sign.start({ kind: 'writing', text: 'Welcome, neighbors!' }, { chapter: 1, grade: 1 }).ui.tiles, []);
+});
+
+test('sign start is pure across interleaved grades and helpFor stays grade-specific', () => {
+  const fallback = [...sign.help];
+  const k = sign.start(null, { chapter: 0, grade: 0 });
+  const kBefore = structuredClone(k);
+  for (const grade of [5, 0, 2, 1, 0]) {
+    const context = Object.freeze({ chapter: grade === 0 ? 0 : 1, grade });
+    sign.start(null, context);
+    assert.deepEqual(sign.helpFor(grade), signHelp(grade));
+    assert.deepEqual(sign.helpFor(0), signHelp(0), 'another grade never changes K help');
+    assert.deepEqual(k, kBefore, 'an earlier start remains independent');
+    assert.deepEqual(sign.help, fallback, 'start does not mutate module-global fallback help');
+  }
 });

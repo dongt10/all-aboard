@@ -54,6 +54,7 @@ export function createMusicScene(ctx) {
   let quiet = false, quietTimer = null, quietBand = null, quietBeat = 0, playedOnce = false;
   let echo = null, echoCount = 0, echoToken = 0;   // echo: { mask, phase: 'demo' | 'copy', beat, timer }
   let destroyed = false, finishing = false;
+  let reward = null;
   const $ = selector => root.querySelector(selector);
   const settings = () => ctx.getState().settings ?? {};
   const say = (speaker, words) => { if (!destroyed) dialogue.say(speaker, words); };
@@ -335,14 +336,20 @@ export function createMusicScene(ctx) {
     await ctx.go('village', { focus: 'music' });
   }
   const finish = onceAtATime(async () => {
-    if (!edited()) return;
+    if (destroyed || finishing || !edited()) return;
     stopAll();
     saveNow();
     finishing = true;   // the card is up: B and Village wait for it
-    await showItemGet(ctx.stage, { name: 'Festival band', artHTML: creationMarkup('music', band), figureHTML: figureMarkup('music', { pose: 'joy', scale: 2 }) });
-    if (destroyed) return;
-    ctx.commit(publishCreation(ctx.getState(), 'music', withScope(band, ctx.getState())));
-    await ctx.go('village', { focus: 'music', celebrate: 'music' });
+    const app = ctx.getState();
+    const scope = { chapter: app.chapter, grade: app.grade, subjectId: 'music' };
+    const creation = withScope(band, scope);
+    reward = showItemGet(ctx.stage, { name: 'Festival band', artHTML: creationMarkup(scope.subjectId, creation), figureHTML: figureMarkup('music', { pose: 'joy', scale: 2 }) });
+    const accepted = await reward;
+    reward = null;
+    const current = ctx.getState();
+    if (!accepted || destroyed || current.chapter !== scope.chapter || current.grade !== scope.grade) return;
+    ctx.commit(publishCreation(current, scope.subjectId, creation));
+    await ctx.go('village', { focus: scope.subjectId, celebrate: scope.subjectId });
   });
   function choose(id) {
     if (id === 'play') togglePlay();
@@ -447,6 +454,8 @@ export function createMusicScene(ctx) {
       if (echo) { clearInterval(echo.timer); echo = null; }   // leaving mid-demo needs no "Echo stopped" line
       stopAll();
       destroyed = true;
+      reward?.cancel();
+      reward = null;
       document.removeEventListener('visibilitychange', onHidden);
       engine?.destroy();
       dialogue?.destroy();

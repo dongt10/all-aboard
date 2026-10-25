@@ -208,54 +208,8 @@ test('tray labels are words at every grade, with the number from grade 2 up', ()
   for (const grade of GRADES) assert.doesNotMatch(iceLabel(50, grade), /%/);
 });
 
-// A small DOM stand-in, enough for mountField: elements, classes, attributes, querySelector by the few selectors used.
-function fakeDoc() {
-  const matches = (el, sel) => sel.split(',').some(part => {
-    part = part.trim();
-    const m = part.match(/^\.([\w-]+)(?:\[data-tray="(\w+)"\])?(?:\s+(\w+))?$/);
-    if (!m) return false;
-    if (m[3]) return false;   // handled by querySelector below
-    return el.classList.has(m[1]) && (!m[2] || el.dataset.tray === m[2]);
-  });
-  const make = tag => {
-    const el = {
-      tagName: tag.toUpperCase(), children: [], attrs: {}, dataset: {}, style: {}, textContent: '', parent: null,
-      classList: { set: new Set(), add(c) { this.set.add(c); }, has(c) { return this.set.has(c); }, toggle(c, on) { on ? this.set.add(c) : this.set.delete(c); }, contains(c) { return this.set.has(c); } },
-      set className(v) { el.classList.set = new Set(v.split(/\s+/).filter(Boolean)); }, get className() { return [...el.classList.set].join(' '); },
-      set innerHTML(html) { el.children = parse(html, el); }, get innerHTML() { return ''; },
-      setAttribute(k, v) { el.attrs[k] = String(v); }, getAttribute(k) { return el.attrs[k] ?? null; },
-      addEventListener() {}, removeEventListener() {}, append(...kids) { for (const k of kids) { k.parent = el; el.children.push(k); } }, remove() {},
-      contains(other) { return other === el || el.children.some(c => c.contains(other)); },
-      querySelectorAll(sel) { const out = []; const walk = n => { for (const c of n.children) { if (matches(c, sel)) out.push(c); walk(c); } }; walk(el); return out; },
-      querySelector(sel) {
-        const [first, ...rest] = sel.trim().split(/\s+/);
-        let found = el.querySelectorAll(first)[0] ?? null;
-        for (const part of rest) found = found ? found.querySelectorAll(part.startsWith('.') ? part : `.${part}`)[0] ?? found.children.find(c => c.tagName === part.toUpperCase()) ?? null : null;
-        return found;
-      },
-    };
-    return el;
-  };
-  // Tiny tag parser for the markup mountField writes: nested tags with class/data/aria attributes, text ignored.
-  function parse(html, parent) {
-    const stack = [{ children: [] }];
-    const re = /<(\/?)([a-z]+)([^>]*?)(\/?)>/gi;
-    let m;
-    while ((m = re.exec(html))) {
-      const [, close, tag, attrText, selfClose] = m;
-      if (close) { stack.pop(); continue; }
-      const el = make(tag);
-      for (const [, k, v] of attrText.matchAll(/([\w-]+)="([^"]*)"/g)) {
-        if (k === 'class') el.className = v; else if (k.startsWith('data-')) el.dataset[k.slice(5)] = v; else el.attrs[k] = v;
-      }
-      el.parent = stack.at(-1); stack.at(-1).children.push(el);
-      if (!selfClose && !['path', 'rect', 'circle', 'line', 'polygon', 'use'].includes(tag)) stack.push(el);
-    }
-    for (const c of stack[0].children) c.parent = parent;
-    return stack[0].children;
-  }
-  return { createElement: make };
-}
+import { Doc } from './helpers/dom.js';
+const fakeDoc = () => new Doc();
 
 test('the field reads minutes, Tray A / Tray B with ice words, and shows the shade only over the shaded tray', () => {
   const doc = fakeDoc();
@@ -270,9 +224,9 @@ test('the field reads minutes, Tray A / Tray B with ice words, and shows the sha
   field.update(state, {});
   assert.equal(root.querySelector('.ice-clock b').textContent, '10 minutes');
   const [a, b] = root.querySelectorAll('.ice-tray');
-  assert.deepEqual([a.querySelector('.ice-name') ? 'Tray A' : null, a.querySelector('.ice-left').textContent], ['Tray A', 'Lots of ice · 80']);
-  assert.equal(b.querySelector('.ice-left').textContent, 'Less ice · 50');
-  assert.deepEqual([a.classList.has('ice-tray--shaded'), b.classList.has('ice-tray--shaded')], [true, false]);
+  assert.deepEqual([a.querySelector('.ice-name').textContent, a.querySelector('.ice-left').textContent], ['Tray A', 'Lots of ice · 80']);
+  assert.deepEqual([b.querySelector('.ice-name').textContent, b.querySelector('.ice-left').textContent], ['Tray B', 'Less ice · 50']);
+  assert.deepEqual([a.classList.contains('ice-tray--shaded'), b.classList.contains('ice-tray--shaded')], [true, false]);
   assert.deepEqual([a.getAttribute('aria-pressed'), b.getAttribute('aria-pressed')], ['true', 'false']);
   assert.equal(a.getAttribute('aria-label'), 'Tray A, in the shade, Lots of ice · 80');
   assert.equal(b.getAttribute('aria-label'), 'Tray B, in the sun, Less ice · 50');

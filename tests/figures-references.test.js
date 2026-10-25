@@ -132,3 +132,50 @@ for (const [id, reference] of Object.entries(manifest.characters)) {
     }
   });
 }
+
+// Frozen side geometry names source-reference pixels, never colors read from the output sheet.
+// Runs are [count, reference pixel index]; -1 is transparent. Step patches are
+// [destination pixel index, reference pixel index]. Right frames derive only from these expectations.
+const sideGeometry = JSON.parse(readFileSync(new URL('./fixtures/neighbor-side-geometry.json', import.meta.url), 'utf8'));
+function referenceSides(reference, geometry) {
+  const front = deriveStand(reference);
+  const stand = geometry.leftStandRuns.flatMap(([count, source]) => Array(count).fill(source));
+  assert.equal(stand.length, size * size, 'side recipe covers the whole frame');
+  const left = [0, 1, 2].map(col => {
+    const indices = [...stand];
+    if (col !== 1) for (const [destination, source] of geometry.leftSteps[col / 2]) indices[destination] = source;
+    return indices.map(index => {
+      assert.ok(Number.isInteger(index) && index >= -1 && index < size * size, 'valid reference coordinate');
+      return index === -1 ? [0, 0, 0, 0] : pixel(front, index % size, Math.floor(index / size));
+    });
+  });
+  return [left, reference.rightMirrorColumns.map(col => Array.from({ length: size * size }, (_, i) =>
+    left[col][Math.floor(i / size) * size + size - 1 - i % size]))];
+}
+function assertReferenceSides(sheet, reference, geometry) {
+  const expected = referenceSides(reference, geometry);
+  for (let side = 0; side < 2; side++) for (let col = 0; col < 3; col++) {
+    for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+      expectPixel(pixel(sheet, col * size + x, (side + 1) * size + y), expected[side][col][y * size + x],
+        `${reference.name} reference-derived side ${side} frame ${col}`, x, y);
+    }
+  }
+}
+for (const [id, reference] of Object.entries(manifest.characters)) {
+  test(`${reference.name}: every side stand, step and mirror matches independent reference pixel recipes`, () => {
+    const sheet = readPNG(new URL(`../assets/figures/${id}.png`, import.meta.url));
+    assertReferenceSides(sheet, reference, sideGeometry[id]);
+  });
+}
+test('side reference checks reject a mirrored recolor even when all side frames agree', () => {
+  const sheet = readPNG(new URL('../assets/figures/math.png', import.meta.url));
+  let changed = 0;
+  for (let y = 64; y < 192; y++) for (let x = 0; x < 192; x++) {
+    const at = (y * sheet.width + x) * 4;
+    if (equal(sheet.rgba.slice(at, at + 3), [255, 154, 60]) && sheet.rgba[at + 3]) {
+      sheet.rgba.set([255, 0, 255], at); changed++;
+    }
+  }
+  assert.ok(changed > 0, 'the isolated mutation changes orange side pixels');
+  assert.throws(() => assertReferenceSides(sheet, manifest.characters.math, sideGeometry.math), /differs from expected/);
+});

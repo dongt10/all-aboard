@@ -5,10 +5,11 @@ let serial = 0;
 
 // The item-get card: "You made… {name}!", the creation drawn large beside the neighbor's joy pose, and
 // a Put it in the festival button with the play icon like every other button. A (or any click on the
-// card) resolves the promise once. artHTML and
+// card) resolves the promise true once. Its cancel() removes the card and resolves false. artHTML and
 // figureHTML are trusted markup from creations.js and figures; the name is set as text.
 export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {}) {
-  return new Promise(resolve => {
+  let cancel;
+  const promise = new Promise(resolve => {
     const opener = document.activeElement;
     const titleId = `item-get-title-${++serial}`;
     const backdrop = document.createElement('div');
@@ -30,21 +31,24 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {})
     dimmed.forEach(child => { child.inert = true; });
 
     let done = false;
-    function finish() {
+    function finish(accepted) {
       if (done) return;
       done = true;
       backdrop.remove();
       dimmed.forEach(child => { child.inert = false; });
       if (opener?.isConnected && !opener.disabled) opener.focus({ preventScroll: true });
-      resolve();
+      resolve(accepted);
     }
-    card.addEventListener('click', finish);
+    cancel = () => finish(false);
+    card.addEventListener('click', () => finish(true));
     card.addEventListener('keydown', event => {
       const intent = keyIntent(event);
-      if (intent === 'a' && !event.repeat) { event.preventDefault(); event.stopPropagation(); finish(); }
+      if (intent === 'a' && !event.repeat) { event.preventDefault(); event.stopPropagation(); finish(true); }
       else if (event.key === 'Tab') { event.preventDefault(); button.focus(); }   // one control: Tab stays on it
     });
     stage.append(backdrop);
     button.focus({ preventScroll: true });
   });
+  promise.cancel = cancel;
+  return promise;
 }

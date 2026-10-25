@@ -81,136 +81,7 @@ test('every parade line fits one dialogue page sentence by sentence, even with B
 // ---- The scene and the windows, mounted under a tiny fake DOM (the same harness as tests/fixes-behavior.test.js,
 // plus replaceWith, which the Guide header uses). Focus follows browser rules: hidden, inert, disabled or
 // detached elements lose it. ----
-const FOCUSABLE_TAGS = new Set(['BUTTON', 'INPUT', 'TEXTAREA', 'SELECT']);
-const camel = name => name.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
-
-function attrOf(el, name) {
-  if (name.startsWith('data-')) return el.dataset[camel(name.slice(5))] ?? null;
-  if (name === 'tabindex') return el._tabIndex === undefined ? null : String(el._tabIndex);
-  return el.attrs.get(name) ?? null;
-}
-function matchCompound(el, compound) {
-  let rest = compound;
-  const tag = rest.match(/^[a-z]+/i)?.[0];
-  if (tag && el.tagName !== tag.toUpperCase()) return false;
-  rest = rest.slice(tag?.length ?? 0);
-  while (rest) {
-    let m;
-    if ((m = rest.match(/^\.([\w-]+)/))) { if (!el.classList.contains(m[1])) return false; }
-    else if ((m = rest.match(/^\[([\w-]+)(?:="([^"]*)")?\]/))) { const v = attrOf(el, m[1]); if (v === null || (m[2] !== undefined && v !== m[2])) return false; }
-    else if ((m = rest.match(/^:not\((.+?\]?)\)/))) { if (matchCompound(el, m[1])) return false; }
-    else if ((m = rest.match(/^:disabled/))) { if (!el.disabled) return false; }
-    else throw new Error(`fake DOM: unsupported selector ${compound}`);
-    rest = rest.slice(m[0].length);
-  }
-  return true;
-}
-function matches(el, selector) {
-  return selector.split(',').some(part => {
-    const chain = part.trim().split(/\s+/);
-    if (!matchCompound(el, chain.at(-1))) return false;
-    let at = el.parentElement;
-    for (let i = chain.length - 2; i >= 0; i--) {
-      while (at && !matchCompound(at, chain[i])) at = at.parentElement;
-      if (!at) return false;
-      at = at.parentElement;
-    }
-    return true;
-  });
-}
-
-const VOID = new Set(['input', 'br', 'img', 'hr', 'meta']);
-function parseInto(host, html) {
-  const stack = [host];
-  for (const [, close, tag, attrs, selfClose] of html.replace(/<!--[\s\S]*?-->/g, '').matchAll(/<(\/?)([a-zA-Z][\w-]*)([^>]*?)(\/?)>/g)) {
-    if (close) { const i = stack.findLastIndex(el => el.tagName === tag.toUpperCase()); if (i > 0) stack.length = i; continue; }
-    const el = new El(tag, host.ownerDocument);
-    for (const [, k, v = ''] of attrs.matchAll(/([\w:-]+)(?:="([^"]*)")?/g)) {
-      if (k === 'class') el.className = v;
-      else if (k.startsWith('data-')) el.dataset[camel(k.slice(5))] = v;
-      else if (k === 'hidden' || k === 'disabled') el[k] = true;
-      else el.setAttribute(k, v);
-    }
-    stack.at(-1).append(el);
-    if (!selfClose && !VOID.has(tag.toLowerCase())) stack.push(el);
-  }
-}
-
-class Event {
-  constructor(type, init = {}) { Object.assign(this, { type, bubbles: true, defaultPrevented: false, repeat: false }, init); }
-  preventDefault() { this.defaultPrevented = true; }
-  stopPropagation() { this.stopped = true; }
-}
-class Target {
-  constructor() { this.listeners = {}; }
-  addEventListener(type, fn, options) { (this.listeners[type] ??= []).push({ fn, once: options?.once }); }
-  removeEventListener(type, fn) { this.listeners[type] = (this.listeners[type] ?? []).filter(l => l.fn !== fn); }
-  fire(event) {
-    for (const l of [...(this.listeners[event.type] ?? [])]) { if (l.once) this.removeEventListener(event.type, l.fn); l.fn(event); }
-  }
-}
-class El extends Target {
-  constructor(tag, doc) {
-    super();
-    Object.assign(this, { tagName: tag.toUpperCase(), ownerDocument: doc, children: [], parentElement: null, dataset: {}, attrs: new Map(), hidden: false, inert: false, disabled: false, textContent: '', value: '', _html: '' });
-    const set = this._classes = new Set();
-    this.classList = { add: (...n) => n.forEach(c => set.add(c)), remove: (...n) => n.forEach(c => set.delete(c)), contains: c => set.has(c), toggle: (c, on = !set.has(c)) => { if (on) set.add(c); else set.delete(c); return on; } };
-    this.style = { setProperty(k, v) { this[k] = v; } };
-  }
-  get className() { return [...this._classes].join(' '); }
-  set className(v) { this._classes.clear(); String(v).split(/\s+/).filter(Boolean).forEach(c => this._classes.add(c)); }
-  get tabIndex() { return this._tabIndex ?? (FOCUSABLE_TAGS.has(this.tagName) ? 0 : -1); }
-  set tabIndex(v) { this._tabIndex = v; }
-  get innerHTML() { return this._html; }
-  set innerHTML(v) { this.children.forEach(c => { c.parentElement = null; }); this.children = []; this._html = String(v); parseInto(this, this._html); }
-  get firstElementChild() { return this.children[0] ?? null; }
-  get isConnected() { let at = this; while (at.parentElement) at = at.parentElement; return at === this.ownerDocument.body; }
-  setAttribute(k, v) { if (k === 'tabindex') this._tabIndex = Number(v); else this.attrs.set(k, String(v)); }
-  getAttribute(k) { return attrOf(this, k); }
-  removeAttribute(k) { this.attrs.delete(k); }
-  toggleAttribute(k, on = !this.attrs.has(k)) { if (on) this.attrs.set(k, ''); else this.attrs.delete(k); return on; }
-  append(...nodes) { for (const n of nodes) if (typeof n !== 'string') { n.remove(); n.parentElement = this; this.children.push(n); } }
-  after(...nodes) {
-    const p = this.parentElement; if (!p) return;
-    nodes.forEach(n => n.remove());
-    const at = p.children.indexOf(this) + 1;
-    nodes.forEach((n, i) => { n.parentElement = p; p.children.splice(at + i, 0, n); });
-  }
-  replaceWith(node) { this.after(node); this.remove(); }
-  remove() { const p = this.parentElement; if (p) p.children = p.children.filter(c => c !== this); this.parentElement = null; }
-  contains(other) { for (let at = other; at; at = at.parentElement) if (at === this) return true; return false; }
-  closest(selector) { for (let at = this; at; at = at.parentElement) if (matches(at, selector)) return at; return null; }
-  matches(selector) { return matches(this, selector); }
-  querySelectorAll(selector) {
-    const out = [];
-    const walk = el => el.children.forEach(c => { if (matches(c, selector)) out.push(c); walk(c); });
-    walk(this);
-    return out;
-  }
-  querySelector(selector) { return this.querySelectorAll(selector)[0] ?? null; }
-  focusable() {
-    if (this.disabled || !(FOCUSABLE_TAGS.has(this.tagName) || this._tabIndex !== undefined)) return false;
-    for (let at = this; at; at = at.parentElement) if (at.hidden || at.inert) return false;
-    return this.isConnected;
-  }
-  focus() { if (this.focusable()) this.ownerDocument._active = this; }
-  blur() { if (this.ownerDocument._active === this) this.ownerDocument._active = null; }
-  click() { if (!this.disabled) this.dispatchEvent(new Event('click')); }
-  dispatchEvent(event) {
-    event.target ??= this;
-    for (let at = this; at && !event.stopped; at = at.parentElement) at.fire(event);
-    if (!event.stopped && this.isConnected) this.ownerDocument.fire(event);
-    return !event.defaultPrevented;
-  }
-  getClientRects() { return this.focusable() ? [{}] : []; }
-  getBoundingClientRect() { return { left: 0, top: 0, width: 0, height: 0 }; }
-}
-class Doc extends Target {
-  constructor() { super(); this.hidden = false; this._active = null; this.body = new El('body', this); }
-  createElement(tag) { return new El(tag, this); }
-  get activeElement() { return this._active?.focusable() ? this._active : this.body; }
-  dispatchEvent(event) { event.target ??= this; this.fire(event); }
-}
+import { Doc, El, Event } from './helpers/dom.js';
 
 const doc = new Doc();
 const speech = { cancels: 0, cancel() { this.cancels++; }, speak() {} };
@@ -377,23 +248,32 @@ test('guide window: Kiko gets a short Save song button with an icon only once a 
   assert.equal(ctx.stage.querySelector('.win-backdrop'), null);
 });
 
-test('guide window: a recording that finishes after the window closed is dropped', async () => {
-  const ctx = fakeCtx(withBand());
-  let finish;
-  globalThis.OfflineAudioContext = class { constructor() { return { createGain: () => ({ gain: {}, connect() {} }), destination: {}, startRendering: () => new Promise(resolve => { finish = resolve; }) }; } };
-  try {
-    openGuideWindow(ctx, { id: 'music' });
-    const status = ctx.stage.querySelector('.guide-record__status');
-    ctx.stage.querySelector('[data-action="record"]').click();
-    assert.equal(status.textContent, RECORDING_LINES.making);
-    ctx.stage.querySelector('.win__close').click();
-    finish?.({ numberOfChannels: 2, length: 0, sampleRate: 44100, getChannelData: () => new Float32Array(0) });
-    await tick();
-    assert.equal(status.textContent, RECORDING_LINES.making, 'nothing downloads after close');
-  } finally {
-    delete globalThis.OfflineAudioContext;
-  }
-});
+for (const closeEarly of [true, false]) {
+  test(`guide window: a real pending recording ${closeEarly ? 'is dropped after close' : 'downloads while open'}`, async () => {
+    const ctx = fakeCtx(withBand()), recording = deferredRecording();
+    let handle;
+    try {
+      handle = openGuideWindow(ctx, { id: 'music' });
+      const status = ctx.stage.querySelector('.guide-record__status');
+      ctx.stage.querySelector('[data-action="record"]').click();
+      assert.equal(status.textContent, RECORDING_LINES.making);
+      assert.equal(recording.renderCalls, 1, 'rendering started before the window can close');
+      assert.equal(recording.canFinish, true, 'a completion resolver exists');
+      assert.ok(recording.notesStarted > 0, 'the published band scheduled real notes');
+      if (closeEarly) ctx.stage.querySelector('.win__close').click();
+      await recording.finish();
+      assert.equal(recording.urls.length, closeEarly ? 0 : 1);
+      assert.equal(recording.downloads, closeEarly ? 0 : 1);
+      assert.equal(status.textContent, closeEarly ? RECORDING_LINES.making : RECORDING_LINES.ready);
+      if (!closeEarly) {
+        assert.equal(recording.blobs[0].type, 'audio/wav');
+        const wav = new Uint8Array(await recording.blobs[0].arrayBuffer());
+        assert.equal(String.fromCharCode(...wav.slice(0, 4)), 'RIFF');
+        assert.deepEqual(recording.filenames, ['my-festival-band.wav']);
+      }
+    } finally { handle?.close(); recording.restore(); }
+  });
+}
 
 test('recording lines fit a dialogue page and avoid grown-up words', () => {
   for (const line of Object.values(RECORDING_LINES)) {
@@ -413,22 +293,31 @@ function recordingApp() {
 }
 function deferredRecording() {
   const originals = { OfflineAudioContext: globalThis.OfflineAudioContext, create: URL.createObjectURL, revoke: URL.revokeObjectURL, click: El.prototype.click, setTimeout, clearTimeout };
-  const urls = [], revoked = [], timers = new Set();
-  let render, downloads = 0;
+  const urls = [], revoked = [], blobs = [], filenames = [], timers = new Set();
+  let render, downloads = 0, renderCalls = 0, notesStarted = 0;
   const node = () => ({ connect() {}, disconnect() {} });
+  const param = () => ({ value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} });
   globalThis.OfflineAudioContext = class {
+    constructor(channels, length, sampleRate) { this.sampleRate = sampleRate; }
     destination = {};
-    createGain() { return { ...node(), gain: {} }; }
+    createGain() { return { ...node(), gain: param() }; }
+    createOscillator() { return { ...node(), frequency: param(), start() { notesStarted++; }, stop() {} }; }
+    createBiquadFilter() { return { ...node(), frequency: param(), Q: param() }; }
+    createBuffer(channels, length) { return { getChannelData: () => new Float32Array(length) }; }
+    createBufferSource() { return { ...node(), start() { notesStarted++; }, stop() {} }; }
     createDynamicsCompressor() { return { ...node(), threshold: {}, knee: {}, ratio: {}, attack: {}, release: {} }; }
-    startRendering() { return new Promise(resolve => { render = resolve; }); }
+    startRendering() { renderCalls++; return new Promise(resolve => { render = resolve; }); }
   };
-  URL.createObjectURL = () => { const url = `blob:recording-${urls.length}`; urls.push(url); return url; };
+  URL.createObjectURL = blob => { blobs.push(blob); const url = `blob:recording-${urls.length}`; urls.push(url); return url; };
   URL.revokeObjectURL = url => revoked.push(url);
-  El.prototype.click = function () { if (this.tagName === 'A') downloads++; return originals.click.call(this); };
+  El.prototype.click = function () { if (this.tagName === 'A') { downloads++; filenames.push(this.download); } return originals.click.call(this); };
   globalThis.setTimeout = (fn, ms, ...args) => { const timer = originals.setTimeout(fn, ms, ...args); if (ms === 30000) timers.add(timer); return timer; };
   globalThis.clearTimeout = timer => { timers.delete(timer); originals.clearTimeout(timer); };
   return {
-    urls, revoked, timers,
+    urls, revoked, timers, blobs, filenames,
+    get renderCalls() { return renderCalls; },
+    get canFinish() { return typeof render === 'function'; },
+    get notesStarted() { return notesStarted; },
     get downloads() { return downloads; },
     async finish() {
       assert.equal(typeof render, 'function', 'the offline render actually started');

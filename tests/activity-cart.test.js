@@ -298,3 +298,16 @@ test('the field: a crate rail per band, loaded crates are buttons that take them
     globalThis.document = previous;
   }
 });
+
+test('repeated cart rolls preserve saved-state identity while replaying the roll feedback', () => {
+  for (const right of [[1], [2]]) {
+    const { state, ui } = cart.start({ kind: 'math', left: [1], right, rolled: true }, { chapter: 1, grade: 1 });
+    const before = structuredClone(state);
+    const result = cart.act(state, ui, cmd('roll'), 1);
+    assert.deepEqual(result.state, before, 'saved values are unchanged');
+    assert.equal(result.state, state, 'a value-preserving action must return the original saved state');
+    assert.equal(result.ui.rolls, ui.rolls + 1, 'the animation can still replay');
+    assert.equal(result.ui.lastRoll, right[0] === 1 ? 'smooth' : 'wobble');
+    assert.equal(result.line, right[0] === 1 ? LINES.smooth : LINES.wobble('right', 1));
+  }
+});

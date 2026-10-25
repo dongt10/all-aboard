@@ -39,6 +39,7 @@ export function createEncounterScene(ctx, { id } = {}) {
   if (!character || !activity) throw new RangeError(`No encounter for ${id}`);
   const theme = SUBJECT_THEME[id];
   let root, field, menu, dialogue, state, ui, grade, finishing = false, dirty = false;
+  let destroyed = false, reward = null;
 
   const scoped = () => withScope(state, ctx.getState());
   const saveNow = () => ctx.commit(saveDraft(ctx.getState(), id, scoped()));
@@ -68,16 +69,23 @@ export function createEncounterScene(ctx, { id } = {}) {
   }
 
   const finish = onceAtATime(async () => {
-    if (finishing || !encounterReady(state)) return;
+    if (destroyed || finishing || !encounterReady(state)) return;
     finishing = true;
     saveNow();
-    await showItemGet(ctx.stage, {
+    const app = ctx.getState();
+    const scope = { chapter: app.chapter, grade: app.grade, subjectId: id };
+    const creation = withScope(state, scope);
+    reward = showItemGet(ctx.stage, {
       name: activity.rewardLabel ?? character.reward.label,
-      artHTML: creationMarkup(id, scoped()),
+      artHTML: creationMarkup(scope.subjectId, creation),
       figureHTML: figureMarkup(id, { pose: 'joy', scale: 2 }),
     });
-    ctx.commit(publishCreation(ctx.getState(), id, scoped()));
-    await ctx.go('village', { focus: id, celebrate: id });
+    const accepted = await reward;
+    reward = null;
+    const current = ctx.getState();
+    if (!accepted || destroyed || current.chapter !== scope.chapter || current.grade !== scope.grade) return;
+    ctx.commit(publishCreation(current, scope.subjectId, creation));
+    await ctx.go('village', { focus: scope.subjectId, celebrate: scope.subjectId });
   });
   const leave = onceAtATime(async () => {
     if (finishing) return;
@@ -148,6 +156,10 @@ export function createEncounterScene(ctx, { id } = {}) {
     },
     pause() {},
     destroy() {
+      if (destroyed) return;
+      destroyed = true;
+      reward?.cancel();
+      reward = null;
       field?.destroy();
       dialogue?.destroy();
       menu?.destroy();
