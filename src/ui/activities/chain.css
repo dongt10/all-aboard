@@ -27,7 +27,7 @@
 .chain-sun-card .chain-picture::before, .chain-sun-card .chain-picture::after { display: none; }
 .chain-creature { position: relative; display: flex; color: var(--ink); }
 .chain-glyph { flex: none; display: block; image-rendering: pixelated; }
-.chain-empty { border: 1px solid var(--ink); box-shadow: inset 1px 1px 0 var(--white), inset -2px -2px 0 var(--paper-shade); background: var(--paper); width: 32px; height: 32px; text-align: center; font-size: 24px; line-height: 30px; }
+.chain-empty { border: 1px solid var(--ink); box-shadow: inset 1px 1px 0 var(--white), inset -2px -2px 0 var(--paper-shade); background: var(--paper); width: 32px; height: 32px; text-align: center; font-size: var(--text-field); line-height: 30px; }
 .chain-word { white-space: nowrap; font-size: var(--text-field); line-height: 1.2; }
 .chain-energy { font-family: var(--font-pixel); font-size: var(--text-field); line-height: 1.1; padding: 2px 5px; }
 .chain-energy::before { border: 1px solid var(--ink); background: var(--paper); clip-path: none; box-shadow: inset 2px 2px 0 var(--white), inset -2px -3px 0 var(--paper-shade); }
@@ -49,6 +49,7 @@
 .chain-card { position: relative; width: 118px; height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; }
 .chain-card-pic { display: flex; flex: none; }
 .chain-card-word { white-space: nowrap; }
+.chain-word--long { font-size: var(--text-small); }
 .chain-card-check { position: absolute; top: 2px; right: 2px; border: 1px solid var(--ink); background: var(--paper); display: flex; box-shadow: inset 1px 1px 0 var(--white), inset -1px -1px 0 var(--paper-shade); }
 .chain-card--placed { background: var(--paper-shade); box-shadow: inset 2px 2px 0 var(--paper), inset -2px -3px 0 #d6c39d; cursor: default; }
 .chain-tile { position: relative; width: 72px; height: 38px; }

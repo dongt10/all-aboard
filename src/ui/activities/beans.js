@@ -61,9 +61,10 @@ function act(state, ui, action) {
     };
     if (action.id === 'wait') {
       const next = waitWeek(state);
-      const line = !CHANGES.includes(state.change) ? LINES.chooseFirst
+      let line = !CHANGES.includes(state.change) ? LINES.chooseFirst
         : next === state ? nextStepLine(state)
           : LINES[`week${next.weeks}${state.change === 'water' ? 'Water' : 'Dark'}`];
+      if (next !== state && beansReady(next)) line = line.replace(/Fill the bed card\.$/, 'Choose Plant bed.');
       return { state: next, ui, line };
     }
     return { state, ui };

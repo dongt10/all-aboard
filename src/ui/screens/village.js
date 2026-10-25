@@ -28,9 +28,21 @@ export const CELEBRATE_LINE = 'That’s going straight into the festival!';
 const A_KEYS = new Set(['Enter', ' ', 'z', 'Z']);
 const WALK_HINT = 'Walk up to a neighbor, then press Enter.';
 
-// Keep the welcome above the square and move other words clear of the speaker's feet.
+const preferredBox = (feet, words) => words === WELCOME_LINE || (feet?.x > 440 && feet?.y > 330) ? 'top' : 'bottom';
+// Include the tabs and More chip, which extend 18px above and below each frame.
+const DIALOGUE_BOXES = {
+  top: { x: 244, y: 150, w: 472, h: 172 },
+  bottom: { x: 476, y: 362, w: 472, h: 172 },
+};
+// Hints avoid the whole player sprite; ties preserve the familiar placement.
 export function dialogueBox(feet, words) {
-  return words === WELCOME_LINE || (feet?.x > 440 && feet?.y > 330) ? 'top' : 'bottom';
+  const preferred = preferredBox(feet, words);
+  if (!feet) return preferred;
+  const player = { x: feet.x - 32, y: feet.y - 57, w: 64, h: 64 };
+  const overlap = box => Math.max(0, Math.min(player.x + player.w, box.x + box.w) - Math.max(player.x, box.x))
+    * Math.max(0, Math.min(player.y + player.h, box.y + box.h) - Math.max(player.y, box.y));
+  const top = overlap(DIALOGUE_BOXES.top), bottom = overlap(DIALOGUE_BOXES.bottom);
+  return top === bottom ? preferred : top < bottom ? 'top' : 'bottom';
 }
 
 // A belongs to the village when its root, an actor button or the Talk chip has focus, even with nobody near.
@@ -158,7 +170,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (!dialogue) return;
     if (opening || closeAfter !== null) timing = { closeAfter };
     const host = root.querySelector('.village-dialogue'), feet = id ? actors.get(id)?.pos : player.pos;
-    host.classList.toggle('village-dialogue--top', dialogueBox(feet, words) === 'top');
+    const box = id ? preferredBox(feet, words) : dialogueBox(feet, words);
+    host.classList.toggle('village-dialogue--top', box === 'top');
     host.hidden = false;
     dialogue.say(nameOf(id), words);
   }

@@ -31,7 +31,7 @@ Changes to All Aboard, grouped by release.
 
 ### Fixed
 
-- The Enter walking hint closes after three seconds and moves above the player when needed, so it never covers the player. Read to me finishes speaking before the closing delay.
+- The Enter walking hint closes after three seconds and chooses a clear dialogue position when available, otherwise the position with less player overlap. Read to me finishes speaking before the closing delay.
 - Taro’s starting crates stay tied to the cart; crates added by the child can still be removed.
 - Older grade-4 bands that load with Form A open as A B, preserving notes and mix settings. Form stays locked.
 - The west compass clue shows “← 2,” matching the stage’s position two squares west of the kiosk.

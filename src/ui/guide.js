@@ -17,7 +17,7 @@ const STAMPS = {
   science: [[0, 'Shade keeps the sun off the ice.'], [2, STAMP_BEANS], [3, STAMP_CHAIN], [4, 'A pond chain keeps one tenth at each step too.'], [5, 'Only 10% of energy moves up each step of a chain.']],
   reading: [[0, 'Letters make a word you can read.'], [1, 'The story tells you what to pack.'], [2, STAMP_RIBBON], [3, STAMP_TALES]],
   writing: [[0, 'Words welcome your neighbors.'], [1, 'A sentence starts big and ends with a mark.'], [3, 'Describing words paint a picture for readers.']],
-  art: [[0, 'Shapes and colors make a design.'], [1, 'A pattern repeats: star, circle, star, circle.'], [3, 'A mirror design is the same on both sides.']],
+  art: [[0, 'Shapes and colors make a design.'], [1, 'A pattern repeats: star, circle, star, circle.'], [2, 'A color pattern repeats: coral, blue, coral, blue.'], [3, 'A mirror design is the same on both sides.']],
   community: [[0, 'A bench gives a tired neighbor a rest.'], [1, 'A good plan works for everyone.'], [2, STAMP_COMPASS], [3, STAMP_HELPDAY], [4, 'Every job needs the strength that fits it.'], [5, 'Ask about a strength before you hand out a job.']],
   music: [[0, 'Music can be fast or slow, high or low.'], [1, 'Rests are part of a rhythm.'], [3, 'A tune can go up, down, or stay the same.'], [4, 'A steady part holds up a changing tune.']],
 };

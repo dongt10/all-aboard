@@ -296,7 +296,7 @@ test('the map marks exactly the three stage cells, and only from grade 3 on', ()
     let s = start(4); s = field(s, { tool: 'sign' }); s = field(s, { cell: BESIDE_STAGE });
     mounted.update(s.state, s.ui);
     assert.equal(cells[BESIDE_STAGE].dataset.item, 'sign');
-    assert.match(cells[BESIDE_STAGE].getAttribute('aria-label'), /by the stage$/);
+    assert.match(cells[BESIDE_STAGE].getAttribute('aria-label'), /By the stage\.$/);
     mounted.destroy();
   } finally { delete globalThis.document; }
 });
@@ -327,4 +327,35 @@ test('an arrow the grid cannot use (down on the bottom row) bubbles so the scene
     assert.equal(press(tools[3], 'ArrowDown').prevented, false);
     mounted.destroy();
   } finally { delete globalThis.document; }
+});
+
+test('all square cell labels use short sentences and describe unchanged items accurately', () => {
+  const previous = globalThis.document;
+  globalThis.document = fakeDocument();
+  try {
+    const host = document.createElement('div'), mounted = square.mountField(host, {});
+    const cells = host.children[0].querySelectorAll('.square-cell');
+    const base = start(1).state;
+    let longest = '';
+    for (const tool of ['bench', 'quiet', 'sign', 'remove']) for (const item of ['', 'bench', 'quiet', 'sign']) {
+      const placements = item ? Array.from({ length: 25 }, (_, i) => ({ item, ...cellPosition(i) })) : [];
+      mounted.update({ ...base, placements }, { tool });
+      for (const [i, cell] of cells.entries()) {
+        const label = cell.getAttribute('aria-label');
+        if (label.length > longest.length) longest = label;
+        for (const sentence of label.split(/(?<=[.!?…]["'”’)\]]*)\s+/)) {
+          assert.ok(sentence.length <= 56, `${sentence.length}: ${sentence}`);
+        }
+        assert.match(label, new RegExp(`Row ${Math.floor(i / 5) + 1}, column ${i % 5 + 1}\\.`));
+        if (item === tool) {
+          assert.doesNotMatch(label, /Replace/);
+          assert.match(label, /^(Quiet garden|Bench|Sign) here\./);
+        }
+      }
+    }
+    assert.equal(longest, 'Replace quiet garden with bench. Row 1, column 1. By the quiet trees.');
+    mounted.update({ ...base, placements: [{ item: 'quiet', ...cellPosition(0) }] }, { tool: 'quiet' });
+    assert.equal(cells[0].getAttribute('aria-label'), 'Quiet garden here. Row 1, column 1. By the quiet trees.');
+    mounted.destroy();
+  } finally { globalThis.document = previous; }
 });

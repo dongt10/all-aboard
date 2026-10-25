@@ -5,7 +5,7 @@
 // or fewer so a dialogue page never breaks mid-sentence with Bigger words on.
 import {
   normalizeEncounterSnapshot, encounterReady, encounterOpeningDialogue,
-  routeReport, squareSteps, gradeBand, STAGE_CELLS, placeCommunityItem, communityCellLabel,
+  routeReport, squareSteps, gradeBand, STAGE_CELLS, placeCommunityItem,
 } from '../../encounters.js';
 import { icon } from '../icons.js';
 import { gridMove, keyIntent } from '../input.js';
@@ -242,8 +242,13 @@ function mountField(host, { dispatch = () => {} } = {}) {
           b.innerHTML = item ? `<span class="square-item square-item--${item}">${glyph(item, 28)}</span>` : '';
         }
         const where = landmark(i);
-        const name = communityCellLabel(tool, placed, Math.floor(i / SIZE) + 1, (i % SIZE) + 1);
-        b.setAttribute('aria-label', where ? `${name}, ${where}` : name);
+        const label = item => item === 'quiet' ? 'quiet garden' : item;
+        const action = tool === 'remove'
+          ? (placed ? `Remove ${label(item)}.` : 'Nothing here to remove.')
+          : item === tool ? `${label(item)[0].toUpperCase()}${label(item).slice(1)} here.`
+            : placed ? `Replace ${label(item)} with ${label(tool)}.` : `Place ${label(tool)}.`;
+        const name = `${action} Row ${Math.floor(i / SIZE) + 1}, column ${(i % SIZE) + 1}.`;
+        b.setAttribute('aria-label', where ? `${name} ${where[0].toUpperCase()}${where.slice(1)}.` : name);
       });
       radios.forEach(b => {
         const on = b.dataset.tool === tool;

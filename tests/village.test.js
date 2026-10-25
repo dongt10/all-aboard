@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createVillageScene, dialogueBox, frameFor, WELCOME_LINE } from '../src/ui/screens/village.js';
+import { showItemGet } from '../src/ui/screens/item-get.js';
 import { createParadeScene } from '../src/ui/screens/parade.js';
 import { createEncounterScene } from '../src/ui/screens/encounter.js';
 import { createState, publishCreation, loadState, STORAGE_KEY } from '../src/progress.js';
@@ -356,15 +357,38 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
 
 const A_KEY_CASES = [['Enter', 'Enter'], [' ', 'Space'], ['z', 'Z'], ['Z', 'Shift+Z']];
 const WALK_HINT = 'Walk up to a neighbor, then press Enter.';
-test('dialogueBox keeps the welcome on top and uses strict feet boundaries for other lines', () => {
+test('dialogueBox prefers a clear sprite rectangle, then smaller overlap, then the old preference', () => {
   for (const feet of [null, undefined, { x: 0, y: 0 }, PLAYER_START]) {
     assert.equal(dialogueBox(feet, WELCOME_LINE), 'top');
   }
-  for (const feet of [null, undefined, { x: 440, y: 500 }, { x: 800, y: 330 }, { x: 400, y: 300 }]) {
+  for (const feet of [null, undefined, { x: 440, y: 500 }, { x: 800, y: 330 }, { x: 480, y: 332 }, { x: 480, y: 348 }]) {
     assert.equal(dialogueBox(feet, WALK_HINT), 'bottom');
   }
-  for (const feet of [PLAYER_START, { x: 441, y: 331 }, { x: 850, y: 470 }]) {
+  for (const feet of [PLAYER_START, { x: 880, y: 470 }, { x: 800, y: 331 }]) {
     assert.equal(dialogueBox(feet, WALK_HINT), 'top');
+  }
+  assert.equal(dialogueBox({ x: 480, y: 300 }, WELCOME_LINE), 'bottom', 'safety precedes the welcome preference');
+  assert.equal(dialogueBox({ x: 600, y: 359 }, WALK_HINT), 'bottom', 'both intersect: bottom overlaps less');
+  assert.equal(dialogueBox({ x: 600, y: 375 }, WALK_HINT), 'top', 'both intersect: top overlaps less');
+  assert.equal(dialogueBox({ x: 600, y: 367 }, WALK_HINT), 'top', 'equal overlap keeps the old preference');
+});
+
+test('hint placement minimizes overlap across the stage, including tabs and the More chip', () => {
+  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
+  const kit = readFileSync(new URL('../src/ui/interaction.css', import.meta.url), 'utf8');
+  const top = cssBlock(css, '.village-dialogue--top'), bottom = cssBlock(css, '.village-dialogue');
+  const w = cssPx(bottom, 'width'), h = cssPx(cssBlock(kit, '.dlg'), 'height');
+  const above = -cssPx(cssBlock(kit, '.dlg__speaker, .dlg__tabs'), 'top');
+  const below = -cssPx(cssBlock(kit, '.dlg__more'), 'bottom');
+  const boxes = {
+    top: { x: cssPx(top, 'left'), y: cssPx(top, 'top') - above },
+    bottom: { x: 960 - cssPx(bottom, 'right') - w, y: 540 - cssPx(bottom, 'bottom') - h - above },
+  };
+  for (let x = 0; x <= 960; x += 4) for (let y = 0; y <= 540; y += 4) {
+    const area = box => Math.max(0, Math.min(x + 32, box.x + w) - Math.max(x - 32, box.x))
+      * Math.max(0, Math.min(y + 7, box.y + h + above + below) - Math.max(y - 57, box.y));
+    const choice = dialogueBox({ x, y }, WALK_HINT);
+    assert.equal(area(boxes[choice]), Math.min(area(boxes.top), area(boxes.bottom)), `${x},${y}`);
   }
 });
 const readAloudState = () => {
@@ -458,6 +482,7 @@ test('a child-started neighbor conversation cancels the opening timeout and stay
   f.tick();
   const line = f.root.querySelector('.dlg__text').textContent;
   assert.match(line, /I delivered every invitation/);
+  assert.equal(f.root.querySelector('.village-dialogue').classList.contains('village-dialogue--top'), false, 'Pip keeps the speaker-based placement');
   clock.advance(60000);
   assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
   assert.equal(f.root.querySelector('.dlg__text').textContent, line);
@@ -504,7 +529,7 @@ test('last-page A cancels the opening timer and starts a fresh three-second hint
 for (const large of [false, true]) test(`the Enter hint closes by itself after 3 s and sits on top at the pier, at the bottom elsewhere (large=${large})`, t => {
   const clock = openingClock(t), f = villageFixture(t, { calm: true, large });
   const box = f.root.querySelector('.village-dialogue');
-  for (const [feet, top] of [[PLAYER_START, true], [{ x: 480, y: 320 }, false], [{ x: 850, y: 470 }, true]]) {
+  for (const [feet, top] of [[PLAYER_START, true], [{ x: 480, y: 320 }, false], [{ x: 880, y: 470 }, true], [{ x: 480, y: 332 }, false], [{ x: 480, y: 348 }, false]]) {
     f.tap(feet.x, feet.y); f.tick();
     assert.deepEqual(f.pos(), feet);
     assert.equal(f.root.querySelector('.village-talk').hidden, true);
@@ -1023,4 +1048,49 @@ test('village and parade thumbnail styles expose the full sign before fitting', 
     assert.match(block, /scale\(var\(--sign-scale/);
     assert.equal(cssPx(block, 'width'), 240);
   }
+});
+
+for (const accept of [false, true]) test(`reward sign fits after insertion and disposes on ${accept ? 'accept' : 'cancel'}`, async t => {
+  const doc = new Doc(), observers = [];
+  let fontsLoaded;
+  doc.fonts = { ready: new Promise(resolve => { fontsLoaded = resolve; }) };
+  for (const [key, value] of Object.entries({
+    document: doc,
+    ResizeObserver: class {
+      constructor(fit) { this.fit = fit; observers.push(this); }
+      observe(sign) {
+        assert.equal(sign.isConnected, true, 'measure only after stage insertion');
+        this.sign = sign; sign.offsetWidth = 240; sign.offsetHeight = 123;
+      }
+      disconnect() { this.disconnected = true; }
+    },
+  })) {
+    const original = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
+    t.after(() => original ? Object.defineProperty(globalThis, key, original) : delete globalThis[key]);
+  }
+  const stage = doc.createElement('div'); doc.body.append(stage);
+  const text = 'Welcome, neighbors! The lanterns are bright.';
+  const pending = showItemGet(stage, { name: 'Festival sign', artHTML: creationMarkup('writing', { text }) });
+  const observer = observers.at(-1), sign = observer.sign;
+  assert.equal(sign.textContent, text);
+  assert.equal(Number(sign.style['--sign-scale']), 1);
+  sign.offsetHeight = 246; observer.fit();
+  assert.equal(Number(sign.style['--sign-scale']), 164 / 246);
+  if (accept) stage.querySelector('.item-get__go').click(); else pending.cancel();
+  assert.equal(await pending, accept);
+  assert.equal(stage.querySelector('.item-get'), null);
+  assert.equal(observer.disconnected, true);
+  const scale = sign.style['--sign-scale'];
+  sign.offsetHeight = 400; observer.fit(); fontsLoaded(); await doc.fonts.ready;
+  assert.equal(sign.style['--sign-scale'], scale, 'late resize and font callbacks do nothing');
+  pending.cancel();
+});
+
+test('reward sign exposes its natural wrapping board before measured scaling', () => {
+  const css = readFileSync(new URL('../src/ui/screens/encounter.css', import.meta.url), 'utf8');
+  const block = cssBlock(css, '.item-get__art > span.world-sign');
+  for (const rule of [/max-width:\s*none/, /max-height:\s*none/, /height:\s*auto/, /overflow:\s*visible/, /overflow-wrap:\s*anywhere/, /zoom:\s*1/, /scale\(var\(--sign-scale/]) assert.match(block, rule);
+  assert.equal(cssPx(block, 'width'), 240);
+  assert.match(cssBlock(css, '.item-get__art'), /position:\s*relative/);
 });

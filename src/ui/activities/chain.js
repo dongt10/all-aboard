@@ -212,6 +212,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
     pic.innerHTML = glyph(card.id);
     const label = node('span', 'chain-card-word', b);
     label.textContent = fieldWord(card.id);
+    label.classList.toggle('chain-word--long', label.textContent.length > 7);
     const check = node('span', 'chain-card-check', b);
     check.innerHTML = icon('check', { size: 12 });
     check.hidden = true;
@@ -281,6 +282,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
       plates.forEach((parts, i) => {
         const card = i ? state.chain[i - 1] : null;
         parts.word.textContent = i ? fieldWord(card) : 'Sun';
+        parts.word.classList.toggle('chain-word--long', parts.word.textContent.length > 7);
         parts.plate.setAttribute('aria-label', i ? (CARD_WORDS[card]?.word ?? 'Empty plate') : 'Sun. Sunlight.');
         if (!i) return;
         const value = state.energy[i - 1];

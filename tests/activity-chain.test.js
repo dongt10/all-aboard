@@ -546,3 +546,43 @@ test('field mounts once, updates in place, has two keyboard rails and recovers f
     if (previous === undefined) delete globalThis.document; else globalThis.document = previous;
   }
 });
+
+test('long pond names use the small token in the rail and plate and reset in place', () => {
+  const previous = globalThis.document;
+  const doc = new Doc(); globalThis.document = doc;
+  try {
+    const host = doc.createElement('div'); doc.body.append(host);
+    const view = activity.mountField(host, { grade: 4 });
+    const initial = start(4), complete = full(4);
+    view.update(initial.state, initial.ui);
+    const plate = host.querySelector('.chain-plate .chain-word');
+    const labels = host.querySelectorAll('.chain-card-word');
+    assert.equal(labels[0].textContent, 'Pondweed');
+    assert.equal(labels[0].classList.contains('chain-word--long'), true);
+    assert.ok(labels.slice(1).every(label => !label.classList.contains('chain-word--long')));
+    view.update(complete, initial.ui);
+    assert.equal(host.querySelector('.chain-plate .chain-word'), plate);
+    assert.equal(plate.textContent, 'Pondweed');
+    assert.equal(plate.classList.contains('chain-word--long'), true);
+    const css = readFileSync(new URL('../src/ui/activities/chain.css', import.meta.url), 'utf8');
+    assert.equal(declarations(css, '.chain-word--long')['font-size'], 'var(--text-small)');
+    // Review font metrics: 95.38px at the enlarged 20px token, within the 98px plate interior.
+    const plateWidth = parseFloat(declarations(css, '.chain-plate').width) - 2 - 8;
+    assert.ok(95.38 <= plateWidth);
+    view.update(initial.state, initial.ui);
+    assert.equal(plate.classList.contains('chain-word--long'), false);
+    view.destroy();
+  } finally { globalThis.document = previous; }
+});
+
+test('chain placeholders and enlarged tale tags use tokens with room for the tag line', () => {
+  const chain = readFileSync(new URL('../src/ui/activities/chain.css', import.meta.url), 'utf8');
+  const tales = readFileSync(new URL('../src/ui/activities/tales.css', import.meta.url), 'utf8');
+  assert.equal(declarations(chain, '.chain-empty')['font-size'], 'var(--text-field)');
+  const tag = declarations(tales, '.large-text .tales-line__tag');
+  assert.equal(tag['font-size'], 'var(--text-small)');
+  const tokens = readFileSync(new URL('../src/ui/tokens.css', import.meta.url), 'utf8');
+  const font = parseFloat(declarations(tokens, '.large-text')['--text-small']);
+  assert.ok(parseFloat(tag.height) >= font + 4, '20px line plus two 2px borders');
+  for (const css of [chain, tales]) assert.doesNotMatch(css, /font-size:\s*\d/);
+});

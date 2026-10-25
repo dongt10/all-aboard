@@ -8,6 +8,15 @@ import { CHARACTERS } from '../src/data.js';
 const sign = { kind: 'writing', text: 'Welcome!', chapter: 0, grade: 0 };
 const SUBJECTS = CHARACTERS.map(c => c.id);
 
+test('a published grade-2 banner earns the coral-blue color-pattern stamp', () => {
+  const state = publishCreation({ ...createState(), chapter: 1, grade: 2 }, 'art', {
+    kind: 'art', chapter: 1, grade: 2, stamps: [],
+  });
+  assert.deepEqual(guideEntries(state).find(entry => entry.id === 'art').stamp, {
+    earned: true, learned: 'A color pattern repeats: coral, blue, coral, blue.',
+  });
+});
+
 test('earned statements follow the published activity, including legacy grade 2–5 work', () => {
   const old = {
     math: { left: [1], right: [1], rolled: true }, science: { canopy: 'left', time: 10 },
@@ -67,7 +76,7 @@ test('learnedText gives the planned sentence at every grade for every subject', 
     science: ['Shade keeps the sun off the ice.', 'Shade keeps the sun off the ice.', 'Plants need sun and water. Change one thing to test.', STAMP_CHAIN, 'A pond chain keeps one tenth at each step too.', 'Only 10% of energy moves up each step of a chain.'],
     reading: ['Letters make a word you can read.', 'The story tells you what to pack.', 'A story has a beginning, middle, end, and a lesson.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.'],
     writing: ['Words welcome your neighbors.', ...Array(2).fill('A sentence starts big and ends with a mark.'), ...Array(3).fill('Describing words paint a picture for readers.')],
-    art: ['Shapes and colors make a design.', ...Array(2).fill('A pattern repeats: star, circle, star, circle.'), ...Array(3).fill('A mirror design is the same on both sides.')],
+    art: ['Shapes and colors make a design.', 'A pattern repeats: star, circle, star, circle.', 'A color pattern repeats: coral, blue, coral, blue.', ...Array(3).fill('A mirror design is the same on both sides.')],
     community: ['A bench gives a tired neighbor a rest.', 'A good plan works for everyone.', 'A compass shows north, south, east and west.', 'Different strengths get every job done together.', 'Every job needs the strength that fits it.', 'Ask about a strength before you hand out a job.'],
     music: ['Music can be fast or slow, high or low.', 'Rests are part of a rhythm.', 'Rests are part of a rhythm.', 'A tune can go up, down, or stay the same.', 'A steady part holds up a changing tune.', 'A steady part holds up a changing tune.'],
   };

@@ -1,5 +1,6 @@
 import { keyIntent } from '../input.js';
 import { icon } from '../icons.js';
+import { fitSignPreviews } from '../creations.js';
 
 let serial = 0;
 
@@ -31,9 +32,11 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {})
     dimmed.forEach(child => { child.inert = true; });
 
     let done = false;
+    let disposeSign = () => {};
     function finish(accepted) {
       if (done) return;
       done = true;
+      disposeSign();
       backdrop.remove();
       dimmed.forEach(child => { child.inert = false; });
       if (opener?.isConnected && !opener.disabled) opener.focus({ preventScroll: true });
@@ -47,6 +50,7 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {})
       else if (event.key === 'Tab') { event.preventDefault(); button.focus(); }   // one control: Tab stays on it
     });
     stage.append(backdrop);
+    disposeSign = fitSignPreviews(card.querySelector('.item-get__art'), 240, 164);
     button.focus({ preventScroll: true });
   });
   promise.cancel = cancel;

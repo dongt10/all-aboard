@@ -24,6 +24,25 @@ const beds = Array.from({ length: 16 }, (_, mask) => BED_TILES.filter((tile, i) 
 const states = () => beds.flatMap(bed => [snapshot({ bed }), ...CHANGES.flatMap(change =>
   [0, 1, 2].map(weeks => snapshot({ change, weeks, bed }))) ]);
 
+test('week two names Plant bed when the bed was filled first, for either change', () => {
+  for (const change of CHANGES) for (const bed of beds) {
+    let result = beans.start();
+    for (const tile of bed) result = step(result, field({ tile }));
+    result = step(result, field({ change }));
+    result = step(result, command('wait'));
+    const before = result.state;
+    result = step(result, command('wait'));
+    assert.equal(before.weeks, 1, 'the previous state is untouched');
+    assert.equal(result.state.weeks, 2);
+    const complete = bed.length === BED_TILES.length;
+    assert.equal(beans.commands(result.state, result.ui).at(-1).disabled, !complete);
+    assert.match(result.line, change === 'water' ? /Plants need water!/ : /Plants need sunlight!/);
+    assert.ok(result.line.endsWith(complete ? 'Choose Plant bed.' : 'Fill the bed card.'));
+    if (complete) assert.doesNotMatch(result.line, /Fill the bed card/);
+    fits(result.line);
+  }
+});
+
 function fits(text) {
   assert.equal(typeof text, 'string');
   assert.ok(text.length > 0);

@@ -76,11 +76,11 @@
 .tales-line--named .tales-line__who { display: block; flex: none; width: 32px; height: 32px; }
 .tales-line--named .tales-line__text { font-weight: 700; }
 
-/* Bigger words: three 44-character lines wrap to two rows each; the number tags shrink, never the sentences. */
+/* Bigger words: three 44-character lines wrap to two rows each; number tags keep room for the small-text token. */
 .large-text .tales-card { gap: 3px; padding-top: 5px; padding-bottom: 5px; }
 .large-text .tales-lines { gap: 2px; }
 .large-text .tales-line { padding-top: 1px; padding-bottom: 1px; line-height: 1.15; }
-.large-text .tales-line__tag { min-width: 20px; height: 20px; padding: 0 2px; font-size: 16px; }
+.large-text .tales-line__tag { min-width: 24px; height: 24px; padding: 0 2px; font-size: var(--text-small); }
 
 /* Sora's tale book: a wood frame with three slots that fill in deck order. */
 .tales-book { position: relative; isolation: isolate; display: flex; flex-direction: column; gap: 4px; min-height: 0; padding: 6px; box-sizing: border-box; background: none; border: 3px solid transparent; box-shadow: 4px 4px 0 var(--ink); }

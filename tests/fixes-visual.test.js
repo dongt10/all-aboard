@@ -44,15 +44,34 @@ test('the item-get card draws box-style creations large, not at their easel size
   assert.ok(zoom >= 2, `zoom ${zoom}`);
 });
 
-test('completed signs fit the item-get art content height and remain scrollable at both text sizes', () => {
+test('completed reward signs expose their whole board and fit by measured scaling', async () => {
   const all = css(['src/ui/screens/encounter.css']);
   const body = rulesFor(all, '.item-get__art > span.world-sign');
-  const zoom = Number(body.match(/zoom:\s*([\d.]+)/)?.[1]);
-  const height = Number(body.match(/max-height:\s*([\d.]+)px/)?.[1]);
+  assert.match(body, /width:\s*240px/);
+  assert.match(body, /height:\s*auto/);
+  assert.match(body, /max-width:\s*none/);
+  assert.match(body, /max-height:\s*none/);
+  assert.match(body, /overflow:\s*visible/);
+  assert.match(body, /overflow-wrap:\s*anywhere/);
+  assert.match(body, /zoom:\s*1/);
+  assert.match(body, /scale\(var\(--sign-scale/);
   const art = rulesFor(all, '.item-get__art');
-  const available = Number(art.match(/height:\s*([\d.]+)px/)[1]) - 2 * 8 - 2 * 4;
-  assert.ok(height > 0 && height * zoom <= available, 'zoomed sign stays within the 164px content height');
-  assert.match(body, /overflow-y:\s*auto/, 'long text can be scrolled instead of painting outside the card');
+  const width = Number(art.match(/width:\s*([\d.]+)px/)[1]) - 2 * 8 - 2 * 4;
+  const height = Number(art.match(/height:\s*([\d.]+)px/)[1]) - 2 * 8 - 2 * 4;
+  assert.deepEqual([width, height], [240, 164]);
+  const { fitSignPreviews } = await import('../src/ui/creations.js');
+  for (const naturalHeight of [77, 123, 246, 400]) {
+    const sign = {
+      offsetWidth: 240, offsetHeight: naturalHeight,
+      style: { setProperty(key, value) { this[key] = value; } },
+    };
+    const dispose = fitSignPreviews({ querySelectorAll: () => [sign], ownerDocument: {} }, width, height);
+    const scale = Number(sign.style['--sign-scale']);
+    assert.equal(scale, Math.min(1, width / sign.offsetWidth, height / sign.offsetHeight));
+    assert.ok(sign.offsetWidth * scale <= width + 1e-6);
+    assert.ok(sign.offsetHeight * scale <= height + 1e-6);
+    dispose();
+  }
 });
 
 test('Guide signs fit the creation frame after zoom at either text size', () => {
