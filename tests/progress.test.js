@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createState, scopeKey, loadState, saveState, normalizeState, cleanCreation, saveDraft, publishCreation, getCompleted, getCreations, getDraft, canStartParade, STORAGE_KEY } from '../src/progress.js';
+import { createState, scopeKey, loadSave, loadState, saveState, normalizeState, cleanCreation, saveDraft, publishCreation, getCompleted, getCreations, getDraft, canStartParade, STORAGE_KEY } from '../src/progress.js';
 import { normalizeEncounterSnapshot } from '../src/encounters.js';
 import { createDefaultBand } from '../src/audio.js';
 const memoryStorage = () => { const map = new Map(); return { getItem:key=>map.get(key)??null, setItem:(key,value)=>map.set(key,value) }; };
@@ -61,6 +61,57 @@ test('corrupt, unsupported, and denied storage stay playable', () => {
   const denied={getItem(){throw Error('denied');},setItem(){throw Error('quota');}};
   assert.deepEqual(loadState(denied),createState());assert.equal(saveState(createState(),denied),false);
   assert.deepEqual(loadState(null),createState());
+});
+
+test('unreadable saves retain their exact text across load, edit, save and reload', () => {
+  const unknown = { ...createState(), drafts: { 'chapter-0': { math: { kind: 'math', activity: 'future', chapter: 0, grade: 0 } } } };
+  const cleanerFailure = { ...createState(), drafts: { 'chapter-1-grade-3': { math: { kind: 'math', activity: 'constructor', chapter: 1, grade: 3 } } } };
+  const missingRecord = { ...createState(), progress: { 'chapter-0': { art: { creation: banner, completedAt: 'invalid' } } } };
+  for (const raw of ['', '{broken', 'null', '{"version":99,"notes":"keep me"}', JSON.stringify(unknown), JSON.stringify(cleanerFailure), JSON.stringify(missingRecord)]) {
+    for (const key of [STORAGE_KEY, 'all-aboard-demo-v1']) {
+      const storage = memoryStorage();
+      // A current save must not be silently replaced with a readable old save.
+      if (key === STORAGE_KEY) storage.setItem('all-aboard-demo-v1', JSON.stringify({ ...createState(), version: 1, avatar: 'girl' }));
+      storage.setItem(key, raw);
+      const loaded = loadSave(storage);
+      assert.equal(loaded.status, 'unreadable', `${key}: ${raw}`);
+      assert.equal(loaded.raw, raw);
+      assert.equal(loaded.key, key);
+      assert.equal(loaded.state.avatar, 'boy');
+      const next = publishCreation(loaded.state, 'writing', sign('New work'));
+      assert.equal(saveState(next, storage), false);
+      assert.equal(storage.getItem(key), raw);
+      if (key !== STORAGE_KEY) assert.equal(storage.getItem(STORAGE_KEY), null, 'do not mask an unreadable legacy save');
+      assert.equal(loadSave(storage).raw, raw);
+      assert.equal(loadSave(storage).status, 'unreadable');
+    }
+  }
+});
+
+test('unknown saved subjects and scopes are protected while readable work stays playable', () => {
+  for (const field of ['progress', 'drafts']) {
+    for (const extra of [{ 'chapter-0': { future: { kind: 'future' } } }, { 'chapter-2': { art: banner } }]) {
+      const state = publishCreation(createState(), 'writing', sign('Keep this'));
+      for (const [scope, records] of Object.entries(extra)) Object.assign(state[field][scope] ??= {}, records);
+      const storage = memoryStorage(), raw = JSON.stringify(state);
+      storage.setItem(STORAGE_KEY, raw);
+      const loaded = loadSave(storage);
+      assert.equal(loaded.status, 'unreadable');
+      assert.equal(getCreations(loaded.state).writing.text, 'Keep this');
+      assert.equal(saveState(loaded.state, storage), false);
+      assert.equal(storage.getItem(STORAGE_KEY), raw);
+    }
+  }
+});
+
+test('load status distinguishes no save, a readable save and unavailable storage', () => {
+  const storage = memoryStorage();
+  assert.equal(loadSave(storage).status, 'empty');
+  assert.equal(loadSave({ getItem() {} }).status, 'empty', 'storage adapters may return undefined for a missing key');
+  assert.equal(saveState(createState(), storage), true);
+  assert.equal(loadSave(storage).status, 'ready');
+  assert.equal(loadSave(null).status, 'unavailable');
+  assert.equal(loadSave({ getItem() { throw Error('denied'); } }).status, 'unavailable');
 });
 
 test('invalid fields, oversized payloads, and prototype keys cannot become world markup', () => {

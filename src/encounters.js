@@ -195,6 +195,3 @@ export function encounterOpeningDialogue(state) {
  if(encounterReady(state)&&state.kind==='reading')return 'Your story bag is ready. Share it, or start over.';
  return {math:mathOpening(state,band),science:SCIENCE_OPENING[band],art:bannerOpening(state),reading:'Help me pack three things for the festival.',writing:signOpening(state),community:COMMUNITY_OPENING[band]}[state.kind];
 }
-export function writingControlAvailability(text) {
- return {canPublish:text.trim().length>0,canRemove:text.length>0};
-}

@@ -1,4 +1,5 @@
-import { loadState, saveState, normalizeState, STORAGE_KEY } from '../progress.js';
+import { loadSave, saveState, normalizeState, STORAGE_KEY } from '../progress.js';
+import { openSaveRecovery } from './save.js';
 import { mountStage, applySettings } from './stage.js';
 import { keyIntent, routeIntent } from './input.js';
 import { createSceneManager, wipe } from './scenes.js';
@@ -31,18 +32,31 @@ function createMissingScene(ctx) {
 export function createApp(root, { scenes = {}, storage } = {}) {
   const { stage, destroy: unmountStage } = mountStage(root);
   const readSave = () => (storage === undefined ? globalThis.localStorage : storage)?.getItem(STORAGE_KEY) ?? null;
-  let lastSaved;
-  try { lastSaved = readSave(); } catch { /* unavailable storage must not authorize a later overwrite */ }
-  let state = loadState(storage);
-  let saveOk = true;
+  const loaded = loadSave(storage);
+  let lastSaved = loaded.currentRaw;
+  let state = loaded.state;
+  const protectedSave = loaded.status === 'unreadable';
+  let recoveryShown = false;
+  let saveOk = ['ready', 'empty'].includes(loaded.status);
   let destroyed = false;
   let lastParams;
 
   const banner = document.createElement('p');
   banner.className = 'px-frame save-off';
   banner.setAttribute('aria-hidden', 'true');
-  banner.textContent = 'Saving is off. Keep this tab open.';
-  banner.hidden = true;
+  const saveWarning = protectedSave ? 'Old save kept. New play is not saved.' : 'Saving is off. Keep this tab open.';
+  banner.textContent = saveWarning;
+  if (protectedSave) {
+    banner.removeAttribute('aria-hidden');
+    const recover = document.createElement('button');
+    recover.type = 'button';
+    recover.className = 'px-button';
+    recover.textContent = 'Old save';
+    recover.style.pointerEvents = 'auto';
+    recover.addEventListener('click', () => openSaveRecovery(ctx, loaded));
+    banner.append(' ', recover);
+  }
+  banner.hidden = saveOk;
   // Outside the stage, so an open window (which makes the stage behind it inert) can't silence it.
   const live = document.createElement('div');
   live.className = 'sr-only';
@@ -51,6 +65,7 @@ export function createApp(root, { scenes = {}, storage } = {}) {
   saveStatus.className = 'sr-only';
   saveStatus.setAttribute('role', 'status');
   saveStatus.setAttribute('aria-atomic', 'true');
+  saveStatus.textContent = saveOk ? '' : saveWarning;
   stage.append(banner);
   root.append(live, saveStatus);
   applySettings(stage, state.settings);
@@ -104,17 +119,23 @@ export function createApp(root, { scenes = {}, storage } = {}) {
       // Keep local play, but never replace a save written or cleared by another tab.
       // A reload starts with the newer snapshot and establishes a new baseline.
       try {
-        if (!destroyed && readSave() === lastSaved && saveState(state, storage)) {
+        const legacyUnchanged = lastSaved !== null || !loaded.raw || loaded.key === STORAGE_KEY
+          || (storage === undefined ? globalThis.localStorage : storage)?.getItem(loaded.key) === loaded.raw;
+        if (!destroyed && !protectedSave && legacyUnchanged && readSave() === lastSaved && saveState(state, storage)) {
           lastSaved = JSON.stringify(normalizeState(state));
           saveOk = true;
         }
       } catch { /* keep the local work and show the save warning */ }
       banner.hidden = saveOk;
-      saveStatus.textContent = saveOk ? '' : banner.textContent;
+      saveStatus.textContent = saveOk ? '' : saveWarning;
       applySettings(stage, state.settings);
       return state;
     },
-    go: (name, params) => manager.go(name, params),
+    go: async (name, params) => {
+      const changed = await manager.go(name, params);
+      if (!destroyed && protectedSave && !recoveryShown) recoveryShown = Boolean(openSaveRecovery(ctx, loaded));
+      return changed;
+    },
     // Rebuild the current scene, e.g. after the grade changes underneath it.
     // One-shot params (a celebration, a Find target) don't replay.
     reload: () => {

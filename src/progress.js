@@ -100,21 +100,48 @@ export function normalizeState(input) {
   return state;
 }
 
-export function loadState(storage) {
+// Normalization is safe for play, but dropping a saved record must never authorize an overwrite.
+function lostRecords(input, state) {
+  for (const field of ['progress', 'drafts']) {
+    if (input[field] === undefined) continue;
+    if (!isObject(input[field])) return true;
+    for (const [scope, records] of Object.entries(input[field])) {
+      if (!scopes.includes(scope) || !isObject(records)) return true;
+      for (const [id, record] of Object.entries(records)) {
+        if (!IDS.has(id) || !Object.hasOwn(state[field][scope] ?? {}, id)) return true;
+        if (field === 'progress' && isObject(record.creation) && !state[field][scope][id].creation) return true;
+      }
+    }
+  }
+  return false;
+}
+
+export function loadSave(storage) {
+  let raw = null, key = STORAGE_KEY, currentRaw;
   try {
     const target = storage === undefined ? globalThis.localStorage : storage;
-    if (!target) return createState();
-    const current = target.getItem(STORAGE_KEY);
-    if (current) { try { const parsed = JSON.parse(current); if (parsed?.version === 2) return normalizeState(parsed); } catch {} }
-    const legacy = target.getItem(LEGACY_KEY);
-    return legacy ? normalizeState(JSON.parse(legacy)) : createState();
-  } catch { return createState(); }
+    if (!target) return { state: createState(), status: 'unavailable', currentRaw };
+    currentRaw = raw = target.getItem(STORAGE_KEY) ?? null;
+    // A present but unreadable current save takes priority over an older save.
+    if (raw === null) { key = LEGACY_KEY; raw = target.getItem(key) ?? null; }
+    if (raw === null) return { state: createState(), status: 'empty', currentRaw };
+    const parsed = JSON.parse(raw);
+    if (!isObject(parsed) || ![1, 2].includes(parsed.version)) throw new Error('Unsupported save');
+    const state = normalizeState(parsed);
+    return { state, status: lostRecords(parsed, state) ? 'unreadable' : 'ready', raw, key, currentRaw };
+  } catch {
+    return { state: createState(), status: raw === null ? 'unavailable' : 'unreadable', raw, key, currentRaw };
+  }
 }
+
+export const loadState = storage => loadSave(storage).state;
 
 export function saveState(state, storage) {
   try {
     const target = storage === undefined ? globalThis.localStorage : storage;
     if (!target) return false;
+    const saved = loadSave(target);
+    if (!['ready', 'empty'].includes(saved.status)) return false;
     target.setItem(STORAGE_KEY, JSON.stringify(normalizeState(state)));
     return true;
   } catch { return false; }
