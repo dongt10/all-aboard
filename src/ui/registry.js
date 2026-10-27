@@ -21,6 +21,7 @@ The Activity contract. Each module in src/ui/activities/ default-exports one.
     kind, title, help,                                   // help: 1–4 short steps, the last one naming the finish command
     rewardLabel?,                                      // optional item-get name; defaults to the character reward
     notReadyLine?,                                       // optional: said when an action with no line makes the creation unready
+    another?(state, ui, grade) → { state, ui, line } | null,   // optional: a fresh second request ("Try another"), see below
     start(snapshot, { chapter, grade }) → { state, ui }, // state = normalizeEncounterSnapshot(kind, snapshot, grade, chapter)
     opening(state, ui, grade) → string,
     commands(state, ui, grade) → Command[],
@@ -41,6 +42,13 @@ The Activity contract. Each module in src/ui/activities/ default-exports one.
   It returns the same `state` object when nothing saved changed, so the scene can skip saving.
 - `start`, `opening`, `commands` and `act` never touch the DOM. `mountField` builds its DOM once inside
   the 520×268 field host, calls `dispatch(action)` for taps, and updates in place.
+- `another` (optional) is the neighbor's second request: a different number, reader or pattern for the same
+  activity. It is pure, returns a fresh ready-to-start `state` (a new request, never the child's current work)
+  with its `ui` and the neighbor's opening `line`, or null when there is no other request. The encounter scene
+  shows a "Try another" chip only when this subject is already finished in this grade and the current work is
+  ready, and saves the new request as the draft; the stamp and the stall's creation stay until the new one is
+  finished. Which request a snapshot is on must survive normalization and cleaning (progress.js).
+- "Show me" demos live in src/ui/demos.js (keyed by activity), not on the activity itself.
 */
 export const ACTIVITIES = { math: cart, science: ice, art: banner, reading: story, writing: sign, community: square };
 

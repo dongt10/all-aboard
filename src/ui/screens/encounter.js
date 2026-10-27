@@ -1,6 +1,6 @@
 import { CHARACTERS } from '../../data.js';
 import { encounterReady } from '../../encounters.js';
-import { getDraft, saveDraft, publishCreation } from '../../progress.js';
+import { getDraft, saveDraft, publishCreation, getCompleted } from '../../progress.js';
 import { ACTIVITIES, activityFor } from '../registry.js';
 import { withScope } from '../save.js';
 import { creationMarkup } from '../creations.js';
@@ -72,6 +72,11 @@ export function createEncounterScene(ctx, { id } = {}) {
   const helpSteps = () => (typeof activity.helpFor === 'function' ? activity.helpFor(grade)
     : typeof activity.help === 'function' ? activity.help(grade) : activity.help);
 
+  // A second request from the same neighbor. The activity's optional another(state, ui, grade) returns a fresh
+  // request's { state, ui, line } (or null). It is offered once this subject is finished in this grade and the
+  // current work is ready, so a tap never throws away something half-done.
+  const canTryAnother = () => typeof activity.another === 'function' && encounterReady(state) && getCompleted(ctx.getState()).includes(id);
+
   function updateMenu(next) {
     const choosing = activity.kind === 'reading' && next.some(command => command?.id.startsWith('pick-'));
     menu.set(next, { requireSelection: choosing });
@@ -80,6 +85,22 @@ export function createEncounterScene(ctx, { id } = {}) {
     status.hidden = !pending;
     status.querySelector('p').textContent = pending ? `Next: ${helpSteps()?.slice(0, -1).join(' ') || 'Open Help for the steps.'}` : '';
     root.querySelector('.enc__choose').hidden = !choosing;
+    root.querySelector('.enc__another').hidden = !canTryAnother();
+  }
+
+  function tryAnother() {
+    if (finishing || destroyed || !canTryAnother()) return;
+    if (dialogue.hasMore()) { dialogue.focusMore(); return; }
+    const result = activity.another(state, ui, grade);
+    if (!result) return;
+    state = result.state;
+    ui = result.ui;
+    dirty = true;
+    saveNow();
+    field.update(state, ui);
+    updateMenu(commands());
+    say(result.line || activity.opening(state, ui, grade));
+    if (!dialogue.hasMore()) focusAction();
   }
 
   function dispatch(action) {
@@ -152,6 +173,7 @@ export function createEncounterScene(ctx, { id } = {}) {
           <button type="button" class="px-chip enc__nav" aria-label="Up from choices goes to the field. Down at the field edge goes to choices.">↑Field ↓Menu</button>
           <p class="enc__choose" hidden>Use arrows to pick a picture. Then press Enter.</p>
           <div class="enc__next" hidden><p></p><button type="button" class="px-chip">Hear steps</button></div>
+          <button type="button" class="px-chip enc__another" hidden>${icon('undo', { size: 18 })}<span>Try another</span></button>
         </aside>
         <section class="enc__field" aria-label=""></section>
         <div class="enc__dialogue"></div>
@@ -164,6 +186,7 @@ export function createEncounterScene(ctx, { id } = {}) {
       ctx.stage.append(root);
       root.querySelector('.enc__nav').addEventListener('click', () => ctx.speak('Up from choices goes to the field. Down at the field edge goes to choices.'));
       root.querySelector('.enc__next button').addEventListener('click', () => ctx.speak(root.querySelector('.enc__next p').textContent));
+      root.querySelector('.enc__another').addEventListener('click', tryAnother);
       // Capture before native Enter/Space, Z routing, or field handlers can replace unread pages.
       const isWork = target => root.querySelector('.enc__field').contains(target) || root.querySelector('.enc__menu').contains(target);
       root.addEventListener('click', event => {
