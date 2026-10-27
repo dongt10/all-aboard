@@ -233,7 +233,7 @@ test('a stall with a draft looks started: three dots and "Started. Tap to contin
 test('Pip\'s welcome and the village Help use short sentences a page can hold', async () => {
   const { WELCOME_LINE, HELP_STEPS } = await import('../src/ui/screens/village.js');
   const { paginate, PAGE_CHARS } = await import('../src/ui/dialogue.js');
-  assert.equal(WELCOME_LINE, 'Welcome to Willow Bay! Tap a neighbor to help them make something.');
+  assert.equal(WELCOME_LINE, 'Welcome to Hanabi Bay! Tap a neighbor to help them make something.');
   const sentences = WELCOME_LINE.split(/(?<=[.!?])\s+/);
   assert.equal(sentences.length, 2);
   for (const s of sentences) assert.ok(s.length <= 56, `${s} fits a Bigger-words page`);
@@ -800,7 +800,7 @@ for (const focus of ['root']) for (const [key, label] of A_KEY_CASES) {
   test(`${label} with ${focus} focus reads the next page before showing the walking hint`, t => {
     const f = villageFixture(t, { calm: true, large: true, focus: focus === 'actor' ? 'writing' : undefined, state: readAloudState() });
     const target = f.doc.activeElement, text = f.root.querySelector('.dlg__text'), more = f.root.querySelector('.dlg__more');
-    assert.equal(text.textContent, 'Welcome to Willow Bay!');
+    assert.equal(text.textContent, 'Welcome to Hanabi Bay!');
     assert.equal(more.hidden, false);
     pressKey(target, 'keydown', key);
     pressKey(target, 'keydown', key, { repeat: true });
@@ -1337,7 +1337,7 @@ for (const calm of [false, true]) for (const id of ['reading', 'writing', 'music
     if (id === 'pip') {
       assert.deepEqual(f.gone, []);
       assert.equal(f.root.querySelector('.dlg__speaker').textContent, 'Pip');
-      assert.equal(f.root.querySelector('.dlg__text').textContent, 'Welcome to Willow Bay!');
+      assert.equal(f.root.querySelector('.dlg__text').textContent, 'Welcome to Hanabi Bay!');
     } else assert.deepEqual(f.gone, id === 'music' ? [['music']] : [['encounter', { id }]]);
     assert.notDeepEqual(f.pos(), talkPoint('community'));
   });

@@ -20,7 +20,7 @@ addSection('Palette',
   'Contrast is against ink text unless noted. Vermilion is decoration only and never sits behind text.');
 
 const typeColumn = (title, extra = '') => `<div class="guide-type ${extra}"><small>${title}</small>
-  <p class="px-title">Willow Bay</p><p class="px-name">TARO · Grade 2</p>
+  <p class="px-title">Hanabi Bay</p><p class="px-name">TARO · Grade 2</p>
   <p style="font-size:var(--text-body)">Make both sides of my cart weigh the same.</p>
   <p style="font-size:var(--text-command);font-weight:700">Load left</p>
   <p style="font-size:var(--text-field)">Lots of ice · 3 of 3 packed</p>

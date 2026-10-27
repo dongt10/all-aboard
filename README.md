@@ -2,7 +2,7 @@
 
 **A learning adventure in an animal village**
 
-All Aboard is a playable village adventure for **Kindergarten and grades 1–5**, designed with neurodivergent children in mind. Explore Willow Bay as it gets ready for a Japanese summer festival, meet animal neighbors in handheld-game encounter scenes, and put your own creations into the village and its parade.
+All Aboard is a playable village adventure for **Kindergarten and grades 1–5**, designed with neurodivergent children in mind. Explore Hanabi Bay as it gets ready for a Japanese summer festival, meet animal neighbors in handheld-game encounter scenes, and put your own creations into the village and its parade.
 
 **[Play now](https://playallaboard.com)** — no installation needed.
 
@@ -14,7 +14,7 @@ All Aboard is a playable village adventure for **Kindergarten and grades 1–5**
 
 - **Backend:** [Dong (@dongt10)](https://github.com/dongt10) and [Isaac (@TerminatorLV)](https://github.com/TerminatorLV).
 - **Frontend — character art:** Alison ([@almixao on Instagram](https://www.instagram.com/almixao/)), who created the character artwork.
-- **Frontend — background art:** [Reem Amro (@reemamro08)](https://github.com/reemamro08), who created Willow Bay’s hand-drawn background.
+- **Frontend — background art:** [Reem Amro (@reemamro08)](https://github.com/reemamro08), who created Hanabi Bay’s hand-drawn background.
 
 Choose **Credits** on the game’s title screen to meet the team. The musical reference credit for C418’s “Minecraft” remains in [Kiko’s music stage](#kikos-music-stage-by-grade) below.
 
@@ -59,8 +59,8 @@ Open **[http://127.0.0.1:4173](http://127.0.0.1:4173)** in your browser. Keep Te
 ## How to play
 
 - **Pick who you are** (boy or girl) and your grade: **Kindergarten** or **1–5**. Then press **▶ Start**.
-- **Pip says hello at the crossroads:** “Welcome to Willow Bay! Tap a neighbor to help them make something.” He says it on every visit until you make your first thing in that grade.
-- **Walk around Willow Bay’s cobblestone crossroads.** Everyone stays on the road; the seven neighbors stroll beside their stalls along the road. Tap one, or walk up and press Enter, to start their activity. A stall marked **!** has something new to make; **...** means you started it and can continue. Pip and Nori wander along the road and say hello.
+- **Pip says hello at the crossroads:** “Welcome to Hanabi Bay! Tap a neighbor to help them make something.” He says it on every visit until you make your first thing in that grade.
+- **Walk around Hanabi Bay’s cobblestone crossroads.** Everyone stays on the road; the seven neighbors stroll beside their stalls along the road. Tap one, or walk up and press Enter, to start their activity. A stall marked **!** has something new to make; **...** means you started it and can continue. Pip and Nori wander along the road and say hello.
 - **Open the Guide** (top right) to meet the whole cast. It is the Matsuri Guide, “the town’s character book.” Each neighbor’s page says what you’ll learn, and shows the stamp once you make their thing. Choose **Find** for an arrow that leads you to them, or **Visit** to go straight to their activity. The header counts your stamps, “0 of 7 stamps.”
 - **Help each neighbor make something.** Kindergarten and grade 1 balance Taro’s cart, shade Momo’s ice, pack Sora’s story bag, and plan Hana’s square. Grade 2 builds Taro’s crate rows, compares cups in Momo’s bean test, follows Hana’s compass errands, and puts Sora’s story ribbon in order. Grades 3–5 share pizza, build a food-chain chart, name tales with evidence, and match helpers to jobs. Every grade also stamps Yuki’s banner, writes Fumi’s sign, and makes a band with Kiko, with goals that grow by grade. The table below explains each task.
 - **Finish your creation.** Each encounter shows at most four commands. The green finish command is last and stays gray until the work is ready: **Send cart**, **Serve ice**, **Share story**, **Open square**, **Plant bed**, **Hang map**, **Share ribbon**, **Serve pizza**, **Pin chart**, **Share tales**, **Start day**, **Hang banner**, **Put up sign**, or **Send band**. In the story bag, **Share story** appears after all three things are packed. Help names the steps and the finish. A wrong try explains why and keeps your work. Finishing shows what you made, then puts it at that neighbor’s stall.
@@ -200,8 +200,8 @@ Both chapters share the same village and cast. Players can choose among **math, 
 
 ## The village
 
-Willow Bay is the team’s hand-drawn cobblestone crossroads. The road is the only walkable ground; the stalls stand along its edges.
+Hanabi Bay is the team’s hand-drawn cobblestone crossroads. The road is the only walkable ground; the stalls stand along its edges.
 
-![The team’s drawing of Willow Bay’s cobblestone crossroads.](assets/village/background.png)
+![The team’s drawing of Hanabi Bay’s cobblestone crossroads.](assets/village/background.png)
 
 See the [full art guide](docs/All_Aboard_Character_and_Art_Plan.md#asset-guide) for export sizes and the [first art batch](docs/All_Aboard_Character_and_Art_Plan.md#first-art-batch) for the initial checklist.

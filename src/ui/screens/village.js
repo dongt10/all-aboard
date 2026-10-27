@@ -1,4 +1,4 @@
-// Willow Bay, the bright overworld: stalls, wandering neighbors, the player, the HUD and the festival board.
+// Hanabi Bay, the bright overworld: stalls, wandering neighbors, the player, the HUD and the festival board.
 import { CHARACTERS } from '../../data.js';
 import { getCreations, getCompleted, getDraft, canStartParade } from '../../progress.js';
 import { SUBJECT_THEME } from '../palette.js';
@@ -20,7 +20,7 @@ const SIDE = {
   nori: { name: 'Nori', line: 'You can go anywhere first. I’m going slowly. That’s my favorite speed.' },
 };
 // Pip greets every visit until the first creation is made in this grade. Each sentence fits one Bigger-words page.
-export const WELCOME_LINE = 'Welcome to Willow Bay! Tap a neighbor to help them make something.';
+export const WELCOME_LINE = 'Welcome to Hanabi Bay! Tap a neighbor to help them make something.';
 export const HELP_STEPS = [
   'Tap a neighbor to walk over and talk.',
   'Tap the path, or use arrow keys to walk.',
@@ -275,7 +275,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     root.className = 'village';
     root.tabIndex = 0;
     root.setAttribute('role', 'region');
-    root.setAttribute('aria-label', 'Willow Bay. Walk with the arrow keys. Press Enter near a neighbor to talk. Or choose a neighbor.');
+    root.setAttribute('aria-label', 'Hanabi Bay. Walk with the arrow keys. Press Enter near a neighbor to talk. Or choose a neighbor.');
     root.innerHTML = `<img class="village-map" src="${BACKGROUND}" alt="" draggable="false" width="960" height="540">
       <div class="village-stalls">${CHARACTERS.map(c => stallMarkup(c, made)).join('')}</div>
       <div class="village-actors">
@@ -288,7 +288,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       </div>
       <header class="village-hud">
         <button type="button" class="px-chip village-grade" data-act="grade">${esc(gradeLabel(s))}</button>
-        <h1 class="village-hud__title">Willow Bay</h1>
+        <h1 class="village-hud__title">Hanabi Bay</h1>
         <nav class="village-hud__buttons" aria-label="Menu">
           <button type="button" class="px-icon-button" data-act="village-help">${icon('help')}<span>Help</span></button>
           <button type="button" class="px-icon-button" data-act="guide">${icon('map')}<span>Guide</span></button>
