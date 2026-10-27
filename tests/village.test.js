@@ -1459,3 +1459,50 @@ test('slow loading leaves Help available and a late valid road unlocks walking',
   f.scene.handleIntent('up');
   assert.notDeepEqual(f.pos(), PLAYER_START);
 });
+
+for (const large of [false, true]) test(`scene frames place measured chips and preserve Talk actions (large=${large})`, t => {
+  t.mock.method(Math, 'random', seeded(17));
+  const f = villageFixture(t, { calm: true, large: !large });
+  const names = f.root.querySelectorAll('.village-name'), talk = f.root.querySelector('.village-talk');
+  let reads = 0;
+  for (const el of [...names, talk]) Object.defineProperties(el, {
+    offsetWidth: { get() { reads++; return Math.ceil(el.textContent.length * (large ? 13 : 10.4) + 24); } },
+    offsetHeight: { get() { reads++; return large ? 38 : 33; } },
+  });
+  f.stage.classList.toggle('large-text', large);
+  const checkChips = () => {
+    const visible = names.filter(el => !el.parentElement.classList.contains('village-actor--near'));
+    if (!talk.hidden) visible.push(talk);
+    const boxes = visible.map(el => ({
+      x: (el === talk ? 0 : parseFloat(el.parentElement.style.left)) + parseFloat(el.style.left) - el.offsetWidth / 2,
+      y: (el === talk ? 0 : parseFloat(el.parentElement.style.top)) + parseFloat(el.style.top),
+      w: el.offsetWidth, h: el.offsetHeight,
+    }));
+    boxes.forEach((b, i) => {
+      assert.ok(Number.isFinite(b.x) && Number.isFinite(b.y), 'frame applied placement');
+      boxes.slice(i + 1).forEach(other => assert.equal(overlaps(b, other), false));
+    });
+  };
+  f.tick();
+  checkChips();
+  const measured = reads;
+  f.tick();
+  assert.equal(reads, measured, 'stationary scene performs no chip measurements');
+  f.stage.classList.remove('calm');
+  const actorPositions = () => names.map(el => [el.parentElement.style.left, el.parentElement.style.top]);
+  const before = actorPositions();
+  f.tick(performance.now() + 5000);
+  for (let i = 0; i < 20; i++) f.tick(100);
+  assert.notDeepEqual(actorPositions(), before, 'neighbors wandered');
+  assert.equal(reads, measured, 'wandering reuses cached chip sizes');
+  checkChips();
+  f.stage.classList.add('calm');
+  f.tick();
+  const goal = talkGoal('pip');
+  f.tap(goal.x, goal.y);
+  assert.equal(talk.hidden, false);
+  assert.equal(talk.getAttribute('aria-label'), 'Talk to Pip');
+  checkChips();
+  talk.click();
+  assert.match(f.root.querySelector('.village-dialogue').textContent, /Pip/);
+});
