@@ -15,7 +15,7 @@
 .banner-shapes .banner-option { min-height: 54px; }
 .banner-option:hover { background: var(--white); }
 .banner-option:active { transform: translateY(1px); }
-.banner-option[aria-checked="true"] { background: var(--lantern); box-shadow: inset 2px 2px 0 #ffe59a, inset -2px -3px 0 #c28c32, 0 2px 0 var(--ink); }
+.banner-option[aria-checked="true"] { outline: 2px solid var(--ink); outline-offset: -4px; background: var(--lantern); box-shadow: inset 2px 2px 0 #ffe59a, inset -2px -3px 0 #c28c32, 0 2px 0 var(--ink); }
 .banner-option:focus-visible { outline: 3px solid var(--vermilion); outline-offset: 1px; }
 .banner-option__name { white-space: nowrap; overflow: hidden; text-overflow: clip; }
 .banner-pot {

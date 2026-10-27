@@ -2,7 +2,7 @@
 // start, opening, commands and act are pure; mountField builds the field once and updates it in place.
 import { ENCOUNTER_COLORS, ENCOUNTER_COLOR_NAMES, normalizeEncounterSnapshot } from '../../encounters.js';
 import {
-  COLUMNS, ROWS, YUKI_CELLS, PATTERN_CELLS, patternFor, yukiStamps, expectedAt, patternReport,
+  COLUMNS, ROWS, YUKI_CELLS, PATTERN_CELLS, patternFor, yukiStamps, expectedAt, patternReport, patternMismatch,
   stampPosition, stampAt, symmetryReport, bannerReady, bannerOpening, bannerHelp, BANNER_RULE_LINES,
 } from '../../banner-rules.js';
 export { stampPosition, stampAt } from '../../banner-rules.js';
@@ -149,13 +149,23 @@ function act(state, ui, action) {
     return { state, ui };
   }
   if (action?.type !== 'field') return { state, ui };
-  if (ENCOUNTER_COLORS.includes(action.color)) return { state, ui: { ...ui, color: action.color }, line: BANNER_LINES.paint(action.color) };
-  if (BANNER_SHAPES.includes(action.shape)) return { state, ui: { ...ui, shape: action.shape }, line: BANNER_LINES.stamp(action.shape) };
+  if (ENCOUNTER_COLORS.includes(action.color)) return { state, ui: { ...ui, color: action.color, patternHint: null }, line: BANNER_LINES.paint(action.color) };
+  if (BANNER_SHAPES.includes(action.shape)) return { state, ui: { ...ui, shape: action.shape, patternHint: null }, line: BANNER_LINES.stamp(action.shape) };
   if (Number.isInteger(action.cell) && action.cell >= 0 && action.cell < CELLS) {
     if (patternFor(state.grade)) {
       if (YUKI_CELLS.includes(action.cell)) return { state, ui, line: BANNER_RULE_LINES.yuki };
       const expected = expectedAt(state.grade, action.cell);
-      if (expected && (expected.shape !== ui.shape || expected.color !== ui.color)) return { state, ui, line: BANNER_RULE_LINES.wrong };
+      const mismatch = patternMismatch(state.grade, action.cell, ui);
+      if (mismatch) {
+        const hint = `${action.cell}:${mismatch}`;
+        const answer = mismatch === 'shape' ? `Try a ${expected.shape} here.`
+          : `Try ${ENCOUNTER_COLOR_NAMES[expected.color].toLowerCase()} paint here.`;
+        const line = ui.patternHint === hint ? answer
+          : mismatch === 'shape' ? BANNER_RULE_LINES.wrongShape : BANNER_RULE_LINES.wrongColor;
+        return { state, ui: { ...ui, patternHint: hint }, line };
+      }
+      // A successful stamp ends this retry, even if it leaves the cloth unchanged.
+      if (ui.patternHint) ui = { ...ui, patternHint: null };
     }
     const stamp = { shape: ui.shape, color: ui.color, rotation: ui.rotation, ...stampPosition(action.cell) };
     const index = stampAt(state, action.cell);

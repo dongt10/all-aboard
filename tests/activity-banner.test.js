@@ -354,7 +354,7 @@ for (const grade of [1, 2]) test(`grade ${grade}: complete the pattern, reject a
     assert.equal(refused.line, BANNER_RULE_LINES.yuki);
   }
   const wrong = field(s, { cell: 3 });
-  assert.equal(wrong.state, s.state); assert.equal(wrong.ui, s.ui); assert.equal(wrong.line, BANNER_RULE_LINES.wrong);
+  assert.equal(wrong.state, s.state); assert.notEqual(wrong.ui, s.ui); assert.equal(wrong.line, BANNER_RULE_LINES.wrongShape);
   s = field(s, { cell: 8 }); assert.equal(s.line, BANNER_RULE_LINES.free);
   for (const cell of PATTERN_CELLS) {
     const expected = expectedAt(grade, cell);
@@ -365,8 +365,8 @@ for (const grade of [1, 2]) test(`grade ${grade}: complete the pattern, reject a
   }
   assert.equal(bannerReady(s.state), true); assert.equal(s.state.stamps.length, 4, 'Yuki adds no saved stamps');
   const before = s.state;
-  s = field(s, { color: '#6dbea0' });
-  const refused = field(s, { cell: 5 }); assert.equal(refused.state, before); assert.equal(refused.ui, s.ui);
+  s = field(s, { shape: 'leaf' });
+  const refused = field(s, { cell: 5 }); assert.equal(refused.state, before); assert.notEqual(refused.ui, s.ui);
   assert.equal(bannerReady(refused.state), true, 'a wrong replacement keeps the correct row');
   s = cmd(s, 'undo');
   assert.equal(s.line, `Undone. ${BANNER_RULE_LINES.patternAgain}`); assert.equal(bannerReady(s.state), false); contract();
@@ -431,4 +431,69 @@ test('banner names keep the small font token and its grade cues add no text widt
     stage.className = large ? 'large-text' : '';
     assert.equal(controlStyle(button, `${kit}\n${css}`)['font-size'], large ? '20px' : '16px');
   }
+});
+
+test('grade 1 can complete the shape pattern with blue circles and mixed paints', () => {
+  let s = banner.start(null, { grade: 1, chapter: 1 });
+  for (const [cell, shape, color] of [[3, 'circle', '#559fc7'], [4, 'star', '#6dbea0'], [5, 'circle', '#9d7fbd']]) {
+    s = field(field(field(s, { shape }), { color }), { cell });
+  }
+  assert.equal(s.line, BANNER_RULE_LINES.patternDone);
+  assert.equal(banner.commands(s.state, s.ui).at(-1).disabled, false);
+  const reopened = banner.start(cleanCreation('art', s.state), { grade: 1, chapter: 1 });
+  assert.deepEqual(reopened.state, s.state);
+  assert.equal(bannerReady(reopened.state), true);
+});
+
+test('pattern retries name the mismatch then give an answer without changing the work', () => {
+  for (const grade of [1, 2]) {
+    let s = field(banner.start(null, { grade, chapter: 1 }), { cell: 8 });
+    const before = s.state, history = s.ui.history;
+    s = field(s, { cell: 3 });
+    assert.equal(s.line, BANNER_RULE_LINES.wrongShape);
+    s = field(s, { cell: 3 });
+    assert.equal(s.line, grade === 1 ? 'Try a circle here.' : 'Try a flower here.');
+    assert.equal(s.state, before); assert.equal(s.ui.history, history);
+    assert.ok(s.line.length <= 56);
+    s = field(s, { shape: expectedAt(grade, 3).shape });
+    if (grade === 2) {
+      s = field(s, { cell: 3 }); assert.equal(s.line, BANNER_RULE_LINES.wrongColor);
+      s = field(s, { cell: 3 }); assert.equal(s.line, 'Try blue paint here.');
+      assert.equal(s.state, before); assert.equal(s.ui.history, history);
+      s = field(s, { color: '#559fc7' });
+    }
+    s = field(s, { cell: 3 });
+    assert.equal(s.line, BANNER_RULE_LINES.fits); assert.equal(s.ui.patternHint, null);
+    const placed = s.state;
+    s = field(s, { shape: 'leaf' }); s = field(s, { cell: 3 });
+    assert.equal(s.line, BANNER_RULE_LINES.wrongShape); assert.equal(s.state, placed);
+    s = field(s, { cell: 5 });
+    assert.equal(s.line, BANNER_RULE_LINES.wrongShape, 'a different position starts its own hint');
+    s = cmd(s, 'undo'); assert.deepEqual(s.state, before, 'wrong tries add no undo steps');
+  }
+});
+
+test('selected paint and stamp have a persistent non-color outline separate from focus', () => {
+  const css = readFileSync(new URL('../src/ui/activities/banner.css', import.meta.url), 'utf8');
+  const selected = declarations(css, '.banner-option[aria-checked="true"]');
+  assert.equal(selected.outline, '2px solid var(--ink)');
+  assert.equal(selected['outline-offset'], '-4px');
+  assert.notEqual(declarations(css, '.banner-option:focus-visible')['outline-offset'], selected['outline-offset']);
+  const previous = globalThis.document, doc = new Doc(); globalThis.document = doc;
+  try {
+    const host = doc.createElement('div'); doc.body.append(host);
+    let s = banner.start(null, { grade: 1 });
+    const view = banner.mountField(host, { dispatch: action => {
+      s = banner.act(s.state, s.ui, action); view.update(s.state, s.ui);
+    } });
+    view.update(s.state, s.ui);
+    for (const [rail, value] of [['banner-paints', '#559fc7'], ['banner-shapes', 'circle']]) {
+      const options = host.querySelector(`.${rail}`).querySelectorAll('.banner-option');
+      assert.equal(options.filter(b => b.getAttribute('aria-checked') === 'true').length, 1);
+      const picked = options.find(b => b.dataset.value === value); picked.click();
+      assert.deepEqual(options.filter(b => b.getAttribute('aria-checked') === 'true'), [picked]);
+      assert.equal(picked.tabIndex, 0);
+    }
+    view.destroy();
+  } finally { globalThis.document = previous; }
 });

@@ -2,7 +2,7 @@
 import { bandPlaybackMessage } from '../music.js';
 
 export const PARADE_ORDER = ['math', 'science', 'art', 'reading', 'writing', 'community', 'music'];
-export const PARADE_LAPS = 2;   // the line crosses the stage twice, then stops in a line-up
+export const PARADE_LAPS = 2;   // one full crossing, then a second pass stops in a line-up
 
 export const PARADE_LINES = {
   opening: 'Your parade! Every idea belongs here.',
@@ -23,7 +23,7 @@ export function paradeOpening({ hasBand = false } = {}) {
   return hasBand ? PARADE_LINES.opening : `${PARADE_LINES.opening} ${PARADE_LINES.noBand}`;
 }
 
-// When the march stops, and what the unnamed line says then. laps: finished crossings of the stage;
+// When the march stops, and what the unnamed line says then. laps: finished animation passes;
 // calm: Calm motion (the setting or the system preference), which shows the line-up at once;
 // made: how many creations march. Every subject made means the whole festival is done.
 // hasBand: without a band the line keeps saying why Play band is grayed out (the opening is gone by then).
@@ -52,9 +52,9 @@ export function paradeStatus(phase, reason, band) {
   if (phase === 'starting') return 'Starting your band…';
   if (phase !== 'playing') return 'Music stopped.';
   return bandPlaybackMessage(band)
-    .replace('Invite a friend or add a note.', 'Visit Kiko to invite a friend or add a note.')
-    .replace('Raise a friend’s volume to listen.', 'Visit Kiko to raise a friend’s volume.')
-    .replace('Raise band volume to listen.', 'Visit Kiko to raise the band volume.')
+    .replace('Everyone is resting. Invite a friend or add a note.', 'Everyone is resting. Visit Kiko to add a note.')
+    .replace('Your friends are muted. Raise a friend’s volume to listen.', 'Friends are muted. Visit Kiko to turn them up.')
+    .replace('Band is playing with sound off. Raise band volume to listen.', 'Sound is off. Visit Kiko to turn it up.')
     .replace(' Try a new sound!', '');
 }
 

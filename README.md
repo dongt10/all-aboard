@@ -4,7 +4,11 @@
 
 All Aboard is a playable village adventure for **Kindergarten and grades 1–5**, designed with neurodivergent children in mind. Explore Willow Bay as it gets ready for a Japanese summer festival, meet animal neighbors in handheld-game encounter scenes, and put your own creations into the village and its parade.
 
-**[Play All Aboard in your browser](https://dongt10.github.io/all-aboard/)** — no installation needed.
+**[Play now](https://playallaboard.com)** — no installation needed.
+
+1. Choose a character and grade, then select **Start** (or **Continue** on a return visit).
+2. Visit a neighbor and follow the activity’s Help steps.
+3. Finish creations and join the parade from the festival board.
 
 ## Credits
 
@@ -183,7 +187,7 @@ The build produces a static site in `dist/`, ready for a static web server. Serv
 
 The plan covers the cast, village layout, front-end screens, sprite sizes, and the first batch of artwork to create.
 
-All seven neighbors plus Pip and Nori are now drawn from the team’s reference drawings in [docs/art/source/neighbors/](docs/art/source/neighbors/). Their sheets are derived using [manifest.json](docs/art/source/neighbors/manifest.json), never redrawn or recolored. The references are pinned by hash and never replaced; [tests/figures-references.test.js](tests/figures-references.test.js) checks the drawings and derived pixels. To change the art, change the reference and the pinned hash on purpose.
+All seven neighbors plus Pip and Nori are now drawn from the team’s reference drawings in [docs/art/source/neighbors/](docs/art/source/neighbors/). Their sheets are derived using [manifest.json](docs/art/source/neighbors/manifest.json), including sampling, background removal, shifts, frame patches and side-view recipes. The recorded color swaps are Taro #efa54e → #ff9a3c and Momo #aee2d6 → #3fcfbf; other references keep their colors. The team still needs to decide whether those substitutions are intended. The references are pinned by hash; [tests/figures-references.test.js](tests/figures-references.test.js) checks the drawings and derived pixels. Any intentional reference change requires updating its pinned hash and derivation.
 
 ## Our first chapters
 
