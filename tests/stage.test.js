@@ -201,6 +201,133 @@ test('standalone keeps keyboard viewport sizes and offsets for focused fields', 
   handle.destroy();
 });
 
+// Measured on iOS 26.4, iPhone 17 Pro Max, port 4175 Home Screen cold launch.
+// All three web viewport APIs and 100dvh were 956x378, while the screen was
+// 440x956 / landscape-primary. A delayed refit and max(client, visual) cannot fix it.
+function iphoneColdLaunch(t) {
+  const env = install(t);
+  const { doc, win, viewport, orientation } = env;
+  win.navigator = { standalone: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 26_4 like Mac OS X)' };
+  Object.assign(win, { innerWidth: 956, innerHeight: 378 });
+  Object.assign(win.screen, { width: 440, height: 956 });
+  orientation.type = 'landscape-primary';
+  Object.assign(doc.documentElement, { clientWidth: 956, clientHeight: 378 });
+  Object.assign(viewport, { width: 956, height: 378, offsetTop: 0, offsetLeft: 0, scale: 1 });
+  win.getComputedStyle = () => ({ paddingLeft: '62px', paddingRight: '62px', paddingTop: '0px', paddingBottom: '20px' });
+  return env;
+}
+
+test('measured iPhone cold launch uses the full screen AND releases the stale fixed-body clip', t => {
+  const { doc, win, tick } = iphoneColdLaunch(t);
+  doc.body.style.width = ''; doc.body.style.height = '';
+  const handle = mountStage(doc.body), host = handle.stage.parentElement;
+  tick(1500); // None of the wrong browser measurements change during settling.
+  assert.equal(win.innerHeight, 378);
+  assert.equal(doc.documentElement.clientHeight, 378);
+  assert.equal(host.style.width, '956px');
+  assert.equal(host.style.height, '440px');
+  assert.equal(doc.body.style.width, '956px');
+  assert.equal(doc.body.style.height, '440px');
+  assert.equal(doc.body.classList.contains('standalone-screen'), true);
+  const box = fitStage(956, 440, { left: 62, right: 62, bottom: 20 });
+  assert.equal(box.height, 420);
+  assert.equal(handle.stage.style.transform, `translate(${box.left}px, 0px) scale(${420 / 540})`);
+  assert.equal(host.querySelector('.rotate-card').hidden, true);
+  // Explicit height alone still clipped in the simulator; the scoped CSS is necessary.
+  const css = read('src/ui/kit.css').toString();
+  assert.match(css, /body\.game\.standalone-screen\s*\{[^}]*position:\s*static;[^}]*overflow:\s*visible;/);
+  handle.destroy();
+  assert.equal(doc.body.style.height, '');
+  assert.equal(doc.body.style.width, '');
+  assert.equal(doc.body.classList.contains('standalone-screen'), false);
+});
+
+test('iPhone portrait launch and stale portrait web viewport on landscape return follow screen orientation', t => {
+  const { doc, win, viewport, orientation } = iphoneColdLaunch(t);
+  orientation.type = 'portrait-primary';
+  Object.assign(viewport, { width: 440, height: 894 });
+  Object.assign(win, { innerWidth: 440, innerHeight: 894 });
+  Object.assign(doc.documentElement, { clientWidth: 440, clientHeight: 894 });
+  win.getComputedStyle = () => ({ paddingLeft: '0px', paddingRight: '0px', paddingTop: '62px', paddingBottom: '34px' });
+  const handle = mountStage(doc.body), host = handle.stage.parentElement;
+  assert.equal(host.style.height, '956px');
+  assert.equal(host.style.width, '440px');
+  assert.equal(host.querySelector('.rotate-card').hidden, false);
+  assert.equal(handle.stage.inert, true);
+  doc.visibilityState = 'hidden'; win.fire(new Event('visibilitychange', { target: doc }), true);
+  orientation.type = 'landscape-primary';
+  win.getComputedStyle = () => ({ paddingLeft: '62px', paddingRight: '62px', paddingTop: '0px', paddingBottom: '20px' });
+  doc.visibilityState = 'visible'; win.fire(new Event('visibilitychange', { target: doc }), true);
+  assert.equal(host.style.width, '956px', 'stale portrait width must also be replaced');
+  assert.equal(host.style.height, '440px');
+  assert.equal(doc.body.style.width, '956px');
+  assert.equal(doc.body.style.height, '440px');
+  assert.equal(host.querySelector('.rotate-card').hidden, true);
+  assert.equal(handle.stage.inert, false);
+  handle.destroy();
+});
+
+test('measured iPhone 17e cold launch recovers the 47px missing from every viewport API', t => {
+  const { doc, win, viewport, tick } = iphoneColdLaunch(t);
+  Object.assign(win.screen, { width: 390, height: 844 });
+  Object.assign(win, { innerWidth: 844, innerHeight: 343 });
+  Object.assign(viewport, { width: 844, height: 343 });
+  Object.assign(doc.documentElement, { clientWidth: 844, clientHeight: 343 });
+  win.getComputedStyle = () => ({ paddingLeft: '47px', paddingRight: '47px', paddingTop: '0px', paddingBottom: '20px' });
+  const handle = mountStage(doc.body), host = handle.stage.parentElement;
+  tick(1500);
+  assert.equal(host.style.width, '844px');
+  assert.equal(host.style.height, '390px');
+  assert.equal(doc.body.style.height, '390px');
+  assert.equal(doc.body.classList.contains('standalone-screen'), true);
+  const box = fitStage(844, 390, { left: 47, right: 47, bottom: 20 });
+  assert.equal(box.height, 370);
+  assert.equal(handle.stage.style.transform, `translate(${box.left}px, 0px) scale(${370 / 540})`);
+  handle.destroy();
+});
+
+test('iPhone screen correction yields to keyboard focus and preserves native pinch and panning', t => {
+  const { doc, viewport, win, tick } = iphoneColdLaunch(t);
+  doc.body.style.width = ''; doc.body.style.height = '';
+  const handle = mountStage(doc.body), host = handle.stage.parentElement;
+  const transform = handle.stage.style.transform;
+  Object.assign(viewport, { scale: 2, width: 478, height: 220, offsetTop: 70, offsetLeft: 40 });
+  win.fire(new Event('pageshow')); tick(1500);
+  assert.equal(handle.stage.style.transform, transform);
+  assert.equal(doc.body.style.height, '440px');
+  assert.equal(doc.body.classList.contains('standalone-screen'), true);
+  for (const tag of ['input', 'textarea', 'select', 'div']) {
+    const field = doc.createElement(tag);
+    if (tag === 'div') { field.isContentEditable = true; field.tabIndex = 0; }
+    handle.stage.append(field); field.focus();
+    Object.assign(viewport, { scale: 1, width: 956, height: 210, offsetTop: 35, offsetLeft: 0 });
+    viewport.fire(new Event('resize'));
+    assert.equal(host.style.height, '210px', tag);
+    assert.equal(host.style.top, '35px', tag);
+    assert.equal(doc.body.style.height, '', tag);
+    assert.equal(doc.body.classList.contains('standalone-screen'), false, tag);
+    field.remove();
+  }
+  viewport.fire(new Event('resize'));
+  assert.equal(host.style.height, '440px');
+  assert.equal(host.style.top, '0px');
+  handle.destroy();
+});
+
+test('screen correction is restricted to iPhone standalone, never Safari, iPad, or desktop', t => {
+  const { win } = iphoneColdLaunch(t);
+  win.navigator.standalone = false;
+  assert.equal(visibleViewport(win).height, 378, 'Safari toolbar height remains authoritative');
+  for (const userAgent of ['Mozilla/5.0 (iPad; CPU OS 26_4 like Mac OS X)', 'Mozilla/5.0 (Macintosh; Intel Mac OS X)']) {
+    win.navigator = { standalone: true, userAgent };
+    assert.equal(visibleViewport(win).height, 378);
+    assert.equal(visibleViewport(win).screenSized, undefined);
+  }
+  win.navigator = { standalone: true, userAgent: 'iPhone' };
+  win.screen.orientation.type = undefined;
+  assert.equal(visibleViewport(win).height, 378, 'missing orientation uses existing fallback');
+});
+
 test('standalone height recovery requires scale 1 and never cancels pinch magnification', t => {
   const { doc, win, viewport, tick } = install(t);
   win.navigator = { standalone: true };
