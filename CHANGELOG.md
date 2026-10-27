@@ -32,6 +32,7 @@ Changes to All Aboard, grouped by release.
 
 ### Art
 
+- The seven stalls are drawn as their own pixel sprites in the characters' outline style: Taro's workshop, Momo's kitchen, Yuki's studio, Sora's reading nook, Fumi's writing booth, Hana's map kiosk and Kiko's stage.
 - Hana, Kiko and Sora rebuilt from the team's drawings with true left, right and back views.
 - Pip and Nori redrawn from approved concept designs in the team's style, with true left and right profiles; the references are pinned and the sheets are derived from them.
 - Yuki and Fumi now come from the team's drawings, with side and back views, and the reference drawings are pinned so they can never be swapped silently.
@@ -39,6 +40,7 @@ Changes to All Aboard, grouped by release.
 
 ### Fixed
 
+- An overnight pass on the 2026-10-27 review: Enter talks to the focused neighbor; unread dialogue pages come before any key press can answer; the reward card accepts only on its button and can be heard; the Guide reads its pages and speech failures show a notice; only local voices are used; stamps say We explored; Echo keeps a partial rhythm and its credit survives leaving; the quiet choice holds through Echo and presets; the no-water seed stays a seed and the bee is pollination, not a growth rule; energy numbers are pretend units; Next story keeps each story's draft; compass starts and distances match the map; finished banners drop the working fold and mirror checks respect flipped stamps; an unreadable or newer save is kept and can be exported, never overwritten; HEAD requests read no file bodies; village name chips never overlap.
 - Phone stage fitting follows the visible viewport and safe-area insets as browser bars move or the device rotates. Pinch zoom keeps its magnification, touch no longer triggers double-tap zoom, and phone margins use the scene’s palette while the central 960×540 playfield stays intact.
 - Read-aloud selects a preferred local English voice and uses a calm pace with neutral pitch.
 - The Enter walking hint closes after three seconds and chooses a clear dialogue position when available, otherwise the position with less player overlap. Read to me finishes speaking before the closing delay.
