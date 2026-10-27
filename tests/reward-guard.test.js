@@ -372,3 +372,49 @@ for (const flow of flows) {
   });
 }
 
+
+test('reward inspection never accepts; only focused acceptance does, and Tab stays in the card', async () => {
+  const ctx = fakeCtx();
+  const reward = showItemGet(ctx.stage, { name: 'Your sign', artHTML: '<span aria-label="Hello friend!">Hello friend!</span>', allowEdit: true });
+  const card = ctx.stage.querySelector('.item-get');
+  for (const selector of ['.item-get__card', '.item-get__name', '.item-get__figure', '.item-get__art']) {
+    card.querySelector(selector).click();
+    assert.ok(ctx.stage.querySelector('.item-get'), `${selector} cannot accept`);
+  }
+  assert.equal(card.querySelector('.item-get__description').textContent, 'Hello friend!');
+  const inspect = card.querySelector('.item-get__inspect');
+  inspect.focus();
+  inspect.dispatchEvent(new Event('keydown', { key: 'z' }));
+  assert.ok(ctx.stage.querySelector('.item-get'), 'Z inspects when inspection is focused');
+  inspect.dispatchEvent(new Event('keydown', { key: 'Tab', shiftKey: true }));
+  assert.equal(doc.activeElement, card.querySelector('.item-get__edit'));
+  doc.activeElement.dispatchEvent(new Event('keydown', { key: 'Tab' }));
+  assert.equal(doc.activeElement, inspect);
+  inspect.dispatchEvent(new Event('keydown', { key: 'ArrowRight' }));
+  assert.equal(doc.activeElement, card.querySelector('.item-get__go'));
+  doc.activeElement.dispatchEvent(new Event('keydown', { key: 'z' }));
+  assert.equal(await reward, true);
+});
+
+for (const cancelBy of ['click', 'Escape', 'x', 'Backspace']) {
+  test(`encounter: ${cancelBy} cancels reward, keeps the draft editable, and allows finishing again`, async t => {
+    const { ctx, card } = openReward(t, flows[0], grade2());
+    const before = getDraft(ctx.getState(), 'writing');
+    if (cancelBy === 'click') card.querySelector('.item-get__edit').click();
+    else doc.activeElement.dispatchEvent(new Event('keydown', { key: cancelBy }));
+    await tick();
+    assert.equal(ctx.stage.querySelector('.item-get'), null);
+    assert.deepEqual(getDraft(ctx.getState(), 'writing'), before);
+    assert.deepEqual(getCreations(ctx.getState()), {});
+    assert.deepEqual(ctx.gone, []);
+    const text = ctx.stage.querySelector('textarea');
+    text.value = 'Hello festival!'; text.dispatchEvent(new Event('input'));
+    assert.equal(getDraft(ctx.getState(), 'writing').text, 'Hello festival!');
+    slot(ctx.stage, 'finish').click();
+    assert.ok(ctx.stage.querySelector('.item-get'), 'finishing guard was reset');
+    ctx.stage.querySelector('.item-get__go').click();
+    await tick();
+    assert.equal(getCreations(ctx.getState()).writing.text, 'Hello festival!');
+    assert.equal(ctx.gone.length, 1);
+  });
+}

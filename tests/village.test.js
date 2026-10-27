@@ -864,7 +864,7 @@ for (const [key, label] of A_KEY_CASES.slice(0, 2)) for (const act of ['grade', 
     assert.equal(pressKey(target, 'keyup', key).defaultPrevented, false);
     assert.equal(clicks, 1);
     if (act === 'parade') assert.deepEqual(f.gone, [['parade']]);
-    else if (act === 'hear') assert.equal(f.spoken.at(-1), before);
+    else if (act === 'hear') assert.equal(f.spoken.at(-1), before + (f.root.querySelector('.dlg__more').hidden ? '' : ' More. Tap to continue.'));
     else if (act === 'more') assert.notEqual(text.textContent, before);
     else assert.deepEqual(f.opened, [act]);
   });

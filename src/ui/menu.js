@@ -59,7 +59,7 @@ export function stepCursor(commands, index, intent) {
 
 // The 2×2 command menu: four permanent slot buttons that set() fills in place. Only the cursor
 // button is in the tab order, a ▶ marks it, and hovering or focusing a command moves it.
-export function createCommandMenu(host, { onChoose = () => {} } = {}) {
+export function createCommandMenu(host, { onChoose = () => {}, onExitUp = () => false } = {}) {
   const frame = document.createElement('div');
   frame.className = 'px-frame cmd-frame';
   const grid = document.createElement('div');
@@ -78,9 +78,9 @@ export function createCommandMenu(host, { onChoose = () => {} } = {}) {
   frame.append(grid);
   host.append(frame);
 
-  let commands = [], cursor = -1;
+  let commands = [], cursor = -1, awaitingSelection = false;
   const hasFocus = () => grid.contains(document.activeElement);
-  const focusCursor = () => { if (cursor >= 0) slots[cursor].button.focus({ preventScroll: true }); };
+  const focusCursor = () => { (cursor >= 0 ? slots[cursor].button : grid).focus({ preventScroll: true }); };
   const focusEmpty = () => {
     const field = host.closest('.enc')?.querySelector('.enc__field');
     const control = field?.querySelector('textarea:not(:disabled)') ?? field?.querySelector('button:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex="-1"])');
@@ -109,6 +109,7 @@ export function createCommandMenu(host, { onChoose = () => {} } = {}) {
   }
   function moveTo(index, focus) {
     cursor = index;
+    awaitingSelection = false;
     markCursor();
     if (focus) focusCursor();
   }
@@ -123,7 +124,7 @@ export function createCommandMenu(host, { onChoose = () => {} } = {}) {
   });
   grid.addEventListener('pointerover', event => {
     const i = indexOf(event);
-    if (event.pointerType !== 'touch' && i >= 0 && i !== cursor && usable(commands[i])) moveTo(i, hasFocus());
+    if (!awaitingSelection && event.pointerType !== 'touch' && i >= 0 && i !== cursor && usable(commands[i])) moveTo(i, hasFocus());
   });
   grid.addEventListener('focusin', event => {
     const i = indexOf(event);
@@ -133,19 +134,29 @@ export function createCommandMenu(host, { onChoose = () => {} } = {}) {
   markCursor();
 
   return {
-    set(next) {
+    set(next, { requireSelection = false } = {}) {
       if (next.length > SLOTS) throw new RangeError('A command menu holds at most 4 commands');
       const hadFocus = hasFocus();
-      cursor = nextCursorIndex(commands, next, cursor);
+      awaitingSelection = requireSelection;
+      cursor = requireSelection ? -1 : nextCursorIndex(commands, next, cursor);
+      grid.tabIndex = requireSelection ? 0 : -1;
+      grid.setAttribute('aria-label', requireSelection ? 'Choose a picture. Use arrows, then Enter.' : 'Choices');
       commands = [...next];
       slots.forEach((slot, i) => paintSlot(slot, commands[i]));
       markCursor();
-      if (hadFocus) cursor >= 0 ? focusCursor() : focusEmpty();   // an empty encounter menu returns to the activity
+      if (hadFocus) cursor >= 0 || requireSelection ? focusCursor() : focusEmpty();   // an empty encounter menu returns to the activity
     },
     focus: focusCursor,
     // Arrows move the cursor, A chooses it. Anything else (B, say) is left to the scene.
     handleIntent(intent) {
-      if (cursor < 0) return false;
+      if (intent === 'up' && (cursor < 0 || stepCursor(commands, cursor, intent) === cursor) && onExitUp()) return true;
+      if (cursor < 0) {
+        if (!STEPS[intent]) return false;
+        const first = commands.findIndex(usable);
+        if (first < 0) return false;
+        moveTo(first, true);
+        return true;
+      }
       if (intent === 'a') { choose(cursor); return true; }
       if (!STEPS[intent]) return false;
       moveTo(stepCursor(commands, cursor, intent), true);

@@ -4,11 +4,10 @@ import { fitSignPreviews } from '../creations.js';
 
 let serial = 0;
 
-// The item-get card: "You made… {name}!", the creation drawn large beside the neighbor's joy pose, and
-// a Put it in the festival button with the play icon like every other button. A (or any click on the
-// card) resolves the promise true once. Its cancel() removes the card and resolves false. artHTML and
-// figureHTML are trusted markup from creations.js and figures; the name is set as text.
-export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {}) {
+// Resolves true only when the child accepts, or false on cancellation. Callers must opt in
+// to editing again and reset their finishing state after a false result.
+// artHTML and figureHTML are trusted markup; the name is set as text.
+export function showItemGet(stage, { name, artHTML = '', figureHTML = '', allowEdit = false } = {}) {
   let cancel;
   const promise = new Promise(resolve => {
     const opener = document.activeElement;
@@ -23,11 +22,19 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {})
           <div class="px-frame item-get__art">${artHTML}</div>
           <div class="item-get__figure">${figureHTML}</div>
         </div>
-        <button type="button" class="px-button px-button--finish item-get__go">${icon('play', { size: 22 })}<span>Put it in the festival</span></button>
+        <button type="button" class="px-button item-get__inspect">Look closer</button>
+        <p class="item-get__description" aria-live="polite">Look closer at your creation, or add it to the festival.</p>
+        <div class="item-get__actions">
+          <button type="button" class="px-button px-button--finish item-get__go">${icon('play', { size: 22 })}<span>Add to fest</span></button>
+          ${allowEdit ? '<button type="button" class="px-button item-get__edit">Keep editing</button>' : ''}
+        </div>
       </section>`;
     backdrop.querySelector('.item-get__name').textContent = `${name ?? ''}!`;
     const card = backdrop.firstElementChild;
     const button = card.querySelector('.item-get__go');
+    const inspect = card.querySelector('.item-get__inspect');
+    const edit = card.querySelector('.item-get__edit');
+    const controls = [inspect, button, ...(edit ? [edit] : [])];
     const dimmed = [...stage.children].filter(child => !child.inert);   // the scene behind can't take focus
     dimmed.forEach(child => { child.inert = true; });
 
@@ -43,11 +50,38 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '' } = {})
       resolve(accepted);
     }
     cancel = () => finish(false);
-    card.addEventListener('click', () => finish(true));
+    button.addEventListener('click', () => finish(true));
+    edit?.addEventListener('click', () => finish(false));
+    inspect.addEventListener('click', () => {
+      const art = card.querySelector('.item-get__art');
+      const description = art.querySelector('[aria-label]')?.getAttribute('aria-label');
+      card.querySelector('.item-get__description').textContent = description || `Your ${name ?? 'creation'} is ready to see.`;
+    });
+    card.querySelector('.item-get__art').addEventListener('click', () => inspect.click());
     card.addEventListener('keydown', event => {
       const intent = keyIntent(event);
-      if (intent === 'a' && !event.repeat) { event.preventDefault(); event.stopPropagation(); finish(true); }
-      else if (event.key === 'Tab') { event.preventDefault(); button.focus(); }   // one control: Tab stays on it
+      if (event.key === 'Tab') {
+        event.preventDefault();
+        const index = controls.indexOf(document.activeElement);
+        const next = index < 0 ? (event.shiftKey ? controls.length - 1 : 0)
+          : (index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length;
+        controls[next].focus();
+      } else if (intent === 'b') {
+        event.preventDefault(); event.stopPropagation();
+        if (allowEdit && !event.repeat) finish(false);
+      } else if (['left', 'right', 'up', 'down'].includes(intent)) {
+        event.preventDefault(); event.stopPropagation();
+        const index = controls.indexOf(document.activeElement);
+        const step = intent === 'left' || intent === 'up' ? -1 : 1;
+        controls[index < 0 ? 0 : (index + step + controls.length) % controls.length].focus();
+      } else if (intent === 'a') {
+        event.stopPropagation();
+        if (event.repeat) event.preventDefault();
+        else if (event.key !== 'Enter' && event.key !== ' ') {
+          event.preventDefault();
+          if (controls.includes(document.activeElement)) document.activeElement.click();
+        }
+      }
     });
     stage.append(backdrop);
     disposeSign = fitSignPreviews(card.querySelector('.item-get__art'), 240, 164);

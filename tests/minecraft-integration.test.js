@@ -307,7 +307,7 @@ test('published Minecraft edits and B phrase drive the same notes in stage, WAV 
     const stagePlan = soundPlan(stageContext, .055);
     slot(run.ctx, 'play').click();
     slot(run.ctx, 'save').click(); await tick();
-    run.ctx.stage.querySelector('.item-get').firstElementChild.click(); await tick();
+    run.ctx.stage.querySelector('.item-get__go').click(); await tick();
     const creation = getCreations(run.ctx.getState()).music;
     assert.equal(creation.preset, 'minecraft'); assert.equal(creation.form, 'AB');
     assert.equal(creation.tracks.find(track => track.id === 'melody').notes[0], 3);

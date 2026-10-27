@@ -63,3 +63,17 @@
 /* Calm motion: no sparkle at all. */
 .calm .item-get__spark { display: none; }
 @media (prefers-reduced-motion: reduce) { .item-get__spark { display: none; } }
+
+/* Keep instructions beside the field, clear of the player and dialogue tabs. */
+.enc__guidance { position: absolute; z-index: 3; left: 16px; top: 96px; width: 190px; max-height: 144px; overflow: auto; display: grid; gap: 8px; font-family: var(--font-read); font-size: var(--text-small); }
+.enc__nav { white-space: normal; font: inherit; }
+.enc__next { border: 0; padding: 4px; background: var(--paper, #fff8e7); color: var(--ink); text-align: left; font: inherit; }
+.enc__choose, .enc__next p { margin: 0; }
+.cmd-menu:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+/* Replay and Skip share a second row so Hear/Help cannot overlap the speaker. */
+.enc .dlg__tabs [data-act="replay"], .enc .dlg__tabs [data-act="skip"] { position: absolute; top: 142px; }
+.enc .dlg__tabs [data-act="replay"] { right: 230px; }
+.enc .dlg__tabs [data-act="skip"] { right: 130px; }
+.item-get__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.item-get__description { margin: 0; font-family: var(--font-read); font-size: var(--text-small); }
+.item-get__card { max-height: calc(100% - 24px); overflow: auto; }
