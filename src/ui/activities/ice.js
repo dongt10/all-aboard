@@ -120,13 +120,19 @@ export default {
   start(snapshot, { chapter = 0, grade = 1 } = {}) {
     const state = normalizeEncounterSnapshot('science', snapshot ?? {}, grade, chapter);
     // A draft that already has a shaded tray counts that tray as the guess; the guess itself is never saved.
-    return { state, ui: { predicted: state.canopy === 'none' ? null : state.canopy } };
+    return { state, ui: { predicted: state.request === 2 || state.canopy === 'none' ? null : state.canopy } };
   },
   opening(state) {
-    if (encounterReady(state)) return encounterOpeningDialogue(state);
+    if (encounterReady(state)) return 'Your ice test is ready. Serve ice, or Try another.';
+    if (state.request === 2 && state.canopy === 'right' && state.time === 0) return 'Tray B starts in the shade. Wait and compare the ice.';
     // A resumed draft with a shaded tray that is still melting: say what comes next, not "shade a tray".
     if (state.canopy !== 'none') return scienceNextStep(state);
     return encounterOpeningDialogue(state);   // per band: K-2 'wait and look!', 3-5 the guess question
+  },
+  another(state) {
+    const request = state.request === 2 ? 1 : 2;
+    const next = this.start({ kind: 'science', request, canopy: request === 2 ? 'right' : 'none', time: 0 }, { grade: state.grade, chapter: state.chapter });
+    return { ...next, line: this.opening(next.state) };
   },
   commands(state) {
     return [

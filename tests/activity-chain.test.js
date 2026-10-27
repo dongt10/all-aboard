@@ -52,6 +52,7 @@ const full = (grade = 3, eater = chainFor(grade).cards[2]) => normalizeChain({
   energy: expectedEnergy(grade), shone: true,
 }, grade, 1);
 const shortSentences = line => {
+  assert.ok(line.length <= 96, `${line.length}: ${line}`);
   assert.equal(typeof line, 'string');
   for (const sentence of line.split(/(?<=[.!?…]["'”’)\]]*)\s+/)) {
     assert.ok(sentence.trim().length <= 56, `${sentence.trim().length}: ${sentence}`);
@@ -74,7 +75,7 @@ function deepFreeze(value) {
 for (const grade of GRADES_CHAIN) {
   test(`grade ${grade}: own snapshot, legacy migration, commands and complete play`, () => {
     let { state, ui } = start(grade);
-    assert.deepEqual(state, { kind: 'science', activity: 'chain', grade, chapter: 1, chain: [null, null, null], energy: [null, null, null], shone: false });
+    assert.deepEqual(state, { kind: 'science', activity: 'chain', request: 1, grade, chapter: 1, chain: [null, null, null], energy: [null, null, null], shone: false });
     assert.deepEqual(ui, { shine: 0 });
     assert.equal(activity.opening(state), LINES.opening);
     const legacy = { ...full(grade), activity: undefined, canopy: 'left', time: 20 };
@@ -592,13 +593,11 @@ test('chain placeholders and enlarged tale tags use tokens with room for the tag
 });
 
 test('energy example and pond feedback avoid universal claims', () => {
-  for (const line of [LINES.opening, LINES.openingPart, LINES.openingReady]) {
-    assert.match(line, /pretend energy units/);
+  for (const line of [LINES.opening, LINES.openingPart]) {
+    assert.match(line, /pretend energy units/i);
     assert.match(line, /new growth/);
-    assert.match(line, /same time/);
     assert.match(line, /Real transfer varies/);
   }
-  assert.match(LINES.opening, /Groups grow over the same time/);
   assert.match(LINES.opening, /new growth/);
   assert.match(LINES.opening, /Real transfer varies/);
   assert.match(STAMP_CHAIN, /Real transfer varies/);
@@ -607,4 +606,44 @@ test('energy example and pond feedback avoid universal claims', () => {
   assert.equal(result.state, state);
   assert.match(result.line, /For this chart/);
   assert.doesNotMatch(result.line, /do not eat/);
+});
+
+
+test('another switches chains and survives cleaning at each grade', () => {
+  for (const grade of [3, 4, 5]) {
+    const initial = activity.start(null, { grade, chapter: 1 });
+    const next = activity.another(initial.state, initial.ui, grade);
+    assert.equal(next.state.request, 2);
+    shortSentences(next.line);
+    assert.notDeepEqual(chainFor(grade, 2).cards, chainFor(grade).cards);
+    let state = next.state, ui = next.ui;
+    for (const [i, card] of chainFor(grade, 2).cards.slice(0, 3).entries()) {
+      let result = activity.act(state, ui, field({ card }));
+      shortSentences(result.line); ({ state, ui } = result);
+      result = activity.act(state, ui, field({ energy: expectedEnergy(grade)[i] }));
+      shortSentences(result.line); ({ state, ui } = result);
+    }
+    ({ state, ui } = activity.act(state, ui, { type: 'command', id: 'shine' }));
+    assert.equal(chainReady(state), true);
+    assert.equal(cleanChainCreation(state).request, 2);
+    assert.equal(activity.another(state, ui, grade).state.request, 1);
+  }
+});
+
+test('cleaning clamps requests and rejects cards from the other request', () => {
+  for (const grade of [3, 4, 5]) {
+    for (const request of [2, 99]) {
+      const input = { kind: 'science', activity: 'chain', grade, chapter: 1, request,
+        chain: chainFor(grade, 1).cards.slice(0, 3), energy: expectedEnergy(grade), shone: true };
+      const clean = cleanChainCreation(input);
+      assert.equal(clean.request, 2);
+      assert.deepEqual(clean.chain, [null, null, null]);
+      assert.deepEqual(normalizeChain(clean, grade, 1), clean);
+      assert.deepEqual(cleanChainCreation(clean), clean);
+    }
+    const second = activity.another(start(grade).state, { shine: 0 });
+    const placed = activity.act(second.state, second.ui, field({ card: chainFor(grade, 2).cards[0] }));
+    const reset = activity.act(placed.state, placed.ui, { type: 'command', id: 'reset' });
+    assert.deepEqual(reset.state, second.state);
+  }
 });

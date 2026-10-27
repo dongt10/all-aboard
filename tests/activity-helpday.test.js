@@ -41,7 +41,7 @@ test('two large job-name lines and the helper slot fit each card and the board',
   assert.ok(px('.helpday-header', 'height') + 2 * card + px('.helpday-grid', 'gap') + 2 * px('.helpday-board', 'border') <= board);
   assert.ok(board + 10 <= px('.helpday-field', 'height'), 'board fits with the field padding');
 });
-const fixture = { kind: 'community', activity: 'helpday', chapter: 1, grade: 3, crew: pairs };
+const fixture = { kind: 'community', activity: 'helpday', request: 1, chapter: 1, grade: 3, crew: pairs };
 const fixtureFor = grade => ({ ...fixture, grade, crew: pairsFor(grade) });
 const fresh = grade => activity.start(null, { grade, chapter: 1 });
 const freeze = value => {
@@ -49,6 +49,7 @@ const freeze = value => {
   return value;
 };
 const short = line => {
+  assert.ok(line.length <= 96, `${line.length}: ${line}`);
   assert.equal(typeof line, 'string');
   // The dialogue.js sentence boundary, including closing quotes/brackets.
   for (const sentence of line.split(/(?<=[.!?…]["'”’)\]]*)\s+/)) {
@@ -68,7 +69,7 @@ test('starts independently at grades 3, 4, 5; legacy and other activities start 
   assert.equal(helpDayOpening, helpdayOpening);
   for (const grade of GRADES_HELPDAY) {
     const { state, ui } = fresh(grade);
-    assert.deepEqual(state, { kind: 'community', activity: 'helpday', grade, chapter: 1, crew: [] });
+    assert.deepEqual(state, { kind: 'community', activity: 'helpday', request: 1, grade, chapter: 1, crew: [] });
     assert.deepEqual(ui, { helper: helpSetFor(grade).helperIds[0] });
     assert.equal(helpdayReady(state), false);
     assert.equal(activity.opening(state), HELPDAY_LINES.opening);
@@ -558,4 +559,38 @@ test('lanterns describe reaching up high and use a compact helper caption with a
       view.destroy();
     }
   } finally { globalThis.document = previous; }
+});
+
+
+test('another swaps job sets and completes after a round trip', () => {
+  for (const grade of [3, 4, 5]) {
+    const first = activity.start(null, { grade, chapter: 1 });
+    let { state, ui } = activity.another(first.state, first.ui);
+    assert.equal(state.request, 2);
+    assert.notEqual(helpSetFor(grade, 2), helpSetFor(grade));
+    for (const [job, helper] of Object.entries(helpSetFor(grade, 2).fits)) {
+      ({ state, ui } = activity.act(state, ui, { type: 'field', helper }));
+      ({ state, ui } = activity.act(state, ui, { type: 'field', job }));
+    }
+    assert.equal(helpdayReady(state), true);
+    assert.deepEqual(activity.start(cleanHelpdayCreation(state), { grade, chapter: 1 }).state, state);
+    assert.equal(activity.another(state, ui).state.request, 1);
+  }
+});
+
+test('mounted board switches request sets without replacing controls', () => {
+  const previous = globalThis.document, doc = new Doc(); globalThis.document = doc;
+  try {
+    const host = doc.createElement('section'); doc.body.append(host);
+    const first = fresh(3), view = activity.mountField(host, { grade: 3 });
+    view.update(first.state, first.ui);
+    const jobs = host.querySelectorAll('.helpday-job'), helpers = host.querySelectorAll('.helpday-helper');
+    const next = activity.another(first.state, first.ui);
+    view.update(next.state, next.ui);
+    assert.deepEqual(host.querySelectorAll('.helpday-job'), jobs);
+    assert.deepEqual(jobs.map(button => button.dataset.job), helpSetFor(3, 2).jobIds);
+    assert.deepEqual(helpers.map(button => button.dataset.helper), helpSetFor(3, 2).helperIds);
+    assert.equal(helpers[0].getAttribute('aria-checked'), 'true');
+    view.destroy();
+  } finally { if (previous === undefined) delete globalThis.document; else globalThis.document = previous; }
 });

@@ -1,5 +1,5 @@
 import {
-  GRID, PLACES, ERRAND_IDS, LINES, normalizeCompass, compassReady, compassOpening,
+  GRID, PLACES, ERRAND_IDS, errandsFor, LINES, normalizeCompass, compassReady, compassOpening,
   currentErrand, deliver, routes, placeAt, tapLine, compassGlyph, routeMarkup, progressLine,
 } from '../../compass.js';
 import { figureMarkup } from '../figures/index.js';
@@ -17,6 +17,8 @@ export const HELP = [
 
 const PLACE_NAMES = { kiosk: 'Kiosk', bakery: 'Bakery', stage: 'Stage', shed: 'Lantern shed', workshop: 'Taro’s workshop', pond: 'Pond' };
 const CARDS = {
+  east: { picture: 'shed', title: 'Lantern', clues: [{ text: '→ 2', label: 'East 2' }] },
+  south: { picture: 'flour', title: 'Flour', clues: [{ text: '↓ 2', label: 'South 2' }] },
   north: { picture: 'flour', title: 'Flour', clues: [{ text: '↑ 1', label: 'North 1' }] },
   west: { picture: 'drum', title: 'Drum', clues: [{ text: '← 2', label: 'West 2' }] },
   lantern: { picture: 'shed', title: 'Lantern', clues: [{ text: '→ 2', label: 'East 2' }, { text: '↓ 1', label: 'South 1' }] },
@@ -29,7 +31,7 @@ const isCell = cell => Number.isInteger(cell) && cell >= 0 && cell < GRID * GRID
 const indexOf = ([row, col]) => row * GRID + col;
 const stepOf = (errand, ui) => errand && ui?.errand === errand.id && Number.isInteger(ui.progress)
   && ui.progress > 0 && ui.progress < errand.path.length - 1 ? ui.progress : 0;
-const DESTINATION = { north: 'Hint: Pip lands at the bakery.', west: 'Hint: Pip lands at the stage.', lantern: 'Hint: Pip lands at Taro’s workshop.' };
+const DESTINATION = { east: 'Hint: Pip lands at the shed.', south: 'Hint: Pip lands at the pond.', north: 'Hint: Pip lands at the bakery.', west: 'Hint: Pip lands at the stage.', lantern: 'Hint: Pip lands at Taro’s workshop.' };
 
 function start(snapshot, { grade = 2, chapter = 1 } = {}) {
   const saved = snapshot?.kind === 'community' && snapshot.activity === 'compass' ? snapshot : null;
@@ -68,9 +70,9 @@ export function fieldView(state, ui = {}) {
   const pip = indexOf(errand ? errand.path[step] : PLACES.kiosk);
   const card = errand ? CARDS[errand.id] : { picture: 'check', title: 'Hang map', clues: [{ text: '✓ 3 of 3', label: 'Three errands done' }] };
   return {
-    ready: compassReady(state), head: errand ? `Errand ${ERRAND_IDS.indexOf(errand.id) + 1} of 3` : '3 of 3 done',
+    ready: compassReady(state), head: errand ? `Errand ${errandsFor(state).findIndex(item => item.id === errand.id) + 1} of 3` : '3 of 3 done',
     errand: errand?.id ?? null, pip, routes: routes(state),
-    card: { ...card, clues: card.clues.map(clue => ({ ...clue })), hint: errand ? (step ? (errand.id === 'west' ? 'West 1 more' : step === 1 ? 'East 1, south 1' : 'South 1') : 'From the kiosk') : 'Choose Hang map.',
+    card: { ...card, clues: card.clues.map(clue => ({ ...clue })), hint: errand ? (step ? (errand.id === 'west' ? 'West 1 more' : errand.id === 'east' ? 'East 1 more' : errand.id === 'south' ? 'South 1 more' : step === 1 ? 'East 1, south 1' : 'South 1') : 'From the kiosk') : 'Choose Hang map.',
       label: errand ? (step ? `${card.title}. ${progressLine(errand.id, step)}` : `${card.title}. ${card.clues.map(clue => `${clue.label}.`).join(' ')} Start at the kiosk.`) : LINES.allDone },
     cells: Array.from({ length: GRID * GRID }, (_, cell) => {
       const place = placeAt(cell);
@@ -84,7 +86,7 @@ function mountField(host, { dispatch = () => {} } = {}) {
   const doc = host.ownerDocument ?? document;
   const root = doc.createElement('div');
   root.className = 'compass-field';
-  const allRoutes = routes(normalizeCompass({ done: ERRAND_IDS }));
+  const allRoutes = [...routes(normalizeCompass({ done: ERRAND_IDS })), ...routes(normalizeCompass({ request: 2, done: ['east', 'south'] }))];
   root.innerHTML = '<div class="compass-map"><div class="compass-grid" role="group" aria-label="Festival map, 5 rows and 5 columns. North is up."></div>'
     + `<svg class="compass-routes" viewBox="0 0 250 250" width="250" height="250" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${allRoutes.map(route => routeMarkup(route)).join('')}</svg>`
     + `<span class="compass-pip" aria-hidden="true">${figureMarkup('pip', { scale: 0.5 })}</span></div>`
@@ -178,4 +180,9 @@ export default {
   kind: 'community', title: 'Hana’s compass errands', rewardLabel: 'Delivery map',
   help: HELP, notReadyLine: LINES.notReady,
   start, opening: compassOpening, commands, act, mountField,
+  another(state) {
+    const request = state.request === 2 ? 1 : 2;
+    const next = start({ kind: 'community', activity: 'compass', request }, { grade: state.grade, chapter: state.chapter });
+    return { ...next, line: compassOpening(next.state) };
+  },
 };

@@ -127,7 +127,7 @@ test('grade 5 serves only after a cut; grades 3–4 never need one', () => {
 test('legacy grade-5 slice counts still load and draw the saved shares', () => {
   for (const slices of ALL_CUTS) for (const grade of GRADES_PIZZA) {
     const halves = slices % 4 !== 0;
-    const saved = { kind: 'math', activity: 'pizza', grade, chapter: 1, slices,
+    const saved = { kind: 'math', activity: 'pizza', grade, chapter: 1, request: 1, slices,
       halves, plates: Object.freeze(Array(4).fill(slices / 2)), tried: true };
     Object.freeze(saved);
     const loaded = pizza.start(saved, { grade, chapter: 1 });
@@ -482,4 +482,25 @@ test('keyboard rail focuses only; Down and native Enter/Space are left for frame
   root.listeners.keydown({ key: 'ArrowRight', target: gives[3], preventDefault() {} });
   assert.equal(doc.activeElement, gives[3]);
   view.destroy();
+});
+
+
+test('another cycles fresh pizzas for every grade', () => {
+  const rounded = normalizePizza({ request: 3 }, 4.9, 1);
+  assert.equal(rounded.grade, 5);
+  assert.equal(rounded.request, 2);
+  assert.deepEqual(normalizePizza(rounded, rounded.grade, rounded.chapter), rounded);
+  for (const grade of GRADES_PIZZA) {
+    let state = pizza.start(null, { grade, chapter: 1 }).state;
+    const original = state.slices;
+    const result = pizza.another(state, { old: true });
+    assert.notEqual(result.state.slices, original);
+    assert.deepEqual(result.state.plates, [0, 0, 0, 0]);
+    assert.equal(result.state.tried, false);
+    assert.deepEqual(result.ui, {});
+    assert.equal(cleanPizzaCreation(result.state).request, 2);
+    assert.equal(result.line, pizza.opening(result.state));
+    for (let i = 1; i < (grade === 5 ? 2 : 3); i++) state = pizza.another(i === 1 ? result.state : state).state;
+    assert.equal(state.request, 1);
+  }
 });

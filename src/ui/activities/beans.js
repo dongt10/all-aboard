@@ -18,7 +18,7 @@ const CHANGE_OPTIONS = [
   { id: 'dark', name: 'Dark box', glyph: 'dark' },
   { id: 'none', name: 'Same as A', glyph: 'same' },
 ];
-const fresh = state => state.change === 'none' && state.weeks === 0 && state.bed.length === 0;
+const fresh = state => state.change === (state.request === 2 ? 'dark' : 'none') && state.weeks === 0 && state.bed.length === 0;
 const glyph = tile => `<svg viewBox="0 0 16 16" width="32" height="32" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${beanGlyphMarkup(tile)}</svg>`;
 const rect = (x, y, w, h, fill) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"/>`;
 
@@ -57,7 +57,7 @@ function act(state, ui, action) {
   if (action?.type === 'command') {
     if (action.id === 'next') return { state, ui, line: nextStepLine(state) };
     if (action.id === 'reset') return {
-      state: fresh(state) ? state : normalizeBeans(null, state.grade, state.chapter), ui, line: LINES.reset,
+      state: fresh(state) ? state : normalizeBeans({ request: state.request, change: state.request === 2 ? 'dark' : 'none' }, state.grade, state.chapter), ui, line: state.request === 2 ? 'Fresh cups. Cup B is in the dark box.' : LINES.reset,
     };
     if (action.id === 'wait') {
       const next = waitWeek(state);
@@ -206,6 +206,11 @@ export default {
     return { state: normalizeBeans(saved, grade, chapter), ui: {} };
   },
   opening: beansOpening,
+  another(state) {
+    const request = state.request === 2 ? 1 : 2;
+    const next = this.start({ kind: 'science', activity: 'beans', request, change: request === 2 ? 'dark' : 'none' }, { grade: state.grade, chapter: state.chapter });
+    return { ...next, line: this.opening(next.state) };
+  },
   commands(state) {
     return [
       { id: 'wait', label: 'Wait a week', icon: 'clock' },

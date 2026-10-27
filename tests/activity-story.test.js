@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { encounterReady } from '../src/encounters.js';
 import assert from 'node:assert/strict';
 import story from '../src/ui/activities/story.js';
 import ribbon from '../src/ui/activities/ribbon.js';
@@ -74,7 +75,7 @@ test('K says the word the way the buttons spell it', () => {                    
 test('packing all three offers Start over and Share story, with the finish last', () => {   // plan 1A/1B
   const s = story.start({ kind: 'reading', found: ['key', 'umbrella'] }, { chapter: 0, grade: 0 });
   const done = story.act(s.state, s.ui, cmd('pick-book'), 0);
-  assert.match(done.line, /All three are packed\. Your story is ready to share\.$/);
+  assert.match(done.line, /Story ready!$/);
   const commands = story.commands(done.state, done.ui, 0);
   assert.deepEqual(commands.map(c => [c.id, c.label, c.icon]), [['again', 'Start over', 'undo'], ['finish', 'Share story', 'check']]);
   assert.ok(commands.at(-1).finish && !commands.at(-1).disabled, 'Share story is the enabled finish, last');
@@ -85,7 +86,7 @@ test('Start over empties the bag and says so, then the first question is back', 
   const s = story.start({ kind: 'reading', found: READING_ITEMS }, { chapter: 1, grade: 1 });
   const again = story.act(s.state, s.ui, cmd('again'), 1);
   assert.deepEqual(again.state.found, []);
-  assert.equal(again.line, 'The bag is empty again. Let’s read! Sora will lock her door. She packs a key. What does Sora pack to lock her door?');
+  assert.equal(again.line, 'Bag empty. Sora will lock her door. She packs a key. What does Sora pack to lock her door?');
   assert.deepEqual(story.commands(again.state, again.ui, 1).map(c => c.id), ['pick-key', 'pick-umbrella', 'pick-book', 'pick-cup']);
   assert.match(story.opening(again.state, again.ui, 1), /lock her door\?$/);
 });
@@ -180,4 +181,44 @@ test('the field shows Part N of 3, the K word as Key, and the bag count', () => 
     assert.deepEqual(root.querySelectorAll('.story-slot__label').map(el => el.textContent), ['Empty', 'Empty', 'Empty']);
     field.destroy();
   } finally { delete globalThis.document; }
+});
+
+test('Try another packs three different items and wraps to a fresh original story', () => {
+  for (const grade of [0, 1]) {
+    const done = story.start({ kind: 'reading', found: ['key', 'umbrella', 'book'] }, { grade, chapter: grade ? 1 : 0 });
+    const next = story.another(done.state, done.ui, grade);
+    assert.equal(next.state.request, 2);
+    assert.deepEqual(next.state.found, []);
+    assert.match(next.line, /Cup|cup/);
+    let current = next;
+    for (const id of ['cup', 'ball', 'flower']) {
+      current = story.act(current.state, current.ui, cmd(`pick-${id}`), grade);
+      if (id !== 'flower') current = story.act(current.state, current.ui, cmd('next'), grade);
+    }
+    assert.deepEqual(current.state.found, ['cup', 'ball', 'flower']);
+    const wrapped = story.another(current.state, current.ui, grade);
+    assert.equal(wrapped.state.request, 1);
+    assert.deepEqual(wrapped.state.found, []);
+  }
+});
+
+test('every story action dialogue fits 96 characters for both requests', () => {
+  const check = line => {
+    if (!line) return;
+    assert.ok(line.length <= 96, `${line.length}: ${line}`);
+    for (const sentence of line.split(/(?<=[.!?])\s+/)) assert.ok(sentence.length <= 56, sentence);
+  };
+  for (const grade of [0, 1]) for (const request of [1, 2]) {
+    let s = story.start({ kind: 'reading', request, found: [] }, { grade, chapter: grade ? 1 : 0 });
+    check(story.opening(s.state, s.ui, grade));
+    const items = request === 1 ? ['key', 'umbrella', 'book'] : ['cup', 'ball', 'flower'];
+    const pictures = request === 1 ? ['key', 'umbrella', 'book', 'cup'] : ['cup', 'ball', 'flower', 'key'];
+    for (const item of items) {
+      for (const other of pictures.filter(id => id !== item)) check(story.act(s.state, s.ui, cmd(`pick-${other}`), grade).line);
+      s = story.act(s.state, s.ui, cmd(`pick-${item}`), grade); check(s.line);
+      if (!encounterReady(s.state)) { s = story.act(s.state, s.ui, cmd('next'), grade); check(s.line); }
+    }
+    const reset = story.act(s.state, s.ui, cmd('again'), grade); check(reset.line);
+    check(story.another(s.state, s.ui, grade).line);
+  }
 });

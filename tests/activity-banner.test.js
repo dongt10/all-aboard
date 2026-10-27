@@ -540,3 +540,20 @@ test('turned, flipped editor pixels match finished banner pixels and description
     view.destroy();
   } finally { delete globalThis.document; }
 });
+
+test('another starts a distinct fresh request at each grade', () => {
+  for (let grade = 0; grade <= 5; grade++) {
+    const first = banner.start(null, { grade, chapter: grade ? 1 : 0 });
+    const second = banner.another(first.state, first.ui);
+    assert.equal(second.state.request, 2);
+    assert.deepEqual(second.state.stamps, []);
+    assert.deepEqual(second.ui.history, []);
+    assert.equal(second.line, banner.opening(second.state));
+    assert.equal(banner.another(second.state, second.ui).state.request, 1);
+    if (grade === 0) {
+      assert.equal(bannerReady({ ...second.state, stamps: [{ shape: 'star' }] }), false);
+      assert.equal(bannerReady({ ...second.state, stamps: [{ shape: 'flower' }] }), true);
+    }
+    if (grade === 1 || grade === 2) assert.notDeepEqual(expectedAt(grade, 3, 1), expectedAt(grade, 3, 2));
+  }
+});

@@ -56,7 +56,8 @@ export const HELP_SETS = {
   B: { jobs: JOBS_B, helpers: HELPERS_B, jobIds: JOBS_B.map(j => j.id), helperIds: HELPERS_B.map(h => h.id),
     fits: { stew: 'momo', tale: 'sora', banner: 'yuki', signs: 'fumi' } },
 };
-export const helpSetFor = grade => Number(grade) === 4 ? HELP_SETS.B : HELP_SETS.A;
+export const helpSetFor = (grade, request = 1) => (Number(grade) === 4) !== (request === 2) ? HELP_SETS.B : HELP_SETS.A;
+const requestNumber = n => Number.isInteger(n) ? Math.max(1, Math.min(2, n)) : 1;
 // Saved pictures follow the crew, so the old grade-4 board still has its four jobs.
 export const helpSetOfCrew = crew => (Array.isArray(crew) ? crew : [])
   .map(pair => Object.values(HELP_SETS).find(set => set.jobIds.includes(pair?.job) && set.helperIds.includes(pair?.helper)))
@@ -102,7 +103,7 @@ export function normalizeCrew(input, set = HELP_SETS.A) {
   return crew;
 }
 
-const historyOf = (state, set = helpSetFor(state?.grade)) => Array.isArray(state?.history)
+const historyOf = (state, set = helpSetFor(state?.grade, state?.request)) => Array.isArray(state?.history)
   ? state.history.slice(-MAX_HISTORY).filter(Array.isArray).map(crew => normalizeCrew(crew, set)) : [];
 
 // The one validator, for the activity and (through the wiring) encounters.js. Optional history keeps
@@ -110,16 +111,16 @@ const historyOf = (state, set = helpSetFor(state?.grade)) => Array.isArray(state
 function normalizedHelpday(input, grade, chapter, set) {
   const s = isPlainObject(input) ? input : {};
   const history = historyOf(s, set);
-  return { kind: KIND, activity: ACTIVITY, grade: clampInt(grade, 0, 5), chapter: chapter === 1 ? 1 : 0,
+  return { kind: KIND, activity: ACTIVITY, request: requestNumber(s.request), grade: clampInt(grade, 0, 5), chapter: chapter === 1 ? 1 : 0,
     crew: normalizeCrew(s.crew, set), ...(history.length ? { history } : {}) };
 }
 export function normalizeHelpday(input, grade = input?.grade ?? 3, chapter = input?.chapter ?? 1) {
   const g = clampInt(grade, 0, 5);
-  const set = helpSetFor(g);
   const s = isPlainObject(input) ? input : {};
+  const set = helpSetFor(g, requestNumber(s.request));
   // Old grade-4 crews start a new board, including their old Undo trail.
   const otherSet = Array.isArray(s.crew) && s.crew.length && helpSetOfCrew(s.crew) !== set;
-  return normalizedHelpday(otherSet ? {} : s, g, chapter, set);
+  return normalizedHelpday(otherSet ? { request: requestNumber(s.request) } : s, g, chapter, set);
 }
 
 // For progress.js cleanCreation: the saved object, or null for anything that is not a Help Day. The chapter
@@ -128,35 +129,36 @@ export function cleanHelpdayCreation(input) {
   if (!isPlainObject(input) || input.kind !== KIND || input.activity !== ACTIVITY) return null;
   const chapter = input.chapter === 1 ? 1 : 0;
   const grade = chapter === 1 ? (Number.isFinite(input.grade) ? clampInt(input.grade, 1, 5) : 1) : 0;
-  const set = input.crew?.length ? helpSetOfCrew(input.crew) : helpSetFor(grade);
+  const set = requestNumber(input.request) === 2 ? helpSetFor(grade, 2)
+    : input.crew?.length ? helpSetOfCrew(input.crew) : helpSetFor(grade);
   return normalizedHelpday(input, grade, chapter, set);
 }
 
-const crewOf = state => normalizeCrew(state?.crew, helpSetFor(state?.grade));
+const crewOf = state => normalizeCrew(state?.crew, helpSetFor(state?.grade, state?.request));
 export const helperAt = (state, job) => crewOf(state).find(p => p.job === job)?.helper ?? null;
 export const jobOfHelper = (state, helper) => crewOf(state).find(p => p.helper === helper)?.job ?? null;
-export const fits = (job, helper, grade = 3) => Object.hasOwn(helpSetFor(grade).fits, job) && helpSetFor(grade).fits[job] === helper;
+export const fits = (job, helper, grade = 3, request = 1) => Object.hasOwn(helpSetFor(grade, request).fits, job) && helpSetFor(grade, request).fits[job] === helper;
 
 // READY: every job has the helper that fits it (so the crew holds all four fitting pairs).
 export function helpdayReady(state) {
   const crew = crewOf(state);
   return Array.isArray(state?.crew) && state.crew.length === 4 && crew.length === 4
-    && Object.entries(helpSetFor(state?.grade).fits).every(([job, helper]) => crew.some(p => p.job === job && p.helper === helper));
+    && Object.entries(helpSetFor(state?.grade, state?.request).fits).every(([job, helper]) => crew.some(p => p.job === job && p.helper === helper));
 }
-export const helpDayFitCount = state => crewOf(state).filter(p => fits(p.job, p.helper, state?.grade)).length;
+export const helpDayFitCount = state => crewOf(state).filter(p => fits(p.job, p.helper, state?.grade, state?.request)).length;
 // The first job in board order without its fitting helper, or null when every job fits.
-export const helpDayNextJob = state => helpSetFor(state?.grade).jobIds.find(job => helperAt(state, job) !== helpSetFor(state?.grade).fits[job]) ?? null;
+export const helpDayNextJob = state => helpSetFor(state?.grade, state?.request).jobIds.find(job => helperAt(state, job) !== helpSetFor(state?.grade, state?.request).fits[job]) ?? null;
 
 // Send a helper to a job. Someone already on that job goes back to the bench; a helper leaving another job
 // empties it. Remember the crew before moving either helper. A mismatch is still placed: the work is kept.
 export function assignHelper(state, job, helper) {
-  const set = helpSetFor(state?.grade);
+  const set = helpSetFor(state?.grade, state?.request);
   if (!set.jobIds.includes(job) || !set.helperIds.includes(helper)) return { state, status: 'invalid' };
   if (helperAt(state, job) === helper) return { state, status: 'same' };
   const before = crewOf(state);
   const crew = [...before.filter(p => p.job !== job && p.helper !== helper), { job, helper }];
   const history = [...historyOf(state), before].slice(-MAX_HISTORY);
-  return { state: { ...state, crew, history }, status: fits(job, helper, state.grade) ? 'fits' : 'mismatch' };
+  return { state: { ...state, crew, history }, status: fits(job, helper, state.grade, state.request) ? 'fits' : 'mismatch' };
 }
 export function undoAssignment(state) {
   const crew = crewOf(state);
@@ -211,7 +213,7 @@ const PICK = {
 export const HELPDAY_LINES = {
   opening: 'Help Day! Four jobs, four helpers. Who fits each job?',
   openingPartial: 'Let’s check your team. Who fits each job?',
-  openingReady: 'Your team is set. Start day, or move a helper.',
+  openingReady: 'Your Help Day team is set. Start day, or Try another.',
   notReady: 'A job is open again. Fill every job to start.',
   allSet: 'Every job fits. Choose Start day!',
   fit: job => FIT[job],
@@ -227,6 +229,9 @@ export const HELPDAY_LINES = {
 // Fresh, resumed part way (or with a wrong pair), or resumed ready.
 export function helpdayOpening(state) {
   if (helpdayReady(state)) return HELPDAY_LINES.openingReady;
+  if (state?.request === 2 && !crewOf(state).length) return helpSetFor(state.grade, 2) === HELP_SETS.A
+    ? 'Help with lanterns, drum, gate, and mail. Who fits each job?'
+    : 'Help with stew, tale, banner, and signs. Who fits each job?';
   return crewOf(state).length ? HELPDAY_LINES.openingPartial : HELPDAY_LINES.opening;
 }
 
@@ -258,7 +263,7 @@ const ACCENT = {
   fumi: (cx, cy) => `<path d="M${cx - 6} ${cy}h3v2h6v-2h3v3h-3v2h-6v-2h-3z" fill="${PAPER}"/>`,
 };
 export function helpdayCreationMarkup(snapshot) {
-  const set = snapshot?.crew?.length ? helpSetOfCrew(snapshot.crew) : helpSetFor(snapshot?.grade);
+  const set = snapshot?.crew?.length ? helpSetOfCrew(snapshot.crew) : helpSetFor(snapshot?.grade, snapshot?.request);
   const crew = normalizeCrew(snapshot?.crew, set);
   const cells = set.jobs.map((job, i) => {
     const x = COLUMNS[i], cx = x + 11, cy = TOKEN_Y;

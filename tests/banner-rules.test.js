@@ -10,7 +10,7 @@ import { creationMarkup } from '../src/ui/creations.js';
 import { paginate, PAGE_CHARS } from '../src/ui/dialogue.js';
 
 const stamp = (cell, shape = 'star', color = '#e96163', rotation = 0) => ({ ...stampPosition(cell), shape, color, rotation, flipped: false });
-const state = (grade, stamps = []) => ({ kind: 'art', chapter: grade ? 1 : 0, grade, background: '#fff1cf', stamps });
+const state = (grade, stamps = []) => ({ kind: 'art', chapter: grade ? 1 : 0, grade, request: 1, background: '#fff1cf', stamps });
 const patternState = grade => state(grade, PATTERN_CELLS.map(cell => ({ ...stamp(cell), ...expectedAt(grade, cell) })));
 const mirrorState = grade => state(grade, [6, 11, 7, 10].map(cell => stamp(cell)).concat(grade >= 4 ? [stamp(12, 'circle', '#559fc7'), stamp(17, 'circle', '#559fc7')] : []));
 const fits = text => {

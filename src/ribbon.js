@@ -64,7 +64,7 @@ export const STORIES = [
     shuffled: ['stop', 'together', 'drum'], lesson: 'steady',
     lessons: [
       { id: 'steady', text: 'Take a breath and go steady.', icon: 'clock' },
-      { id: 'loud', text: 'Play as loud as you can.', icon: 'hear', wrong: 'The band needed a slower beat. Read line 4 again.' },
+      { id: 'loud', text: 'Play loud.', icon: 'hear', wrong: 'The band needed a slower beat. Read line 4 again.' },
       { id: 'hard', text: 'Big drums are too hard.', icon: 'stop', wrong: 'Kiko played the drum in the end. What helped her?' },
       { id: 'fast', text: 'Fast is always best.', icon: 'play', wrong: 'The band could not keep up. Read line 4 again.' },
     ],
@@ -76,7 +76,7 @@ export const LINES = {
   openingFresh: 'Here is a short story. Read it, then answer my question.',
   order: 'Put the story in order. What happened first?',
   lesson: 'Pick the lesson of the story.',
-  openingReady: 'Your ribbon is ready. Share it, or try the next story.',
+  openingReady: 'Your story ribbon is ready! Share it or Try another.',
   notReady: 'The ribbon changed. Fill it again.',
   nextStory: 'A new story! Read it, then answer my question.',
   startOver: 'The ribbon is empty. Read the story again.',
@@ -110,7 +110,7 @@ export function normalizeRibbon(input, grade = 2, chapter = 1) {
   }
   return {
     kind: KIND, activity: ACTIVITY, grade: Math.round(clamp(grade, 0, 5)), chapter: chapter === 1 ? 1 : 0,
-    found: [], story, ...storyProgress(s),
+    found: [], request: Number.isInteger(s.request) ? clamp(s.request, 1, 2) : 1, story, ...storyProgress(s),
     ...(Object.keys(storyDrafts).length ? { storyDrafts } : {}),
   };
 }

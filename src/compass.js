@@ -13,28 +13,36 @@ export const ERRANDS = [
   { id: 'lantern', target: [3, 4], path: [[2, 2], [2, 3], [2, 4], [3, 4]], near: { cell: [2, 4] } },
 ];
 export const ERRAND_IDS = ERRANDS.map(errand => errand.id);
+export const ALT_ERRANDS = [{ id: 'east', target: [2, 4], path: [[2, 2], [2, 3], [2, 4]] }, { id: 'south', target: [4, 2], path: [[2, 2], [3, 2], [4, 2]] }, ERRANDS[0]];
+export const errandsFor = state => state?.request === 2 ? ALT_ERRANDS : ERRANDS;
+const requestNumber = n => Number.isInteger(n) ? Math.max(1, Math.min(2, n)) : 1;
 export const DIRECTION_HINT = {
   north: 'North is up on the map.',
   west: 'West is left on the map.',
   lantern: 'East is right, south is down.',
+  east: 'East is right on the map.', south: 'South is down on the map.',
 };
 export const ROUTE_STYLES = {
   north: { color: VERMILION, marker: 'circle' },
   west: { color: '#2857a8', marker: 'square' },
   lantern: { color: FINISH, marker: 'triangle' },
+  east: { color: '#2857a8', marker: 'square' }, south: { color: FINISH, marker: 'triangle' },
 };
 export const LINES = {
   prompts: {
     north: 'From the kiosk, go north one square. Tap each square.',
+    east: 'From the kiosk, go east two squares. Tap each square.',
+    south: 'From the kiosk, go south two squares. Tap each square.',
     west: 'From the kiosk, go west two squares. Tap each square.',
     lantern: 'From the kiosk, go east two squares, then south one. Tap each square.',
   },
   openingFresh: 'Three errands today.',
   openingMid: n => `Errand ${n} of 3.`,
-  openingReady: 'All three errands are done. Hang map, or start over.',
+  openingReady: 'Your errand map is ready. Hang map, or Try another.',
   notReady: 'An errand is open again. Finish all three.',
   delivered: {
     north: 'The baker needs flour. Pip the courier helps.',
+    east: 'Pip brings a lantern to the shed.', south: 'Pip brings flour to the pond.',
     west: 'Kiko needs a drum on the stage. Taro carries it.',
     lantern: 'Taro needs light to work. Your lantern helps!',
   },
@@ -65,12 +73,12 @@ const isObject = value => value !== null && typeof value === 'object' && !Array.
 const isCompass = value => isObject(value) && value.kind === 'community' && value.activity === 'compass';
 const isCell = cell => Number.isInteger(cell) && cell >= 0 && cell < GRID * GRID;
 const indexOf = ([row, col]) => row * GRID + col;
-const doneOf = state => ERRAND_IDS.filter(id => Array.isArray(state?.done) && state.done.includes(id));
+const doneOf = state => errandsFor(state).map(errand => errand.id).filter(id => Array.isArray(state?.done) && state.done.includes(id));
 
 export function normalizeCompass(input, grade = 2, chapter = 1) {
   const state = isObject(input) ? input : {};
-  return { kind: 'community', activity: 'compass', grade: Math.round(clamp(grade, 0, 5)),
-    chapter: chapter === 1 ? 1 : 0, done: doneOf(state) };
+  return { kind: 'community', activity: 'compass', request: requestNumber(state.request), grade: Math.round(clamp(grade, 0, 5)),
+    chapter: chapter === 1 ? 1 : 0, done: doneOf({ ...state, request: requestNumber(state.request) }) };
 }
 
 export function cleanCompassCreation(input) {
@@ -79,16 +87,16 @@ export function cleanCompassCreation(input) {
 
 export function compassReady(state) {
   return isCompass(state) && state.chapter === 1 && GRADES_COMPASS.includes(state.grade)
-    && Array.isArray(state.done) && state.done.length === ERRAND_IDS.length
-    && ERRAND_IDS.every(id => state.done.includes(id));
+    && Array.isArray(state.done) && state.done.length === errandsFor(state).length
+    && errandsFor(state).map(errand => errand.id).every(id => state.done.includes(id));
 }
 
-export const currentErrand = state => ERRANDS.find(errand => !doneOf(state).includes(errand.id)) ?? null;
+export const currentErrand = state => errandsFor(state).find(errand => !doneOf(state).includes(errand.id)) ?? null;
 export const placeAt = cell => isCell(cell) ? Object.keys(PLACES).find(place => indexOf(PLACES[place]) === cell) ?? null : null;
 
 // A route is a new value: callers cannot change a later map by editing its points.
 export function routes(state) {
-  return ERRANDS.filter(errand => doneOf(state).includes(errand.id)).map(errand => ({
+  return errandsFor(state).filter(errand => doneOf(state).includes(errand.id)).map(errand => ({
     id: errand.id, path: errand.path.map(point => [...point]), ...ROUTE_STYLES[errand.id],
   }));
 }
@@ -96,7 +104,7 @@ export function routes(state) {
 export function compassOpening(state) {
   const errand = currentErrand(state);
   if (!errand) return LINES.openingReady;
-  const prefix = doneOf(state).length ? LINES.openingMid(ERRAND_IDS.indexOf(errand.id) + 1) : LINES.openingFresh;
+  const prefix = doneOf(state).length ? LINES.openingMid(errandsFor(state).findIndex(item => item.id === errand.id) + 1) : LINES.openingFresh;
   return `${prefix} ${LINES.prompts[errand.id]}`;
 }
 
@@ -112,13 +120,15 @@ export function deliver(state, cell, progress = 0) {
     return { state, status: 'progress', progress: step + 1 };
   }
   if (cell === indexOf(errand.target) && step === errand.path.length - 2) {
-    const done = ERRAND_IDS.filter(id => id === errand.id || doneOf(state).includes(id));
+    const done = errandsFor(state).map(item => item.id).filter(id => id === errand.id || doneOf(state).includes(id));
     return { state: { ...state, done }, status: 'done' };
   }
   return { state, status: errand.id === 'north' && cell === indexOf(errand.near.cell) ? 'near' : 'wrong' };
 }
 
 export function progressLine(id, step) {
+  if (id === 'east') return 'One square east. Go east one more square.';
+  if (id === 'south') return 'One square south. Go south one more square.';
   if (id === 'west') return 'One square west. Go west one more square.';
   if (id === 'lantern' && step === 1) return 'One square east. Go east one more square, then south one.';
   return 'Two squares east. Go south one square.';

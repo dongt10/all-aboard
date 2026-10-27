@@ -180,7 +180,7 @@ test('a ready draft opens with the ready line at every grade', () => {
   for (const grade of GRADES) {
     const s = ice.start({ kind: 'science', canopy: 'right', time: 10 }, { chapter: chapterOf(grade), grade });
     assert.equal(ice.opening(s.state, s.ui, grade), encounterOpeningDialogue(s.state));
-    assert.equal(ice.opening(s.state, s.ui, grade), 'Your ice test is ready. Serve ice, or try fresh ice.');
+    assert.equal(ice.opening(s.state, s.ui, grade), 'Your ice test is ready. Serve ice, or Try another.');
   }
 });
 
@@ -196,6 +196,7 @@ test('every line fits one Bigger words page per sentence and avoids grown-up wor
   const lines = [ice.notReadyLine, ...ice.help, ICE_LINES.waitSunny, ICE_LINES.result, ICE_LINES.fresh, ICE_LINES.freshSunny, ICE_LINES.finishHint,
     ...['left', 'right'].flatMap(side => [ICE_LINES.waitShaded(side), ICE_LINES.shaded(side), ICE_LINES.guessed(side), ICE_LINES.moved(side), ICE_LINES.movedGuess(side)])];
   for (const line of lines) {
+    assert.ok(line.length <= 96, line);
     for (const sentence of sentences(line)) assert.ok(sentence.length <= 56, `"${sentence}" is ${sentence.length} characters`);
     assert.doesNotMatch(line, /model|canopy|%|simplified|experiment/i, line);
   }
@@ -238,4 +239,17 @@ test('the field reads minutes, Tray A / Tray B with ice words, and shows the sha
   const kField = ice.mountField(host, { grade: 0 });
   kField.update(ice.start({ kind: 'science', canopy: 'none', time: 5 }, { chapter: 0, grade: 0 }).state, {});
   assert.equal(host.children[1].querySelectorAll('.ice-left')[0].textContent, 'Lots of ice');
+});
+
+test('another starts a fresh shaded tray and wraps', () => {
+  const first = ice.start(null, { grade: 1, chapter: 1 });
+  const next = ice.another(first.state, first.ui);
+  assert.equal(next.state.request, 2);
+  assert.equal(next.state.canopy, 'right');
+  assert.equal(next.state.time, 0);
+  assert.equal(next.ui.predicted, null);
+  assert.equal(ice.start(next.state, { grade: 1, chapter: 1 }).ui.predicted, null);
+  const changed = ice.act(next.state, next.ui, { type: 'field', tray: 'left' });
+  assert.doesNotMatch(ice.opening(changed.state), /Tray B starts/);
+  assert.equal(ice.another(next.state, next.ui).state.request, 1);
 });

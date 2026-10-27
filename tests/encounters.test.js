@@ -71,9 +71,9 @@ test('reading word mode and elementary passages have direct matching questions',
 
 test('ready encounter reentry describes the saved state rather than restarting its task',async()=>{
  const {encounterOpeningDialogue}=await import('../src/encounters.js');
- assert.match(encounterOpeningDialogue({kind:'math',left:[2],right:[2],rolled:true}),/ready to send/);
+ assert.match(encounterOpeningDialogue({kind:'math',left:[2],right:[2],rolled:true}),/balanced cart is ready/);
  assert.match(encounterOpeningDialogue({kind:'science',canopy:'left',time:10}),/test is ready/);
- assert.match(encounterOpeningDialogue({kind:'reading',found:['book','key','umbrella']}),/start over/);
+ assert.match(encounterOpeningDialogue({kind:'reading',found:['book','key','umbrella']}),/Try another/);
  assert.match(encounterOpeningDialogue({kind:'math',grade:1,left:[],right:[],rolled:false}),/weighs 3/);
  assert.match(encounterOpeningDialogue({kind:'math',left:[],right:[],rolled:false}),/two crates/,'no grade reads as Kindergarten');
 });
@@ -157,7 +157,7 @@ test('the math opening names the pre-loaded weight and every sentence fits one p
   else assert.match(line,new RegExp(['zero','one','two','three'][startingCargo(0).left.length]+' crates'));
  }
  const ready=encounterOpeningDialogue({kind:'math',grade:3,left:[5,3],right:[5,3],rolled:true});
- assert.match(ready,/ready to send/);shortSentences(ready,'math ready');
+ assert.match(ready,/balanced cart is ready/);shortSentences(ready,'math ready');
 });
 
 test('the math opening tells the truth about a draft whose left side is not the pre-load',async()=>{

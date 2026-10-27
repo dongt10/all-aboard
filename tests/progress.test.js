@@ -5,7 +5,7 @@ import { normalizeEncounterSnapshot } from '../src/encounters.js';
 import { createDefaultBand } from '../src/audio.js';
 const memoryStorage = () => { const map = new Map(); return { getItem:key=>map.get(key)??null, setItem:(key,value)=>map.set(key,value) }; };
 const sign = text => ({kind:'writing',text,chapter:0,grade:0});
-const banner = {kind:'art',chapter:0,grade:0,background:'#fff1cf',stamps:[{shape:'star',color:'#e96163',x:25,y:45,rotation:90,flipped:false}]};
+const banner = {kind:'art',chapter:0,grade:0,request:1,background:'#fff1cf',stamps:[{shape:'star',color:'#e96163',x:25,y:45,rotation:90,flipped:false}]};
 
 test('drafts survive without granting completion; publish preserves actual creation', () => {
   const original = createState();
@@ -256,7 +256,7 @@ test('all four banded creations repair junk and round-trip through drafts and pu
       }
     }
     const ice = { kind: 'science', chapter: 1, grade, canopy: 'left', time: 10 };
-    assert.deepEqual(cleanCreation('science', ice), ice, 'legacy ice is never migrated by grade');
+    assert.deepEqual(cleanCreation('science', ice), { ...ice, request: 1 }, 'legacy ice is never migrated by grade');
   }
 });
 
@@ -284,7 +284,7 @@ test('grade-2 creations repair junk and round-trip through drafts, publication a
   ];
   for (const [kind, activity, cap, label, partialValues, readyValues, junk] of cases) {
     const rules = await import(`../src/${activity}.js`);
-    const base = { kind, activity, chapter: 1, grade: 2 };
+    const base = { kind, activity, chapter: 1, grade: 2, request: 1 };
     const original = { ...createState(), chapter: 1, grade: 2 };
     const controller = activityFor(kind, 2), options = { chapter: 1, grade: 2 };
     const storage = memoryStorage();
@@ -392,12 +392,12 @@ test('only an absent activity discriminator uses the legacy save format', () => 
     const unsupported = { ...cart, activity, left: [1], right: [1] };
     assert.equal(cleanCreation('math', unsupported), null);
     const loaded = normalizeState({ ...state, drafts: { 'chapter-0': { math: unsupported } } });
-    assert.deepEqual(getDraft(loaded, 'math'), cart, 'invalid draft falls back to the published cart');
+    assert.deepEqual(getDraft(loaded, 'math'), { ...cart, request: 1 }, 'invalid draft falls back to the published cart');
   }
   for (const kind of ['science', 'art', 'reading', 'writing', 'community', 'music']) {
     assert.equal(cleanCreation(kind, { kind, activity: 'unknown' }), null, kind);
   }
-  assert.deepEqual(cleanCreation('math', cart), cart);
+  assert.deepEqual(cleanCreation('math', cart), { ...cart, request: 1 });
 });
 
 test('drafts and progress reject snapshots from another chapter or grade', async () => {
@@ -422,7 +422,7 @@ test('drafts and progress reject snapshots from another chapter or grade', async
     assert.deepEqual(getCompleted(repaired), []);
   }
   const valid = normalizeState({ ...scoped, drafts: { 'chapter-1-grade-3': { science: chain } }, progress: { 'chapter-1-grade-3': { science: record } } });
-  assert.deepEqual(getDraft(valid, 'science'), chain);
+  assert.deepEqual(getDraft(valid, 'science'), { ...chain, request: 1 });
   assert.equal(chainReady(getCreations(valid).science), true);
   const mixed = normalizeState({ ...valid, grade: 5, drafts: { 'chapter-1-grade-5': { science: chain } } });
   assert.equal(getDraft(mixed, 'science'), null);
@@ -458,9 +458,9 @@ test('writing tile runs are grade-validated, bounded, independent and preserved 
   const saved = publishCreation(saveDraft(original, 'writing', snapshot), 'writing', snapshot);
   saveState(saved, storage);
   const loaded = loadState(storage);
-  assert.deepEqual(getDraft(loaded, 'writing'), snapshot);
-  assert.deepEqual(getCreations(loaded).writing, snapshot);
-  assert.deepEqual(normalizeEncounterSnapshot('writing', snapshot, 5, 1), snapshot);
+  assert.deepEqual(getDraft(loaded, 'writing'), { ...snapshot, request: 1 });
+  assert.deepEqual(getCreations(loaded).writing, { ...snapshot, request: 1 });
+  assert.deepEqual(normalizeEncounterSnapshot('writing', snapshot, 5, 1), { ...snapshot, request: 1 });
   getDraft(loaded, 'writing').tiles.pop();
   assert.deepEqual(getDraft(loaded, 'writing').tiles, snapshot.tiles);
   const cases = [

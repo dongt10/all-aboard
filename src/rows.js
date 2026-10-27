@@ -17,9 +17,10 @@ const cleanCrates = crates => Array.isArray(crates) ? [...new Set(crates.filter(
 
 export function normalizeRows(input, grade = 2, chapter = 1) {
   const s = isObject(input) ? input : {};
+  const request = Number.isInteger(s.request) ? Math.max(1, Math.min(3, s.request)) : 1;
   return {
     kind: 'math', activity: 'rows', grade: Math.round(clamp(grade, 0, 5)), chapter: chapter === 1 ? 1 : 0,
-    target: TARGETS.includes(s.target) ? s.target : TARGETS[0], crates: cleanCrates(s.crates),
+    request, target: TARGETS.includes(s.target) ? s.target : TARGETS[request - 1], crates: cleanCrates(s.crates),
   };
 }
 
@@ -70,7 +71,7 @@ export function pairs(count) {
 export const LINES = {
   opening: target => `I need ${target} crates in equal rows. Build them any way.`,
   openingPartial: target => `Let's finish the order. ${target} crates in equal rows.`,
-  openingReady: 'Your rows are ready. Send cart, or make a new order.',
+  openingReady: 'Your crate rows are ready. Send cart, or Try another.',
   notReady: 'The rows changed. Make equal rows again.',
   ready: (rows, perRow, sum) => `${rows} rows of ${perRow}. ${sum}. Choose Send cart.`,
   gaps: 'Equal counts! Close the gaps to make a solid block.',

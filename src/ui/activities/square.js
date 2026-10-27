@@ -5,7 +5,7 @@
 // or fewer so a dialogue page never breaks mid-sentence with Bigger words on.
 import {
   normalizeEncounterSnapshot, encounterReady, encounterOpeningDialogue,
-  routeReport, squareSteps, gradeBand, STAGE_CELLS, placeCommunityItem, communityBlockedLine,
+  routeReport, squareSteps, gradeBand, STAGE_CELLS, placeCommunityItem, communityBlockedLine, normalizeRequest,
 } from '../../encounters.js';
 import { icon } from '../icons.js';
 import { gridMove, keyIntent } from '../input.js';
@@ -70,7 +70,7 @@ export const LINES = {
   nothing: 'There is nothing here to remove.',
   same: 'That item is already here. Choose another place.',
   ready: 'Everything is ready! Choose Open square.',
-  readyOpening: 'Your square is ready to open. You can still change it.',
+  readyOpening: 'Your square plan is ready. Open square, or Try another.',
 };
 export const HELP = [
   'Pick a tool, then tap the map to place it.',
@@ -115,6 +115,7 @@ export function walkLine(state) {
   if (blocked) return blocked;
   const step = squareSteps(state).find(s => !s.done && s.id !== 'tried');
   if (step) return WALK_LINES[step.id] ?? step.text;   // a step this file does not know still speaks its checklist text
+  if (normalizeRequest(state?.request) === 2 && gradeBand(state?.grade) === 0) return 'The sign shows the way to the stage. Ready! Choose Open square.';
   return WALK_READY[gradeBand(state?.grade)];
 }
 
@@ -233,7 +234,7 @@ function mountField(host, { dispatch = () => {} } = {}) {
       const tool = ui?.tool ?? 'bench';
       const report = routeReport(state);
       // The sign matters from grade 3 on, so only then does the map mark the three cells next to the stage.
-      root.classList.toggle('square-field--stage-marked', gradeBand(state.grade) >= 3);
+      root.classList.toggle('square-field--stage-marked', gradeBand(state.grade) >= 3 || (state.grade === 0 && state.request === 2));
       cells.forEach((b, i) => {
         const { x, y } = cellPosition(i);
         const placed = state.placements.find(p => p.x === x && p.y === y);
@@ -274,7 +275,13 @@ export default {
   help: HELP,
   notReadyLine: LINES.changed,
   start(snapshot, { chapter = 0, grade = 1 } = {}) {
-    return { state: normalizeEncounterSnapshot(KIND, snapshot, grade, chapter), ui: { tool: 'bench' } };
+    const state = normalizeEncounterSnapshot(KIND, snapshot, grade, chapter);
+    return { state, ui: { tool: state.request === 2 ? (gradeBand(grade) === 0 ? 'sign' : 'quiet') : 'bench' } };
+  },
+  another(state, ui, grade = state.grade) {
+    const request = normalizeRequest(state.request) % 2 + 1;
+    const next = this.start({ kind: KIND, request }, { chapter: state.chapter, grade });
+    return { ...next, line: encounterOpeningDialogue(next.state) };
   },
   opening(state) { return encounterReady(state) ? LINES.readyOpening : encounterOpeningDialogue(state); },
   commands(state) {

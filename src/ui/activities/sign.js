@@ -351,6 +351,14 @@ export default {
     return { state: { ...next, tiles }, ui: { seed, seen: [scenario.id], tiles: [...tiles], hints: {} } };
   },
   opening: signOpening,
+  another(state, ui) {
+    const request = state.request === 2 ? 1 : 2;
+    const seed = ((ui?.seed ?? 0) + 0x9e3779b9) >>> 0;
+    const scenario = nextScenario(state.grade, { seed, current: state.scenario, seen: [state.scenario] });
+    if (!scenario) return null;
+    const fresh = this.start({ kind: KIND, request, scenario: scenario.id }, { grade: state.grade, chapter: state.chapter, seed });
+    return { ...fresh, line: signOpening(fresh.state) };
+  },
   commands,
   act,
   mountField,

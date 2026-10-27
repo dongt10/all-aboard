@@ -1,6 +1,6 @@
 import {
   KIND, LINES, STORY_COUNT, normalizeRibbon, ribbonReady, ribbonOpening, currentStory, phaseOf,
-  answerWhy, placeCard, chooseLesson, nextStory, resetStory, readLine, storyText,
+  answerWhy, placeCard, chooseLesson, nextStory, resetStory, readLine,
 } from '../../ribbon.js';
 import { figureMarkup } from '../figures/index.js';
 import { icon } from '../icons.js';
@@ -40,7 +40,12 @@ function hearText(state, part) {
 
 function act(state, ui, action) {
   if (action?.type === 'command') {
-    if (action.id === 'read') return { state, ui, line: storyText(state) };
+    if (action.id === 'read') {
+      const lines = currentStory(state).lines;
+      const index = ui?.readStory === state.story && Number.isInteger(ui?.readPart) ? ui.readPart : 0;
+      const part = index % 3;
+      return { state, ui: { ...ui, readStory: state.story, readPart: (part + 1) % 3 }, line: lines.slice(part * 2, part * 2 + 2).join(' ') };
+    }
     if (action.id === 'next') {
       const next = nextStory(state);
       return { state: next, ui, line: ribbonOpening(next) };
@@ -275,4 +280,10 @@ export default {
   kind: KIND, title: 'Sora’s story ribbon', rewardLabel: 'Story ribbon',
   help: HELP, notReadyLine: LINES.notReady,
   start, opening: ribbonOpening, commands, act, mountField,
+  another(state) {
+    if (!ribbonReady(state)) return null;
+    const request = state.request === 2 ? 1 : 2;
+    const next = start({ kind: KIND, activity: 'ribbon', request, story: request === 2 ? (state.story + 1) % STORY_COUNT : 0 }, { grade: state.grade, chapter: state.chapter });
+    return { ...next, line: ribbonOpening(next.state) };
+  },
 };

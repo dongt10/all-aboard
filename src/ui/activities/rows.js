@@ -148,6 +148,11 @@ export default {
     return { state: normalizeRows(saved, grade, chapter), ui: { paired: false } };
   },
   opening: rowsOpening,
+  another(state) {
+    const request = ((state.request ?? 1) % 3) + 1;
+    const fresh = this.start({ kind: 'math', activity: 'rows', request }, { grade: state.grade, chapter: state.chapter });
+    return { ...fresh, line: rowsOpening(fresh.state) };
+  },
   commands(state, ui) {
     return [
       { id: 'new', label: 'New order', art: ORDER_GLYPH },

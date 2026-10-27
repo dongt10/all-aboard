@@ -95,9 +95,11 @@ function stampedLine(state, cell) {
     const report = symmetryReport(state);
     if (!report.symmetric) return BANNER_RULE_LINES.mirror;
     if (bannerReady(state)) return BANNER_RULE_LINES.mirrorDone;
-    if (state.grade >= 4 && report.count >= 6 && report.colors.size < 2) return BANNER_RULE_LINES.secondColor;
+    if (state.grade >= 4 && report.count >= (state.request === 2 ? 8 : 6) && report.colors.size < 2) return BANNER_RULE_LINES.secondColor;
+    if (state.request === 2) return state.grade >= 4 ? 'Use two colors and eight stamps.' : 'Use six stamps for this banner.';
     return state.grade >= 4 ? BANNER_RULE_LINES.pairColors : BANNER_RULE_LINES.pair;
   }
+  if (state.request === 2 && !bannerReady(state)) return 'Add a flower stamp to the cloth.';
   return BANNER_LINES.stamped;
 }
 
@@ -128,8 +130,8 @@ function act(state, ui, action) {
   if (Number.isInteger(action.cell) && action.cell >= 0 && action.cell < CELLS) {
     if (patternFor(state.grade)) {
       if (YUKI_CELLS.includes(action.cell)) return { state, ui, line: BANNER_RULE_LINES.yuki };
-      const expected = expectedAt(state.grade, action.cell);
-      const mismatch = patternMismatch(state.grade, action.cell, ui);
+      const expected = expectedAt(state.grade, action.cell, state.request);
+      const mismatch = patternMismatch(state.grade, action.cell, ui, state.request);
       if (mismatch) {
         const hint = `${action.cell}:${mismatch}`;
         const answer = mismatch === 'shape' ? `Try a ${expected.shape} here.`
@@ -286,7 +288,7 @@ function mountField(host, { dispatch }) {
     if (state !== current.state) {
       const [light, shade] = PAINT_STEPS[state.background] || PAINT_STEPS['#fff1cf'];
       cloth.setAttribute('style', `background:${state.background};--cloth-light:${light};--cloth-shade:${shade}`);
-      const yuki = yukiStamps(state.grade);
+      const yuki = yukiStamps(state.grade, state.request);
       drawStamps(yukiSpots, yuki);
       drawStamps(childSpots, state.stamps);
       fold.hidden = !(state.grade >= 3);
@@ -340,4 +342,9 @@ export default {
   helpFor: bannerHelp,
   notReadyLine: NOT_READY_LINE,
   start, opening, commands, act, mountField,
+  another(state) {
+    const request = state.request === 2 ? 1 : 2;
+    const fresh = start({ kind: 'art', request }, { grade: state.grade, chapter: state.chapter });
+    return { ...fresh, line: opening(fresh.state) };
+  },
 };

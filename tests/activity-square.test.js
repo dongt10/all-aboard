@@ -50,6 +50,37 @@ test('the square starts with the bench tool, three commands and a locked finish 
   assert.equal(square.notReadyLine, 'Something changed. Choose Try it again.');
 });
 
+test('another square asks K for a stage sign and grade 1 for a garden first', () => {
+  for (const grade of [0, 1]) {
+    const first = start(grade);
+    const old = { ...first.state, tried: true, placements: [{ item: 'bench', x: 50, y: 90 }, { item: 'quiet', x: 10, y: 10 }] };
+    const before = structuredClone(old);
+    let next = square.another(Object.freeze(old), first.ui, grade);
+    assert.deepEqual(old, before);
+    assert.equal(next.state.request, 2);
+    assert.equal(encounterReady(next.state), false);
+    assert.match(nextNeed(next.state), grade === 0 ? /sign next to the stage/ : /garden/);
+    if (grade === 0) {
+      assert.equal(next.ui.tool, 'sign');
+      next = field(next, { tool: 'bench' });
+      next = field(next, { cell: OFF_PATH });
+      assert.equal(encounterReady(cmd(next, 'invite').state), false, 'the old bench goal does not finish request 2');
+      next = field(next, { tool: 'sign' });
+      next = field(next, { cell: BESIDE_STAGE });
+    } else {
+      next = field(next, { tool: 'quiet' });
+      next = field(next, { cell: QUIET });
+      assert.match(nextNeed(next.state), /bench/);
+      next = field(next, { tool: 'bench' });
+      next = field(next, { cell: OFF_PATH });
+    }
+    next = cmd(next, 'invite');
+    assert.equal(encounterReady(next.state), true);
+    assert.match(square.opening(next.state), /Try another/);
+    assert.deepEqual(square.another(next.state, next.ui, grade).state, first.state);
+  }
+});
+
 test('the opening grows with the grade and says so when a saved square is already ready', () => {
   // The wording belongs to encounters.js (the rules lane); the square only has to pass it through per band.
   assert.equal(square.opening(start(0).state), 'Put a bench off the path for a tired neighbor.');
@@ -61,7 +92,7 @@ test('the opening grows with the grade and says so when a saved square is alread
   const saved = { kind: 'community', tried: true, placements: [{ item: 'bench', x: 50, y: 90 }, { item: 'quiet', x: 10, y: 10 }, { item: 'sign', x: 90, y: 10 }] };
   const s = square.start(saved, { chapter: 1, grade: 5 });
   assert.equal(encounterReady(s.state), true);
-  assert.equal(square.opening(s.state), 'Your square is ready to open. You can still change it.');
+  assert.equal(square.opening(s.state), 'Your square plan is ready. Open square, or Try another.');
   assert.equal(finish(s).disabled, false);
 });
 
@@ -302,6 +333,9 @@ test('the map marks exactly the three stage cells, and only from grade 3 on', ()
       const s = start(grade); mounted.update(s.state, s.ui);
       assert.equal(root.classList.contains('square-field--stage-marked'), false, `grade ${grade} does not mark the stage`);
     }
+    const second = square.another(start(0).state, start(0).ui, 0);
+    mounted.update(second.state, second.ui);
+    assert.equal(root.classList.contains('square-field--stage-marked'), true, 'request 2 shows K where the stage sign belongs');
     for (const grade of [3, 4, 5]) {
       const s = start(grade); mounted.update(s.state, s.ui);
       assert.equal(root.classList.contains('square-field--stage-marked'), true, `grade ${grade} marks the stage`);

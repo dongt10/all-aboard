@@ -85,12 +85,12 @@ export const TALE_DECKS = [
 export const LINES = {
   openingFresh: 'I collect village tales, but the names fell off! Read the tale. Who is it about?',
   openingMid: n => `Tale ${n} of 3. Who is it about?`,
-  openingReady: 'Your three tales are ready to share. Start over brings new tales.',
+  openingReady: 'Your tale book is ready! Share it or Try another.',
   rightPick: name => (name === 'Sora' ? 'Yes, it’s me, Sora! Which line told you?' : `Yes, it’s ${name}! Which line told you?`),
   wrongPick: why => `${why} Does any line say that?`,
   wrongLine: about => `That line tells ${about}. Which line shows who it is?`,
   proved: yes => `${yes} Choose Next tale.`,
-  provedLast: yes => `${yes} All three tales have names! Choose Share tales.`,
+  provedLast: yes => `${yes} All named! Choose Share tales.`,
   nextTale: n => `Tale ${n}. Who is this one about?`,
   startOver: 'New tales! Read the first one. Who is it about?',
   readLine: (n, text) => `Line ${n}: ${text}`,
@@ -129,7 +129,7 @@ export function normalizeTales(input, grade = 3, chapter = 1) {
   const g = c === 0 ? 0 : Math.round(clamp(grade, 1, 5, 3));
   const hasDeck = Object.hasOwn(s, 'deck');
   const deck = isDeck(s.deck) ? s.deck : hasDeck ? 0 : freshDeck(g);
-  return { kind: KIND, activity: ACTIVITY, grade: g, chapter: c, found: [], deck,
+  return { kind: KIND, activity: ACTIVITY, grade: g, chapter: c, found: [], request: Number.isInteger(s.request) ? clamp(s.request, 1, 2) : 1, deck,
     solved: hasDeck ? cleanSolved(deck, s.solved) : [] };
 }
 

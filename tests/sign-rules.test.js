@@ -78,17 +78,17 @@ test('normalization keeps text and current whole tiles, resets retired phrases, 
     const input = { text, tiles: words }, before = structuredClone(input);
     Object.freeze(input.tiles); Object.freeze(input);
     const clean = normalizeSign(input, grade);
-    assert.deepEqual(clean, before); assert.deepEqual(normalizeSign(clean, grade), clean); assert.deepEqual(input, before);
-    assert.deepEqual(normalizeSign({ text: 'My own words', tiles: words }, grade), { text: 'My own words', tiles: [] });
+    assert.deepEqual(clean, { ...before, request: 1 }); assert.deepEqual(normalizeSign(clean, grade), clean); assert.deepEqual(input, before);
+    assert.deepEqual(normalizeSign({ text: 'My own words', tiles: words }, grade), { text: 'My own words', request: 1, tiles: [] });
     for (const junk of [null, undefined, 42, [], 'text']) assert.equal(normalizeSign(junk, grade).text, '');
     assert.equal(normalizeSign({ text: 'x'.repeat(200) }, grade).text.length, 120);
   }
   const oldWords = ['Welcome, neighbors!', 'Come explore', 'our summer festival.', 'Everyone belongs here.', 'Please keep the path clear.'];
   for (const grade of [3, 4, 5]) {
-    assert.deepEqual(normalizeSign({ text: oldWords.join(' '), tiles: oldWords }, grade), { text: oldWords.join(' ').slice(0, 120), tiles: [] });
-    assert.deepEqual(normalizeSign({ text: 'Welcome, neighbors!' }, grade), { text: 'Welcome, neighbors!' });
+    assert.deepEqual(normalizeSign({ text: oldWords.join(' '), tiles: oldWords }, grade), { text: oldWords.join(' ').slice(0, 120), request: 1, tiles: [] });
+    assert.deepEqual(normalizeSign({ text: 'Welcome, neighbors!' }, grade), { text: 'Welcome, neighbors!', request: 1 });
   }
-  assert.deepEqual(normalizeSign({ text: 'Hello friend!' }, 0), { text: 'Hello friend!' });
+  assert.deepEqual(normalizeSign({ text: 'Hello friend!' }, 0), { text: 'Hello friend!', request: 1 });
   assert.deepEqual(reconcileTiles(['us.'], 'Come bus.'), []);
   assert.deepEqual(reconcileTiles(['Welcome', 'to'], 'Hello to'), ['to']);
   assert.deepEqual(reconcileTiles(['Welcome', 'to'], 'Hi Welcome to  '), ['Welcome', 'to']);
@@ -111,8 +111,8 @@ test('scenario normalization keeps valid optional data and reconciles scenario t
   const item = scenariosFor(1)[0];
   const tiles = item.tiles.phrases.slice(0, 2);
   const input = { text: tiles.join(' '), scenario: item.id, tiles, kept: ['NASA', 'nasa', 'Word'], ignored: true };
-  assert.deepEqual(normalizeSign(input, 1), { text: input.text, scenario: item.id, tiles, kept: ['nasa', 'word'] });
-  assert.deepEqual(normalizeSign({ text: '', scenario: 2, kept: ['ok', 3] }, 1), { text: '' });
+  assert.deepEqual(normalizeSign(input, 1), { text: input.text, request: 1, scenario: item.id, tiles, kept: ['nasa', 'word'] });
+  assert.deepEqual(normalizeSign({ text: '', scenario: 2, kept: ['ok', 3] }, 1), { text: '', request: 1 });
   assert.equal(normalizeSign({ kept: Array.from({ length: 25 }, (_, i) => `w${i}`) }, 1).kept.length, 20);
   assert.deepEqual(normalizeSign({ text: input.text, scenario: 'missing', tiles }, 1).tiles,
     tiles.every(tile => signWords(1).includes(tile)) ? tiles : []);
@@ -167,14 +167,14 @@ test('scenario prompt remains visible when ready and reason goal affects readine
   assert.ok(item);
   const draft = { ...state(item.example, 3), scenario: item.id };
   assert.equal(signReady(draft), true);
-  assert.equal(signOpening(draft), item.prompt);
+  assert.equal(signOpening(draft), SIGN_RULE_LINES.ready);
   assert.equal(signReady({ ...draft, text: 'Hello! We are bright.' }), false);
   assert.ok(signReport('Hello! We are bright.', 3, { goal: item.goal }).missing.includes('Tell why. Use because or so.'));
 });
 
 test('normalization retains only valid optional metadata and is idempotent', () => {
-  assert.deepEqual(normalizeSign({ text: 'Hello', scenario: null, kept: 'hello', tiles: null, other: 1 }, 0), { text: 'Hello', tiles: [] });
-  assert.deepEqual(normalizeSign({ scenario: '', kept: ['Hi', 'HI', 'HELLO'], tiles: [] }, 0), { text: '', scenario: '', kept: ['hi', 'hello'], tiles: [] });
+  assert.deepEqual(normalizeSign({ text: 'Hello', scenario: null, kept: 'hello', tiles: null, other: 1 }, 0), { text: 'Hello', request: 1, tiles: [] });
+  assert.deepEqual(normalizeSign({ scenario: '', kept: ['Hi', 'HI', 'HELLO'], tiles: [] }, 0), { text: '', request: 1, scenario: '', kept: ['hi', 'hello'], tiles: [] });
   const normalized = normalizeSign({ scenario: 'retired', kept: ['Hello', 'hello'], text: 'Hi' }, 1);
   assert.deepEqual(normalizeSign(normalized, 1), normalized);
 });

@@ -124,7 +124,7 @@ function act(state, ui, action) {
     if (action.id === 'new') {
       const cuts = PIZZA_CUTS(state.grade);
       const slices = cuts[(cuts.indexOf(state.slices) + 1) % cuts.length];
-      const next = normalizePizza({ slices }, state.grade, state.chapter);
+      const next = normalizePizza({ slices, request: state.request }, state.grade, state.chapter);
       return { state: next, ui, line: newLine(next) };
     }
     if (action.id === 'try') {
@@ -290,6 +290,12 @@ export default {
     return { state: normalizePizza(saved, grade, chapter), ui: {} };
   },
   opening: pizzaOpening,
+  another(state) {
+    const count = state.grade >= 5 ? 2 : 3;
+    const request = ((state.request ?? 1) % count) + 1;
+    const fresh = this.start({ kind: 'math', activity: 'pizza', request }, { grade: state.grade, chapter: state.chapter });
+    return { ...fresh, line: pizzaOpening(fresh.state) };
+  },
   commands(state) {
     return [
       { id: 'new', label: 'New pizza', art: PIZZA_GLYPH },
