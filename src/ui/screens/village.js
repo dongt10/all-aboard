@@ -13,7 +13,7 @@ import {
   SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, nearestNeighbor,
   setRoad, road, loadRoad, clampWalk, roadPath, talkGoal, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, stallSVG, easelRect,
 } from '../village-map.js';
-import { BACKGROUND, STALLS, EASELS } from '../village-layout.js';
+import { BACKGROUND, STALLS, EASELS, STAGE } from '../village-layout.js';
 
 const SIDE = {
   pip: { name: 'Pip' },
@@ -123,11 +123,71 @@ export function neighborMarkup(c, made = {}) {
       </button>`;
 }
 
+// Measure border boxes in logical stage pixels (offset sizes ignore the stage's scale).
+// Movement only uses cached sizes; font/size changes invalidate them as a batch.
+export function createVillageChipLayout(actors, talk, isLarge, fonts = globalThis.document?.fonts) {
+  const names = new Map([...actors].map(a => [a, a.el.querySelector('.village-name')]));
+  const sizes = new Map();
+  let previous = '', dirty = true, disposed = false;
+  const invalidate = () => { dirty = true; sizes.clear(); };
+  const observer = globalThis.ResizeObserver ? new ResizeObserver(invalidate) : null;
+  for (const el of [...names.values(), talk]) observer?.observe(el);
+  fonts?.addEventListener?.('loadingdone', invalidate);
+  fonts?.ready?.then(() => { if (!disposed) invalidate(); });
+  let large;
+  return {
+    update(near) {
+      const nextLarge = isLarge();
+      if (large !== nextLarge) { large = nextLarge; invalidate(); }
+      const key = JSON.stringify([near, ...[...names.keys()].map(a => [a.pos.x, a.pos.y])]);
+      if (!dirty && key === previous) return;
+      previous = key; dirty = false;
+      const entries = [...names].map(([a, name]) => ({ a, el: a.id === near ? talk : name }));
+      // Keep Talk at its familiar anchor and move the neighboring names around it.
+      entries.sort((a, b) => Number(b.el === talk) - Number(a.el === talk));
+      const measured = entries.map(entry => {
+        const { el } = entry, text = el.textContent;
+        let size = sizes.get(el);
+        if (!size || size.text !== text) {
+          size = { text, w: el.offsetWidth, h: el.offsetHeight };
+          sizes.set(el, size);
+        }
+        return { ...entry, ...size };
+      });
+      const placed = [], gap = 8, edge = 8;
+      const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+      for (const { a, el, w, h } of measured) {
+        if (!(w > 0 && h > 0)) continue; // Detached/hidden stage: ResizeObserver retries when visible.
+        const x = clamp(a.pos.x - w / 2, edge, STAGE.width - edge - w);
+        const base = clamp(a.pos.y + (SIDE[a.id] ? 2 : 4), edge, STAGE.height - edge - h);
+        // The gap also covers subpixel rounding in offsetWidth/Height.
+        const hits = placed.filter(b => x < b.x + b.w + gap && x + w + gap > b.x);
+        const candidates = [base, ...hits.flatMap(b => [b.y + b.h + gap, b.y - h - gap])]
+          .filter(y => y >= edge && y + h <= STAGE.height - edge)
+          .sort((a, b) => Math.abs(a - base) - Math.abs(b - base) || b - a);
+        const y = candidates.find(y => hits.every(b => y >= b.y + b.h + gap || y + h + gap <= b.y));
+        if (y === undefined) continue;
+        placed.push({ x, y, w, h });
+        const parent = el === talk ? { x: 0, y: 0 } : hotspotRect(a.id, a.pos);
+        const left = px(x + w / 2 - parent.x), top = px(y - parent.y);
+        if (el.style.left !== left) el.style.left = left;
+        if (el.style.top !== top) el.style.top = top;
+      }
+    },
+    destroy() {
+      disposed = true;
+      observer?.disconnect();
+      fonts?.removeEventListener?.('loadingdone', invalidate);
+    },
+  };
+}
+
 export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   let root = null, dialogue = null, previews = null, frame = 0, last = 0, paused = false, alive = false, leaving = false;
   let ready = false, mapFailed = false, mapLoading = false;
   let findTarget = homeSpot(guide) ? guide : null;
   const actors = new Map();          // id → { id, el, fig, pos, target, facing, step, clock, waitUntil, render }
+  let chipLayout = null;
   const player = { pos: { ...PLAYER_START }, target: null, path: [], tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
   let near = null;
   let timing = null, closeTimer = null, unwatchSpeech = null, welcomeOpen = false, helpWindow = null;
@@ -353,12 +413,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       }
       for (const a of actors.values()) a.el.classList.toggle('village-actor--near', a.id === id);
     }
-    if (id) {   // the chip stands in for the neighbor's name chip, so the two never overlap
-      const a = actors.get(id);
-      chip.style.left = px(a.pos.x);
-      chip.style.top = px(a.pos.y + (SIDE[id] ? 2 : 4));
-      chip.style.zIndex = '900';
-    }
+    if (id) chip.style.zIndex = '900';
+    chipLayout?.update(id);
   }
   function drawFind() {
     const lantern = root.querySelector('.village-find'), pointer = root.querySelector('.village-pointer');
@@ -603,6 +659,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       if (!state().hasStarted) ctx.commit?.({ ...state(), hasStarted: true });
       build();
       ctx.stage.append(root);
+      chipLayout = createVillageChipLayout(actors.values(), root.querySelector('.village-talk'), largeText);
       previews = fitSignPreviews(root, 64, 40);
       root.addEventListener('click', onClick);
       root.addEventListener('keydown', onKey);
@@ -644,6 +701,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       cancelOpening();
       alive = false;
       cancelFrame(frame);
+      chipLayout?.destroy();
       previews?.();
       dialogue?.destroy();
       root?.removeEventListener('click', onClick);
