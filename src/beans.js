@@ -4,6 +4,7 @@ import { INK, PAPER, PAPER_SHADE, WOOD, LANTERN, GRASS, GRASS_DARK, SEA, SKY, VE
 export const GRADES_BEANS = [2];
 export const STAMP_BEANS = 'Plants need sun and water. Change one thing to test.';
 export const BED_TILES = ['seed', 'sun', 'water', 'bee'];
+export const REQUIRED_TILES = ['seed', 'sun', 'water'];
 export const TRAY_TILES = [...BED_TILES, 'dark', 'dry'];
 export const CHANGES = ['water', 'dark'];
 export const TILE_NAMES = { seed: 'Seed', sun: 'Sun', water: 'Water', bee: 'Bee', dark: 'Dark', dry: 'Dry' };
@@ -31,8 +32,9 @@ export function cleanBeansCreation(input) {
 export const testDone = s => isBeans(s) && CHANGES.includes(s.change) && s.weeks === 2;
 export function beansReady(s) {
   return testDone(s) && s.chapter === 1 && GRADES_BEANS.includes(s.grade)
-    && Array.isArray(s.bed) && s.bed.length === BED_TILES.length
-    && BED_TILES.every((tile, i) => s.bed[i] === tile);
+    && Array.isArray(s.bed) && s.bed.length === cleanBed(s.bed).length
+    && cleanBed(s.bed).every((tile, i) => tile === s.bed[i])
+    && REQUIRED_TILES.every(tile => s.bed.includes(tile));
 }
 
 // 'none' is the Same as A choice; refusing it keeps an existing test intact.
@@ -59,7 +61,7 @@ export function cupState(s, cup) {
   if (!weeks || !['a', 'b', 'A', 'B'].includes(cup)) return 'seed';
   if (cup === 'a' || cup === 'A') return weeks === 1 ? 'sprout' : 'tall';
   if (s.change === 'dark') return 'pale';
-  return weeks === 1 ? 'sprout' : 'droop';
+  return 'seed';
 }
 
 export const LINES = {
@@ -67,26 +69,26 @@ export const LINES = {
   running: w => `Week ${w} of 2. Choose Wait a week.`,
   done: 'The test is done. Fill the bed card.',
   ready: 'Your bed card is ready. Plant bed, or start over.',
-  notReady: 'The bed card changed. Fill all four slots.',
+  notReady: 'The bed card changed. Add seed, sun, and water.',
   changeWater: 'Cup B gets sun but no water. Now wait a week.',
   changeDark: 'Cup B gets water but sits in a dark box. Wait a week.',
-  same: 'Then we learn nothing. Change one thing.',
+  same: 'Same conditions cannot test water or light. Pick a change.',
   newTest: 'New test!',
   chooseFirst: 'Pick one change for cup B first. Change one thing only. Then you know why.',
   nextChange: 'Tap one change for cup B: No water or Dark box.',
-  week1Water: 'Week 1. Both cups sprout. Cup B looks dry.',
-  week2Water: 'Week 2. Cup A grows tall. Cup B grows weak and droops. Plants need water! Fill the bed card.',
+  week1Water: 'Week 1. Cup A sprouts. Dry cup B stays a seed.',
+  week2Water: 'Week 2. Cup A grows tall. Cup B is still a seed. Plants need water! Fill the bed card.',
   week1Dark: 'Week 1. Both cups sprout. Cup B is pale.',
   week2Dark: 'Week 2. Cup A grows tall. Cup B grows weak and pale. Plants need sunlight! Fill the bed card.',
   seed: 'A seed starts the plant.',
   sun: 'Sun! Plants need sunlight to grow well.',
   water: 'Water! Plants need water to grow well.',
-  bee: 'A bee carries pollen so new seeds grow.',
+  bee: 'Bees move pollen between flowers. Beans can self-pollinate.',
   dark: 'Plants need sunlight. No dark box in the bed.',
   dry: 'Plants need water. Keep the water in the bed.',
   removed: name => `The ${name} is back in the tray.`,
-  allFour: 'All four are in! Choose Plant bed.',
-  early: 'The bed is full. Now finish the test.',
+  allFour: 'Choose Plant bed.',
+  early: 'Now finish the test.',
   reset: 'Fresh cups. Cup A gets sun and water again.',
 };
 
@@ -131,7 +133,7 @@ export const beanGlyphMarkup = tile => Object.hasOwn(GLYPHS, tile) ? GLYPHS[tile
 
 export function beansCreationMarkup(snapshot) {
   const s = normalizeBeans(snapshot);
-  const label = 'Your garden bed card: seed, sun, water and bee';
+  const label = 'Your garden bed card: seed, sun, water and optional bee';
   const spots = BED_TILES.map((tile, i) => {
     const x = 7 + i * 22;
     const drawing = s.bed.includes(tile)

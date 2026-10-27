@@ -34,7 +34,7 @@ test('week two names Plant bed when the bed was filled first, for either change'
     result = step(result, command('wait'));
     assert.equal(before.weeks, 1, 'the previous state is untouched');
     assert.equal(result.state.weeks, 2);
-    const complete = bed.length === BED_TILES.length;
+    const complete = ['seed', 'sun', 'water'].every(tile => bed.includes(tile));
     assert.equal(beans.commands(result.state, result.ui).at(-1).disabled, !complete);
     assert.match(result.line, change === 'water' ? /Plants need water!/ : /Plants need sunlight!/);
     assert.ok(result.line.endsWith(complete ? 'Choose Plant bed.' : 'Fill the bed card.'));
@@ -170,20 +170,39 @@ test('every valid subset and test stage is idempotent and survives a saved creat
   }
 });
 
-test('readiness requires grade 2, chapter 1, one real change, two weeks, and each bed tile once', () => {
+test('readiness requires grade 2, chapter 1, one real change, two weeks, and the three plant tiles', () => {
   for (const change of CHANGES) {
     const s = ready(change);
     assert.equal(beansReady(s), true); assert.equal(testDone(s), true);
+    assert.equal(beansReady({ ...s, bed: ['seed', 'sun', 'water'] }), true);
     for (const extra of [
       { kind: 'math' }, { activity: 'ice' }, { activity: undefined }, { chapter: 0 }, { chapter: '1' },
       ...[0, 1, 3, 4, 5, 2.5, '2', undefined].map(grade => ({ grade })),
       { change: 'none' }, { change: 'both' }, { weeks: 0 }, { weeks: 1 }, { weeks: 3 }, { weeks: '2' },
       ...[null, {}, [], Array(4), [...BED_TILES, 'bee'], ['seed', 'seed', 'seed', 'seed'],
         ['seed', 'sun', 'water', 'dark'], [...BED_TILES].reverse()].map(bed => ({ bed })),
-      ...BED_TILES.map(tile => ({ bed: BED_TILES.filter(id => id !== tile) })),
+      ...['seed', 'sun', 'water'].map(tile => ({ bed: BED_TILES.filter(id => id !== tile) })),
     ]) assert.equal(beansReady({ ...s, ...extra }), false, JSON.stringify(extra));
   }
   for (const bad of [null, undefined, 1, [], {}, 'beans']) { assert.equal(beansReady(bad), false); assert.equal(testDone(bad), false); }
+});
+
+test('each final plant tile explains itself, and bee is a separate optional pollen tap', () => {
+  for (const last of ['seed', 'sun', 'water']) {
+    let s = beans.start(snapshot({ change: 'water', weeks: 2 }));
+    for (const tile of ['seed', 'sun', 'water'].filter(tile => tile !== last)) s = step(s, field({ tile }));
+    s = step(s, field({ tile: last }));
+    assert.equal(s.line, `${LINES[last]} ${LINES.allFour}`);
+    assert.equal(beans.commands(s.state).at(-1).disabled, false);
+    assert.equal(s.state.bed.includes('bee'), false);
+    const saved = beans.start(JSON.parse(JSON.stringify(s.state)));
+    assert.equal(beansReady(saved.state), true);
+    s = step(saved, field({ tile: 'bee' }));
+    assert.equal(s.line, LINES.bee);
+    assert.equal(beansReady(s.state), true);
+    s = step(s, field({ tile: 'bee' }));
+    assert.equal(beansReady(s.state), true);
+  }
 });
 
 test('Same as A and a wait before choosing explain the test without changing saved work', () => {
@@ -192,7 +211,7 @@ test('Same as A and a wait before choosing explain the test without changing sav
     assert.deepEqual(chooseChange(state, 'none'), { state, status: 'same' });
     const same = beans.act(state, ui, field({ change: 'none' }));
     assert.equal(same.state, state); assert.equal(same.ui, ui);
-    assert.equal(same.line, 'Then we learn nothing. Change one thing.'); fits(same.line);
+    assert.equal(same.line, 'Same conditions cannot test water or light. Pick a change.'); fits(same.line);
     if (state.change === 'none') {
       assert.equal(waitWeek(state), state);
       const wait = beans.act(state, ui, command('wait'));
@@ -217,28 +236,28 @@ for (const change of CHANGES) test(`${change}: choose, watch two weeks, fill the
   assert.equal(result.state.weeks, 0);
   assert.equal(beans.opening(result.state), 'Week 0 of 2. Choose Wait a week.');
   assert.equal(say(command('wait')), change === 'water'
-    ? 'Week 1. Both cups sprout. Cup B looks dry.' : 'Week 1. Both cups sprout. Cup B is pale.');
+    ? 'Week 1. Cup A sprouts. Dry cup B stays a seed.' : 'Week 1. Both cups sprout. Cup B is pale.');
   assert.equal(cupState(result.state, 'a'), 'sprout');
-  assert.equal(cupState(result.state, 'b'), change === 'water' ? 'sprout' : 'pale');
+  assert.equal(cupState(result.state, 'b'), change === 'water' ? 'seed' : 'pale');
   assert.equal(say(command('next')), 'Week 1 of 2. Choose Wait a week.');
   assert.equal(say(command('wait')), change === 'water'
-    ? 'Week 2. Cup A grows tall. Cup B grows weak and droops. Plants need water! Fill the bed card.'
+    ? 'Week 2. Cup A grows tall. Cup B is still a seed. Plants need water! Fill the bed card.'
     : 'Week 2. Cup A grows tall. Cup B grows weak and pale. Plants need sunlight! Fill the bed card.');
   assert.equal(cupState(result.state, 'a'), 'tall');
-  assert.equal(cupState(result.state, 'b'), change === 'water' ? 'droop' : 'pale');
+  assert.equal(cupState(result.state, 'b'), change === 'water' ? 'seed' : 'pale');
   assert.equal(testDone(result.state), true); assert.equal(beansReady(result.state), false);
   const done = result.state;
   assert.equal(say(command('wait')), LINES.done); assert.equal(result.state, done);
   assert.equal(say(command('next')), LINES.done); assert.equal(result.state, done);
   for (const tile of BED_TILES) {
-    assert.equal(say(field({ tile })), tile === 'bee' ? LINES.allFour : LINES[tile]);
+    assert.equal(say(field({ tile })), tile === 'water' ? `${LINES.water} ${LINES.allFour}` : LINES[tile]);
   }
   assert.equal(beansReady(result.state), true);
   assert.equal(beans.opening(result.state), 'Your bed card is ready. Plant bed, or start over.');
   assert.equal(say(command('next')), LINES.ready);
   assert.equal(say(field({ tile: 'water' })), 'The water is back in the tray.');
   assert.equal(beansReady(result.state), false); assert.equal(result.state.weeks, 2);
-  assert.equal(say(field({ tile: 'water' })), LINES.allFour);
+  assert.equal(say(field({ tile: 'water' })), `${LINES.water} ${LINES.allFour}`);
   assert.equal(beansReady(result.state), true);
   assert.equal(say(command('reset')), 'Fresh cups. Cup A gets sun and water again.');
   assert.deepEqual(result.state, snapshot());
@@ -251,7 +270,7 @@ test('bed tiles can be collected early, in any order; the experiment still gates
     let result = beans.start();
     for (const tile of [...BED_TILES].reverse()) result = step(result, field({ tile }));
     assert.deepEqual(result.state.bed, BED_TILES);
-    assert.equal(result.line, 'The bed is full. Now finish the test.');
+    assert.equal(result.line, `${LINES.seed} ${LINES.early}`);
     assert.equal(beansReady(result.state), false);
     result = step(result, field({ change }));
     result = step(result, command('wait')); assert.equal(beansReady(result.state), false);
@@ -346,7 +365,7 @@ test('cup growth always contrasts healthy cup A with the one changed condition',
   for (const change of ['none', ...CHANGES]) for (const weeks of [0, 1, 2]) {
     const state = snapshot({ change, weeks });
     const expectedA = state.weeks === 0 ? 'seed' : state.weeks === 1 ? 'sprout' : 'tall';
-    const expectedB = state.weeks === 0 ? 'seed' : change === 'dark' ? 'pale' : state.weeks === 1 ? 'sprout' : 'droop';
+    const expectedB = state.weeks === 0 ? 'seed' : change === 'dark' ? 'pale' : 'seed';
     for (const cup of ['a', 'A']) assert.equal(cupState(state, cup), expectedA);
     for (const cup of ['b', 'B']) assert.equal(cupState(state, cup), expectedB);
   }
@@ -355,15 +374,15 @@ test('cup growth always contrasts healthy cup A with the one changed condition',
 
 test('help, stamps, field labels, and every generated sentence fit normal and Bigger words pages', () => {
   assert.equal(STAMP_BEANS, 'Plants need sun and water. Change one thing to test.');
-  assert.equal(beans.notReadyLine, 'The bed card changed. Fill all four slots.');
+  assert.equal(beans.notReadyLine, 'The bed card changed. Add seed, sun, and water.');
   assert.equal(beans.help, HELP);
   assert.deepEqual(HELP, ['Tap one change for cup B: No water or Dark box.',
-    'Choose Wait a week two times. Watch both cups.', 'Tap the tiles a plant needs into the bed card.',
-    'Fill the bed, then choose Plant bed.']);
+    'Choose Wait a week two times. Watch both cups.', 'Add seed, sun, and water. Bee is optional.',
+    'Tap Bee for pollen facts, or choose Plant bed.']);
   assert.equal(LINES.seed, 'A seed starts the plant.');
   assert.equal(LINES.sun, 'Sun! Plants need sunlight to grow well.');
   assert.equal(LINES.water, 'Water! Plants need water to grow well.');
-  assert.equal(LINES.bee, 'A bee carries pollen so new seeds grow.');
+  assert.equal(LINES.bee, 'Bees move pollen between flowers. Beans can self-pollinate.');
   for (const line of [...HELP, STAMP_BEANS, beans.title, beans.rewardLabel, ...Object.values(LINES).filter(v => typeof v === 'string')]) fits(line);
   for (const tile of BED_TILES) fits(LINES.removed(TILE_NAMES[tile].toLowerCase()));
   for (const state of states()) {
@@ -383,7 +402,7 @@ test('creation has one safe SVG, four canonical spots, the soil strip, and the e
     const markup = beansCreationMarkup(snapshot({ bed }));
     assert.match(markup, /^<svg class="creation creation--science creation--beans"/);
     assert.match(markup, /viewBox="0 0 100 65"/);
-    assert.match(markup, /role="img" aria-label="Your garden bed card: seed, sun, water and bee"/);
+    assert.match(markup, /role="img" aria-label="Your garden bed card: seed, sun, water and optional bee"/);
     assert.match(markup, /shape-rendering="crispEdges"/);
     assert.equal((markup.match(/<svg\b/g) ?? []).length, 1);
     assert.equal((markup.match(/class="beans-creation-slot"/g) ?? []).length, 4);
@@ -404,7 +423,7 @@ test('creation has one safe SVG, four canonical spots, the soil strip, and the e
 test('the data module only imports the palette and child-facing science uses grows weak', () => {
   const data = readFileSync(new URL('../src/beans.js', import.meta.url), 'utf8');
   assert.deepEqual([...data.matchAll(/^import .* from '([^']+)'/gm)].map(m => m[1]), ['./ui/palette.js']);
-  assert.match(LINES.week2Water, /grows weak/); assert.match(LINES.week2Dark, /grows weak/);
+  assert.match(LINES.week2Water, /still a seed/); assert.match(LINES.week2Dark, /grows weak/);
   assert.doesNotMatch(data, /does not grow/);
 });
 

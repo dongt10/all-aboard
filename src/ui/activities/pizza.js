@@ -9,7 +9,7 @@ import { INK, PAPER, PAPER_SHADE, PATH, WOOD, LANTERN, VERMILION, SUBJECT_THEME 
 export const LINES = PIZZA_LINES;
 export const helpFor = grade => [
   'New pizza picks the slices. Tap a friend to give one.',
-  grade >= 5 ? 'Cut a half when slices are left. Hand out every piece.' : 'Hand out every slice. Tap one to take it back.',
+  grade >= 5 ? 'Tap the pizza to cut the slices left in half.' : 'Hand out every slice. Tap one to take it back.',
   'Choose Dig in! to check the shares.',
   'When all four match, choose Serve pizza.',
 ];
@@ -116,7 +116,7 @@ function changePlate(state, ui, i, giving, piece = pieceUnits(state)) {
   if (!giving && state.plates[i] < piece) return { state, ui };
   const plates = state.plates.map((n, at) => at === i ? n + (giving ? piece : -piece) : n);
   const next = { ...state, plates, tried: false };
-  return { state: next, ui, line: giving ? giveLine(next, i, state.tried) : takeLine(next, state.tried, piece) };
+  return { state: next, ui, line: giving ? giveLine(next, i, state.tried) : takeLine(next, state.tried, piece, i) };
 }
 
 function act(state, ui, action) {
@@ -133,7 +133,7 @@ function act(state, ui, action) {
     }
     if (action.id === 'take') {
       if (state.plates.every(n => n === 0)) return { state, ui, line: LINES.platesEmpty };
-      // Last among tied fullest plates, so repeated undo is deterministic.
+      // Last among tied fullest plates; the feedback names the friend and amount.
       const i = state.plates.lastIndexOf(Math.max(...state.plates));
       return changePlate(state, ui, i, false);
     }
@@ -166,12 +166,14 @@ function mountField(host, { dispatch = () => {} } = {}) {
       <path d="M155 91h4v12h-4v16h-4v16h-11v12h-12v8h-16v4H48v-4H32v-4h16v4h64v-4h12v-8h12v-12h11v-16h4V99h4z" fill="#d6c39d"/>
       <path d="M52 48h56v1H52zM44 72h72v1H44zM48 96h64v1H48zM60 120h36v1H60z" fill="#d6c39d"/>
       ${Array.from({ length: 24 }, () => `<g class="pizza-wedge">${Object.entries(PIZZA_TONES).map(([tone, fill]) => `<path class="pizza-${tone}" fill="${fill}"/>`).join('')}</g>`).join('')}
-    </svg></button>
+    </svg><span class="px-chip pizza-cut" style="position: absolute; left: 50%; bottom: 0; transform: translateX(-50%); white-space: nowrap; font-family: var(--font-read); font-size: var(--text-small)" hidden></span></button>
     <div class="pizza-plank" aria-hidden="true"></div><i class="pizza-wheel pizza-wheel--left" aria-hidden="true"></i><i class="pizza-wheel pizza-wheel--right" aria-hidden="true"></i>
     <div class="pizza-ground" aria-hidden="true"></div>
     <div class="pizza-friends" role="group" aria-label="Four friends and their plates"></div>`;
   const friends = root.querySelector('.pizza-friends');
   const board = root.querySelector('.pizza-board');
+  const cutCue = root.querySelector('.pizza-cut');
+  cutCue.textContent = 'Tap to cut';
   const total = root.querySelector('.pizza-total');
   const equation = root.querySelector('.pizza-equation');
   const wedges = [...root.querySelectorAll('.pizza-wedge')].map(node => ({ node,
@@ -234,7 +236,9 @@ function mountField(host, { dispatch = () => {} } = {}) {
       equation.textContent = `${state.slices} ÷ 4 = ${ready ? shareText(r.share) : '?'}`;
       equation.classList.toggle('pizza-equation--ready', ready);
       const left = state.halves ? `${r.remaining} of ${state.slices * 2} halves` : `${r.remainingWhole} of ${state.slices} slices`;
-      board.setAttribute('aria-label', `Pizza, ${left} left${state.grade >= 5 && !state.halves && r.remaining > 0 ? '. Tap to cut the leftovers in half' : ''}`);
+      const canCut = state.grade >= 5 && !state.halves && r.remaining > 0;
+      cutCue.hidden = !canCut;
+      board.setAttribute('aria-label', `Pizza, ${left} left${canCut ? '. Tap to cut the leftovers in half' : ''}`);
       const count = (state.slices * 2) / piece, used = (state.slices * 2 - r.remaining) / piece;
       const art = pizzaArt(state.slices, state.halves);
       wedges.forEach(({ node, layers }, j) => {

@@ -133,6 +133,7 @@ test('report separates gaps, unequal counts and misalignment, and writes only re
     [[0, 2, 5, 7], 'contiguous', LINES.gaps],
     [[0, 1, 10, 11], 'contiguous', LINES.gaps],
     [[0, 1, 5], 'equal', LINES.unequal],
+    [[0, 2, 10], 'equal', LINES.unequal],
     [[0, 1, 6, 7], 'aligned', LINES.misaligned],
   ];
   for (const [crates, reason, line] of cases) {
@@ -145,6 +146,16 @@ test('report separates gaps, unequal counts and misalignment, and writes only re
   assert.equal(placeLine(snapshot({ crates: [0, 1, 2, 3] })), '4 crates on the cart. 8 more to go.');
   assert.equal(placeLine(snapshot({ crates: rectangle(3, 5) })), '15 crates. That is 3 too many.');
   assert.equal(placeLine(snapshot()), LINES.empty);
+});
+
+test('equal rows with gaps keep their counts and explain the packing constraint', () => {
+  for (const crates of [[0, 2, 5, 7], [0, 1, 10, 11]]) {
+    const state = snapshot({ crates });
+    assert.equal(rowsReport(state).equal, true);
+    assert.equal(placeLine(state), 'Equal counts! Close the gaps to make a solid block.');
+    assert.equal(rowsReady(state), false);
+    assert.deepEqual(state.crates, crates);
+  }
 });
 
 test('every solid rectangle and offset is ready exactly when its count matches a listed order', () => {

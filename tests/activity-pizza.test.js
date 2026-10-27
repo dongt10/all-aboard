@@ -85,7 +85,7 @@ test('help per grade asks for every slice, and grade 5 asks for a cut', () => {
   for (const grade of GRADES_PIZZA) {
     assert.deepEqual(helpFor(grade), [
       'New pizza picks the slices. Tap a friend to give one.',
-      grade === 5 ? 'Cut a half when slices are left. Hand out every piece.' : 'Hand out every slice. Tap one to take it back.',
+      grade === 5 ? 'Tap the pizza to cut the slices left in half.' : 'Hand out every slice. Tap one to take it back.',
       'Choose Dig in! to check the shares.',
       'When all four match, choose Serve pizza.',
     ]);
@@ -204,14 +204,14 @@ test('wrong tries keep the work and explain empty, unequal and leftover shares',
   assert.equal(step(fair(3), field({ give: 0 })).state.tried, true);
 });
 
-test('give/take is pure, undo chooses the last fullest, and every change re-arms Dig in!', () => {
+test('give/take is pure, Take back names the last fullest plate, and every change re-arms Dig in!', () => {
   let s = fresh(3);
   Object.freeze(s.state.plates); Object.freeze(s.state); Object.freeze(s.ui);
   let next = step(s, field({ give: 0 }));
   assert.deepEqual(s.state.plates, [0, 0, 0, 0]); assert.deepEqual(next.state.plates, [2, 0, 0, 0]);
   assert.equal(next.line, 'Sora gets a slice. 7 left on the pizza.');
   next = step(next, field({ take: 0 })); assert.deepEqual(next.state.plates, s.state.plates);
-  assert.equal(next.line, LINES.takeSlice);
+  assert.equal(next.line, LINES.takeSlice('Sora'));
   next = step({ state: snapshot({ plates: [2, 2, 2, 2] }), ui: {} }, cmd('take'));
   assert.deepEqual(next.state.plates, [2, 2, 2, 0]);
   for (const grade of GRADES_PIZZA) {
@@ -219,7 +219,7 @@ test('give/take is pure, undo chooses the last fullest, and every change re-arms
     assert.equal(pizzaReady(done.state), true);
     const undone = step(done, cmd('take'));
     assert.equal(pizzaReady(undone.state), false); assert.equal(undone.state.tried, false);
-    assert.equal(undone.line, LINES.changed);
+    assert.equal(undone.line, `${grade === 5 ? LINES.takeHalf('Pip') : LINES.takeSlice('Pip')} Choose Dig in! to check.`);
     const restored = step(undone, field({ give: 3 }));
     assert.equal(pizzaReady(restored.state), false);
     assert.equal(pizzaReady(step(restored, cmd('try')).state), true);
@@ -242,7 +242,8 @@ test('grade 5: leftover nudge, cut once, return halves, then 6/4 and 10/4 mixed 
   s = step(step(s, cmd('try')), field({ pizza: true }));
   assert.equal(s.state.tried, false); assert.equal(s.state.halves, true);
   assert.equal(pieceUnits(s.state), 1);
-  assert.equal(s.line, 'Every slice is cut in half. Now there are 4 halves.');
+  assert.equal(s.line, 'I cut the 2 slices left into 4 halves.');
+  assert.deepEqual(s.state.plates, [2, 2, 2, 2], 'served slices stay whole');
   assert.equal(step(s, field({ pizza: true })).state, s.state);
   assert.equal(step(s, field({ pizza: true })).line, LINES.cutAlready);
   for (let i = 0; i < 4; i++) s = step(s, field({ give: i }));
@@ -254,10 +255,37 @@ test('grade 5: leftover nudge, cut once, return halves, then 6/4 and 10/4 mixed 
   s = step(s, field({ pizza: true }));
   for (let i = 0; i < 20; i++) s = step(s, field({ give: i % 4 }));
   assert.equal(step(s, cmd('try')).line, '10 ÷ 4 = 2 and a half each! Choose Serve pizza.');
-  assert.equal(step(s, field({ take: 0 })).line, LINES.takeHalf);
+  assert.equal(step(s, field({ take: 0 })).line, LINES.takeHalf('Sora'));
   for (const grade of [3, 4]) {
     const start = fresh(grade), tapped = step(start, field({ pizza: true }));
     assert.equal(tapped.state, start.state); assert.equal(tapped.line, LINES.tapHint);
+  }
+});
+
+test('cut feedback counts only the remaining slices, including a single slice', () => {
+  for (const [plates, expected] of [
+    [[0, 0, 0, 0], 'I cut the 6 slices left into 12 halves.'],
+    [[4, 2, 2, 2], 'I cut the 1 slice left into 2 halves.'],
+  ]) {
+    const start = { state: snapshot({ slices: 6, plates }, 5), ui: {} };
+    const result = step(start, field({ pizza: true }));
+    assert.equal(result.line, expected);
+    assert.deepEqual(result.state.plates, plates);
+  }
+});
+
+test('Take back always names the actual friend and amount, even when a nudge or check is due', () => {
+  for (const halves of [false, true]) for (const tried of [false, true]) {
+    // Sora has the fullest plate; Pip was the most recent recipient.
+    let s = fresh(5);
+    if (halves) s = step(s, field({ pizza: true }));
+    for (const i of [0, 0, 1, 2, 3]) s = step(s, field({ give: i }));
+    if (tried) s = step(s, cmd('try'));
+    const result = step(s, cmd('take'));
+    assert.deepEqual(result.state.plates, Array(4).fill(halves ? 1 : 2));
+    assert.equal(result.line, `One ${halves ? 'half' : 'slice'} back from Sora.${tried ? ' Choose Dig in! to check.' : ''}`);
+    assert.equal(result.state.tried, false);
+    short(result.line);
   }
 });
 
@@ -354,7 +382,7 @@ test('clicking a displayed whole or half returns exactly that piece and describe
     assert.equal(remainingUnits(s.state), takeUnits);
     assert.equal(s.state.tried, false);
     assert.equal(pizza.commands(s.state).at(-1).disabled, true);
-    assert.equal(s.line, checked ? LINES.changed : takeUnits === 2 ? LINES.takeSlice : LINES.takeHalf);
+    assert.equal(s.line, `${takeUnits === 2 ? LINES.takeSlice('Sora') : LINES.takeHalf('Sora')}${checked ? ' Choose Dig in! to check.' : ''}`);
     assert.equal(pieces[0].classList.contains('pizza-piece--half'), takeUnits === 2);
     assert.equal(pieces[1].hidden, true);
     view.destroy();
@@ -409,22 +437,31 @@ test('field pools buttons, shows reactions, has sibling give/pieces and recovers
 test('pizza board offers cutting only while whole leftovers can still be cut', () => {
   const doc = fakeDoc(), host = doc.createElement('section');
   const view = pizza.mountField(host);
-  const board = host.querySelector('.pizza-board');
+  const board = host.querySelector('.pizza-board'), cue = board.querySelector('.pizza-cut');
+  assert.equal(cue.textContent, 'Tap to cut');
   let s = fresh(5);
   view.update(s.state);
   assert.match(board.getAttribute('aria-label'), /6 of 6 slices left\. Tap to cut/);
+  assert.equal(cue.hidden, false);
+  // The cut cue also remains visible after an uneven distribution.
+  s = step(s, field({ give: 0 })); view.update(s.state);
+  assert.equal(cue.hidden, false);
   s = step(s, field({ pizza: true }));
   view.update(s.state);
-  assert.equal(board.getAttribute('aria-label'), 'Pizza, 12 of 12 halves left');
+  assert.equal(board.getAttribute('aria-label'), 'Pizza, 10 of 12 halves left');
+  assert.equal(cue.hidden, true);
   s = fresh(5);
   while (remainingUnits(s.state)) s = step(s, field({ give: 0 }));
   view.update(s.state);
   assert.equal(board.getAttribute('aria-label'), 'Pizza, 0 of 6 slices left');
+  assert.equal(cue.hidden, true);
   s = step(s, field({ take: 0 }));
   view.update(s.state);
   assert.match(board.getAttribute('aria-label'), /1 of 6 slices left\. Tap to cut/);
+  assert.equal(cue.hidden, false);
   view.update(fresh(4).state);
   assert.doesNotMatch(board.getAttribute('aria-label'), /Tap to cut/);
+  assert.equal(cue.hidden, true);
   view.destroy();
 });
 

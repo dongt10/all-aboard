@@ -1,5 +1,5 @@
 import {
-  BED_TILES, TRAY_TILES, CHANGES, TILE_NAMES, LINES, normalizeBeans, beansReady, beansOpening,
+  BED_TILES, REQUIRED_TILES, TRAY_TILES, CHANGES, TILE_NAMES, LINES, normalizeBeans, beansReady, beansOpening,
   chooseChange, waitWeek, toggleTile, testDone, cupState, nextStepLine, beanGlyphMarkup,
 } from '../../beans.js';
 import { icon } from '../icons.js';
@@ -10,8 +10,8 @@ export { LINES };
 export const HELP = [
   'Tap one change for cup B: No water or Dark box.',
   'Choose Wait a week two times. Watch both cups.',
-  'Tap the tiles a plant needs into the bed card.',
-  'Fill the bed, then choose Plant bed.',
+  'Add seed, sun, and water. Bee is optional.',
+  'Tap Bee for pollen facts, or choose Plant bed.',
 ];
 const CHANGE_OPTIONS = [
   { id: 'water', name: 'No water', glyph: 'dry' },
@@ -81,8 +81,10 @@ function act(state, ui, action) {
   }
   if (!TRAY_TILES.includes(action.tile)) return { state, ui };
   const next = toggleTile(state, action.tile);
+  const completed = next !== state && REQUIRED_TILES.every(tile => next.bed.includes(tile))
+    && !REQUIRED_TILES.every(tile => state.bed.includes(tile));
   const line = state.bed.includes(action.tile) ? LINES.removed(TILE_NAMES[action.tile].toLowerCase())
-    : next !== state && next.bed.length === 4 ? beansReady(next) ? LINES.allFour : LINES.early
+    : completed ? `${LINES[action.tile]} ${beansReady(next) ? LINES.allFour : LINES.early}`
       : LINES[action.tile];
   return { state: next, ui, line };
 }
@@ -99,10 +101,10 @@ export function fieldView(state) {
         needs: id === 'a' || state.change === 'none' ? ['sun', 'water'] : state.change === 'water' ? ['sun', 'dry'] : ['dark', 'water'] };
     }),
     changes: CHANGE_OPTIONS.map(option => ({ ...option, checked: state.change === option.id })),
-    bed: { title: 'Garden bed', label: `Garden bed, ${state.bed.length} of 4 tiles.`,
-      slots: BED_TILES.map(tile => ({ tile, filled: state.bed.includes(tile), label: `${TILE_NAMES[tile]}, ${state.bed.includes(tile) ? 'in the bed' : 'empty'}.` })) },
+    bed: { title: 'Garden bed', label: `Garden bed, ${REQUIRED_TILES.filter(tile => state.bed.includes(tile)).length} of 3 needed tiles. Bee is optional.`,
+      slots: BED_TILES.map(tile => ({ tile, filled: state.bed.includes(tile), label: `${TILE_NAMES[tile]}${tile === 'bee' ? ' (optional)' : ''}, ${state.bed.includes(tile) ? 'in the bed' : 'empty'}.` })) },
     tray: TRAY_TILES.map(tile => ({ tile, name: TILE_NAMES[tile], pressed: state.bed.includes(tile),
-      label: state.bed.includes(tile) ? `${TILE_NAMES[tile]} is in the bed. Tap to take it back.` : `${TILE_NAMES[tile]}. Tap to try it in the bed.` })),
+      label: state.bed.includes(tile) ? `${TILE_NAMES[tile]} is in the bed. Tap to take it back.` : `${TILE_NAMES[tile]}${tile === 'bee' ? ' (optional)' : ''}. Tap to try it in the bed.` })),
   };
 }
 
