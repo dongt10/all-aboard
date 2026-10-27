@@ -40,6 +40,7 @@ Changes to All Aboard, grouped by release.
 
 ### Fixed
 
+- The Home Screen app (Add to Home Screen) uses the whole screen on a cold launch; iOS reported the height minus the portrait status bar, so the stage now sizes from the screen there.
 - An overnight pass on the 2026-10-27 review: Enter talks to the focused neighbor; unread dialogue pages come before any key press can answer; the reward card accepts only on its button and can be heard; the Guide reads its pages and speech failures show a notice; only local voices are used; stamps say We explored; Echo keeps a partial rhythm and its credit survives leaving; the quiet choice holds through Echo and presets; the no-water seed stays a seed and the bee is pollination, not a growth rule; energy numbers are pretend units; Next story keeps each story's draft; compass starts and distances match the map; finished banners drop the working fold and mirror checks respect flipped stamps; an unreadable or newer save is kept and can be exported, never overwritten; HEAD requests read no file bodies; village name chips never overlap.
 - Phone stage fitting follows the visible viewport and safe-area insets as browser bars move or the device rotates. Pinch zoom keeps its magnification, touch no longer triggers double-tap zoom, and phone margins use the scene’s palette while the central 960×540 playfield stays intact.
 - Read-aloud selects a preferred local English voice and uses a calm pace with neutral pitch.
