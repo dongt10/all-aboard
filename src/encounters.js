@@ -100,12 +100,19 @@ export function routeReport(s) {
     signed: placements.some(p => p.item === 'sign' && atStage(p)),
   };
 }
+export function communityBlockedLine(s) {
+  const blocker = (s?.placements ?? []).find(p => p.item !== 'sign' && onPath(p));
+  if (!blocker) return null;
+  return blocker.item === 'quiet'
+    ? 'Choose Remove, then tap the garden. Put a garden by the quiet trees.'
+    : 'Choose Remove, then tap the bench. Put a bench off the path.';
+}
 // The square's checklist for this snapshot's grade, in order. K: bench. Grades 1–2 add the garden. Grades 3–5 add the sign.
 // A bench or garden on the path blocks the walk, so the first step stays undone and says to move it until the path is clear.
 export function squareSteps(s) {
   const r = routeReport(s), band = gradeBand(s?.grade);
   const steps = [r.blocked
-    ? { id: 'rest', done: false, text: 'Move the bench or garden off the path.' }
+    ? { id: 'rest', done: false, text: communityBlockedLine(s) }
     : { id: 'rest', done: r.rest, text: 'Put a bench off the path.' }];
   if (band >= 1) steps.push({ id: 'quiet', done: r.quiet, text: 'Put a garden by the quiet trees.' });
   if (band >= 3) steps.push({ id: 'signed', done: r.signed, text: 'Put a sign next to the stage.' });

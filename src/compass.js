@@ -25,9 +25,9 @@ export const ROUTE_STYLES = {
 };
 export const LINES = {
   prompts: {
-    north: 'Pip walks north from the kiosk. Tap where Pip stops.',
-    west: 'The stage is west of the kiosk. Tap the stage.',
-    lantern: 'Bring the lantern. Go east 2, then south 1.',
+    north: 'From the kiosk, go north one square. Tap each square.',
+    west: 'From the kiosk, go west two squares. Tap each square.',
+    lantern: 'From the kiosk, go east two squares, then south one. Tap each square.',
   },
   openingFresh: 'Three errands today.',
   openingMid: n => `Errand ${n} of 3.`,
@@ -42,8 +42,7 @@ export const LINES = {
   allDone: 'All three errands are done! Choose Hang map.',
   wrong: id => `That is a different way. ${DIRECTION_HINT[id] ?? DIRECTION_HINT.north}`,
   near: {
-    north: 'North is right! Pip stops one square up.',
-    lantern: 'That is the lantern shed. Now go south 1.',
+    north: 'Yes, that is north! Pip stops one square up.',
   },
   kiosk: 'That is the kiosk, where you start.',
   compass: 'North is up, south is down. West is left, east is right.',
@@ -102,17 +101,27 @@ export function compassOpening(state) {
 }
 
 // Only the current destination saves a change. Near misses and repeated taps preserve the snapshot.
-export function deliver(state, cell) {
+export function deliver(state, cell, progress = 0) {
   if (!isCell(cell)) return { state, status: 'wrong' };
   if (!isCompass(state) || state.chapter !== 1 || !GRADES_COMPASS.includes(state.grade)) return { state, status: 'wrong' };
   const errand = currentErrand(state);
   if (!errand) return { state, status: 'ready' };
   if (cell === indexOf(PLACES.kiosk)) return { state, status: 'kiosk' };
-  if (cell === indexOf(errand.target)) {
+  const step = Number.isInteger(progress) && progress >= 0 && progress < errand.path.length - 1 ? progress : 0;
+  if (cell === indexOf(errand.path[step + 1]) && step + 1 < errand.path.length - 1) {
+    return { state, status: 'progress', progress: step + 1 };
+  }
+  if (cell === indexOf(errand.target) && step === errand.path.length - 2) {
     const done = ERRAND_IDS.filter(id => id === errand.id || doneOf(state).includes(id));
     return { state: { ...state, done }, status: 'done' };
   }
-  return { state, status: errand.near && cell === indexOf(errand.near.cell) ? 'near' : 'wrong' };
+  return { state, status: errand.id === 'north' && cell === indexOf(errand.near.cell) ? 'near' : 'wrong' };
+}
+
+export function progressLine(id, step) {
+  if (id === 'west') return 'One square west. Go west one more square.';
+  if (id === 'lantern' && step === 1) return 'One square east. Go east one more square, then south one.';
+  return 'Two squares east. Go south one square.';
 }
 
 // Takes the snapshot before the tap so the job line names the errand just completed.
@@ -121,6 +130,7 @@ export function tapLine(state, cell, result = deliver(state, cell)) {
   const errand = currentErrand(state);
   if (result.status === 'ready') return LINES.places[placeAt(cell)] ?? LINES.grass;
   if (result.status === 'kiosk') return LINES.kiosk;
+  if (result.status === 'progress') return progressLine(errand.id, result.progress);
   if (result.status === 'near') return LINES.near[errand?.id] ?? LINES.wrong(errand?.id);
   if (result.status === 'done') return `${LINES.delivered[errand.id]} ${compassReady(result.state) ? LINES.allDone : LINES.next}`;
   return LINES.wrong(errand?.id);

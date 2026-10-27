@@ -5,7 +5,7 @@
 // or fewer so a dialogue page never breaks mid-sentence with Bigger words on.
 import {
   normalizeEncounterSnapshot, encounterReady, encounterOpeningDialogue,
-  routeReport, squareSteps, gradeBand, STAGE_CELLS, placeCommunityItem,
+  routeReport, squareSteps, gradeBand, STAGE_CELLS, placeCommunityItem, communityBlockedLine,
 } from '../../encounters.js';
 import { icon } from '../icons.js';
 import { gridMove, keyIntent } from '../input.js';
@@ -60,7 +60,7 @@ const TOOLS = [
 ];
 const TOOL_IDS = TOOLS.map(t => t.id);
 // The word a kid reads for each item: the garden is always "garden", never "quiet".
-const ITEM_WORDS = { bench: 'bench', quiet: 'garden' };
+const ITEM_WORDS = { bench: 'bench', quiet: 'garden', sign: 'sign' };
 
 export const LINES = {
   placed: 'Placed. Choose Try it when you are ready.',
@@ -94,13 +94,11 @@ const WALK_READY = {
 export function cellPosition(cell) {
   return { x: 10 + (cell % SIZE) * 20, y: 10 + Math.floor(cell / SIZE) * 20 };
 }
-const onPath = p => Math.abs(p.y - 50) < 16;
 const isStageCell = cell => { const { x, y } = cellPosition(cell); return STAGE_CELLS.some(c => c.x === x && c.y === y); };
 
 // The first item sitting on the path (benches and gardens block it; signs do not), named for a kid.
 export function blockedLine(state) {
-  const blocker = (state?.placements ?? []).find(p => p.item !== 'sign' && onPath(p));
-  return blocker ? `Move the ${ITEM_WORDS[blocker.item]} off the path.` : null;
+  return communityBlockedLine(state);
 }
 
 // Next step: the blocked path first, then the first step of this grade's checklist that is not done, then ready.
@@ -123,11 +121,14 @@ export function walkLine(state) {
 function place(state, ui, cell) {
   if (!Number.isInteger(cell) || cell < 0 || cell >= CELLS) return { state, ui };
   const { x, y } = cellPosition(cell);
+  const previous = state.placements.find(p => p.x === x && p.y === y);
   const result = placeCommunityItem(state, ui.tool, x, y);
   if (result.status === 'full') return { state, ui, line: LINES.full };
   if (result.status === 'unchanged') return { state, ui, line: ui.tool === 'remove' ? LINES.nothing : LINES.same };
   // A change after a walk-through undoes it, so the kid hears that Try it is needed again.
-  const line = state.tried ? LINES.changed : result.status === 'removed' ? LINES.removed : LINES.placed;
+  const line = previous && result.status === 'placed'
+    ? `Replaced the ${ITEM_WORDS[previous.item]} with a ${ITEM_WORDS[ui.tool]}. ${state.tried ? 'Choose Try it again.' : 'Choose Try it when you are ready.'}`
+    : state.tried ? LINES.changed : result.status === 'removed' ? LINES.removed : LINES.placed;
   return { state: result.state, ui, line };
 }
 

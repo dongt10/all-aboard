@@ -91,7 +91,7 @@ test('start ignores legacy K–2 community saves and unrelated activity snapshot
   const resumed = compass.start(snapshot(['north']));
   assert.deepEqual(resumed.state, snapshot(['north']));
   assert.deepEqual(resumed.ui, {});
-  assert.equal(compass.opening(resumed.state), 'Errand 2 of 3. The stage is west of the kiosk. Tap the stage.');
+  assert.equal(compass.opening(resumed.state), 'Errand 2 of 3. From the kiosk, go west two squares. Tap each square.');
   assert.equal(compass.opening(resumed.state), compassOpening(resumed.state));
   assert.equal(compass.start(snapshot([], 5), { grade: 1, chapter: 0 }).state.grade, 1);
   assert.equal(compass.start(snapshot([], 5), { grade: 1, chapter: 0 }).state.chapter, 0);
@@ -157,10 +157,10 @@ test('all 25 cells have the correct outcome for each errand, with no saving on a
     const state = Object.freeze(snapshot(Object.freeze(ERRAND_IDS.slice(0, n)))), ui = Object.freeze({});
     assert.equal(currentErrand(state), errand);
     for (let cell = 0; cell < GRID * GRID; cell++) {
-      const expected = cell === cellOf(errand.target) ? 'done' : cell === 12 ? 'kiosk' : errand.near && cell === cellOf(errand.near.cell) ? 'near' : 'wrong';
+      const expected = cell === 12 ? 'kiosk' : cell === cellOf(errand.path[1]) ? (errand.path.length === 2 ? 'done' : 'progress') : errand.id === 'north' && cell === cellOf(errand.near.cell) ? 'near' : 'wrong';
       const result = deliver(state, cell), action = compass.act(state, ui, field(cell));
       assert.equal(result.status, expected, `${errand.id}, cell ${cell}`);
-      assert.equal(action.ui, ui);
+      if (expected !== 'progress') assert.equal(action.ui, ui);
       assert.deepEqual(action.state, result.state);
       assert.equal(action.line, tapLine(state, cell));
       fits(action.line);
@@ -178,18 +178,18 @@ test('all 25 cells have the correct outcome for each errand, with no saving on a
 
 test('near misses teach the final step; the lantern shed is not the lantern destination', () => {
   const north = snapshot(), lantern = snapshot(['north', 'west']);
-  assert.equal(tapLine(north, 2), 'North is right! Pip stops one square up.');
+  assert.equal(tapLine(north, 2), 'Yes, that is north! Pip stops one square up.');
   assert.equal(deliver(north, 2).state, north);
-  assert.equal(tapLine(lantern, 14), 'That is the lantern shed. Now go south 1.');
+  assert.equal(deliver(lantern, 14).status, 'wrong');
   assert.equal(deliver(lantern, 14).state, lantern);
-  assert.equal(deliver(lantern, 19).status, 'done');
+  assert.equal(deliver(lantern, 19).status, 'wrong');
   assert.equal(tapLine(north, 12), 'That is the kiosk, where you start.');
   for (const [n, errand] of ERRANDS.entries()) assert.equal(tapLine(snapshot(ERRAND_IDS.slice(0, n)), 24), `That is a different way. ${DIRECTION_HINT[errand.id]}`);
 });
 
 test('full play-through explains the three jobs, resumes, hangs the map, and can start over', () => {
   let { state, ui } = compass.start();
-  assert.equal(compass.opening(state), 'Three errands today. Pip walks north from the kiosk. Tap where Pip stops.');
+  assert.equal(compass.opening(state), 'Three errands today. From the kiosk, go north one square. Tap each square.');
   const expectedLines = [
     'The baker needs flour. Pip the courier helps. Choose Next errand.',
     'Kiko needs a drum on the stage. Taro carries it. Choose Next errand.',
@@ -199,9 +199,9 @@ test('full play-through explains the three jobs, resumes, hangs the map, and can
     Object.freeze(state.done); Object.freeze(state); Object.freeze(ui);
     const next = compass.act(state, ui, cmd('next'));
     assert.equal(next.state, state); assert.equal(next.ui, ui); fits(next.line);
+    for (const point of errand.path.slice(1, -1)) ({ state, ui } = compass.act(state, ui, field(cellOf(point))));
     const result = compass.act(state, ui, field(cellOf(errand.target)));
     assert.equal(result.line, expectedLines[n]); fits(result.line);
-    assert.equal(result.ui, ui);
     assert.equal(state.done.length, n);
     ({ state, ui } = result);
     contract(state, ui);
@@ -250,8 +250,8 @@ test('malformed taps and unknown actions preserve frozen state and ui exactly', 
     }
     const rose = compass.act(state, ui, cmd('rose'));
     assert.equal(rose.state, state); assert.equal(rose.ui, ui);
-    assert.equal(rose.line, 'North is up, south is down. West is left, east is right.');
-    assert.equal(rose.line.length, 56);
+    assert.equal(rose.line, done.length ? LINES.compass : `${LINES.compass} Hint: Pip lands at the bakery.`);
+    fits(rose.line);
   }
   const state = snapshot();
   for (const cell of [-1, 25, null, '7', Symbol('cell')]) {
@@ -294,7 +294,7 @@ test('field text is bounded, Pip moves once, and clue cards never name the desti
   for (const done of subsets) {
     const state = snapshot(done), view = fieldView(state);
     assert.equal(view.cells.length, 25);
-    assert.equal(view.pip, done.includes('north') ? 7 : 12);
+    assert.equal(view.pip, 12);
     assert.equal(view.cells.filter(cell => cell.pip).length, 1);
     assert.equal(view.ready, compassReady(state));
     assert.deepEqual(view.routes, routes(state));
@@ -312,7 +312,7 @@ test('field text is bounded, Pip moves once, and clue cards never name the desti
 test('help, stamp, openings and every static or generated sentence meet the dialogue limits', () => {
   assert.deepEqual(HELP, [
     'North is up on the map. East is right.',
-    'Listen to the errand. Tap the square it names.',
+    'Listen to the errand. Tap each square along the way.',
     'Choose Compass or Next errand if you are stuck.',
     'Do all three errands, then choose Hang map.',
   ]);
@@ -395,7 +395,7 @@ test('mounted field builds once and keeps every button, figure, route and card n
     assert.equal(root.querySelectorAll('.compass-picture').filter(picture => !picture.hidden).length, 1);
     assert.equal(root.querySelectorAll('.compass-picture').find(picture => !picture.hidden).dataset.picture, view.card.picture);
     assert.equal(root.querySelector('.compass-pip').style.left, '118px');
-    assert.equal(root.querySelector('.compass-pip').style.top, done.includes('north') ? '68px' : '118px');
+    assert.equal(root.querySelector('.compass-pip').style.top, '118px');
     for (const cell of cells) fits(cell.getAttribute('aria-label'));
   }
   assert.deepEqual(paths.map(path => path.dataset.marker), ['circle', 'square', 'triangle']);
@@ -414,19 +414,19 @@ test('nested map taps dispatch numeric cells and update the activity without rep
   const actions = [];
   env = mount(action => { actions.push(action); session = compass.act(session.state, session.ui, action); env.mounted.update(session.state, session.ui); });
   const { root, cells, doc, mounted } = env;
-  for (const cell of [7, 10, 14, 19]) {
+  for (const cell of [7, 11, 10, 13, 14, 19]) {
     cells[cell].firstElementChild.dispatchEvent(new Event('click'));
     assert.deepEqual(actions.at(-1), field(cell));
     assert.equal(doc.activeElement, cells[cell]);
     assert.equal(cells[cell].tabIndex, 0);
   }
-  assert.equal(actions.length, 4);
+  assert.equal(actions.length, 6);
   assert.equal(compassReady(session.state), true);
   root.querySelector('.compass-clue').click();
-  assert.equal(actions.length, 4);
+  assert.equal(actions.length, 6);
   mounted.destroy();
   cells[0].click();
-  assert.equal(actions.length, 4);
+  assert.equal(actions.length, 6);
 });
 
 test('keyboard arrows rove the 5 by 5 map and leave bottom-edge Down for the menu', () => {
@@ -459,14 +459,14 @@ test('native Enter and Space each make one delivery and retain the cell focus', 
   let session = compass.start(), env;
   const actions = [];
   env = mount(action => { actions.push(action); session = compass.act(session.state, session.ui, action); env.mounted.update(session.state, session.ui); });
-  for (const [cell, key] of [[7, 'Enter'], [10, ' '], [19, 'Enter']]) {
+  for (const [cell, key] of [[7, 'Enter'], [11, ' '], [10, 'Enter'], [13, ' '], [14, 'Enter'], [19, 'Enter']]) {
     env.cells[cell].focus();
     assert.equal(routeIntent({ target: env.cells[cell], key }), 'native');
     assert.equal(pressKey(env.cells[cell], 'keydown', key).defaultPrevented, false);
     assert.equal(pressKey(env.cells[cell], 'keyup', key).defaultPrevented, false);
     assert.equal(env.doc.activeElement, env.cells[cell]);
   }
-  assert.deepEqual(actions, [field(7), field(10), field(19)]);
+  assert.deepEqual(actions, [field(7), field(11), field(10), field(13), field(14), field(19)]);
   assert.equal(compassReady(session.state), true);
   env.mounted.destroy();
 });
@@ -522,4 +522,35 @@ test('all field words use font tokens and reserve room for Bigger words without 
   const card = declarations(css, '.compass-card');
   assert.ok(36 + 30 + 20 + 8 + 2 * (parseFloat(card.padding) + parseFloat(card.border)) <= parseFloat(card.height));
   mounted.destroy();
+});
+
+test('intermediate progress survives mistakes and repeats the remaining route', () => {
+  let state = snapshot(['north', 'west']), ui = {};
+  let result = compass.act(state, ui, field(13));
+  ({ state, ui } = result);
+  assert.equal(fieldView(state, ui).pip, 13);
+  assert.match(fieldView(state, ui).card.label, /east one more square, then south one/);
+  result = compass.act(state, ui, field(19));
+  assert.equal(result.state, state); assert.equal(result.ui, ui);
+  assert.match(result.line, /east one more square, then south one/); fits(result.line);
+  assert.equal(compass.act(state, ui, cmd('next')).line, 'One square east. Go east one more square, then south one.');
+  ({ state, ui } = compass.act(state, ui, field(14)));
+  assert.equal(fieldView(state, ui).pip, 14);
+  assert.equal(compass.act(state, ui, field(19)).state.done.length, 3);
+});
+
+test('optional compass hint names the destination and stale progress is ignored', () => {
+  for (const [done, place] of [[[], 'bakery'], [['north'], 'stage'], [['north', 'west'], 'workshop']]) {
+    const state = snapshot(done);
+    const clue = compass.act(state, {}, cmd('next')).line;
+    assert.doesNotMatch(clue, new RegExp(place, 'i'));
+    const hint = compass.act(state, {}, cmd('rose')).line;
+    assert.match(hint, new RegExp(place, 'i')); fits(hint);
+  }
+  for (const progress of [1, 99, -1, '1', null, {}]) {
+    const ui = { errand: 'lantern', progress };
+    assert.equal(compass.act(snapshot(ERRAND_IDS), ui, cmd('next')).line, LINES.openingReady);
+    assert.equal(fieldView(snapshot(['north']), ui).pip, 12);
+    assert.equal(compass.act(snapshot(['north']), ui, field(10)).state.done.length, 1);
+  }
 });

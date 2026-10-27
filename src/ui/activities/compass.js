@@ -1,6 +1,6 @@
 import {
   GRID, PLACES, ERRAND_IDS, LINES, normalizeCompass, compassReady, compassOpening,
-  currentErrand, deliver, routes, placeAt, tapLine, compassGlyph, routeMarkup,
+  currentErrand, deliver, routes, placeAt, tapLine, compassGlyph, routeMarkup, progressLine,
 } from '../../compass.js';
 import { figureMarkup } from '../figures/index.js';
 import { icon } from '../icons.js';
@@ -10,7 +10,7 @@ import { INK, VERMILION, PAPER } from '../palette.js';
 export { LINES };
 export const HELP = [
   'North is up on the map. East is right.',
-  'Listen to the errand. Tap the square it names.',
+  'Listen to the errand. Tap each square along the way.',
   'Choose Compass or Next errand if you are stuck.',
   'Do all three errands, then choose Hang map.',
 ];
@@ -27,6 +27,9 @@ const ROSE = `<svg viewBox="0 0 24 24" shape-rendering="crispEdges" aria-hidden=
   + `<path d="M11 3h2v6h2v2h-2v2h-2z" fill="${VERMILION}"/></svg>`;
 const isCell = cell => Number.isInteger(cell) && cell >= 0 && cell < GRID * GRID;
 const indexOf = ([row, col]) => row * GRID + col;
+const stepOf = (errand, ui) => errand && ui?.errand === errand.id && Number.isInteger(ui.progress)
+  && ui.progress > 0 && ui.progress < errand.path.length - 1 ? ui.progress : 0;
+const DESTINATION = { north: 'Hint: Pip lands at the bakery.', west: 'Hint: Pip lands at the stage.', lantern: 'Hint: Pip lands at Taro’s workshop.' };
 
 function start(snapshot, { grade = 2, chapter = 1 } = {}) {
   const saved = snapshot?.kind === 'community' && snapshot.activity === 'compass' ? snapshot : null;
@@ -43,28 +46,32 @@ function commands(state) {
 }
 
 function act(state, ui, action) {
+  const errand = currentErrand(state), step = stepOf(errand, ui);
   if (action?.type === 'field' && isCell(action.cell)) {
-    const result = deliver(state, action.cell);
-    return { state: result.state, ui, line: tapLine(state, action.cell, result) };
+    const result = deliver(state, action.cell, step);
+    const nextUi = result.status === 'progress' ? { ...ui, errand: errand.id, progress: result.progress }
+      : result.status === 'done' && ui.progress ? { ...ui, progress: 0 } : ui;
+    return { state: result.state, ui: nextUi, line: result.status === 'wrong' && step ? `Try again. ${progressLine(errand.id, step)}` : tapLine(state, action.cell, result) };
   }
   if (action?.type === 'command') {
-    if (action.id === 'next') return { state, ui, line: compassOpening(state) };
-    if (action.id === 'rose') return { state, ui, line: LINES.compass };
-    if (action.id === 'reset' && state.done.length) return { state: { ...state, done: [] }, ui, line: LINES.startOver };
+    if (action.id === 'next') return { state, ui, line: step ? progressLine(errand.id, step) : compassOpening(state) };
+    if (action.id === 'rose') return { state, ui, line: errand ? `${LINES.compass} ${DESTINATION[errand.id]}` : LINES.compass };
+    if (action.id === 'reset' && state.done.length) return { state: { ...state, done: [] }, ui: ui.progress ? { ...ui, progress: 0 } : ui, line: LINES.startOver };
   }
   return { state, ui };
 }
 
 // The clue card holds the thing being carried and directions, never a destination name.
-export function fieldView(state) {
+export function fieldView(state, ui = {}) {
   const errand = currentErrand(state);
-  const pip = indexOf(state.done.includes('north') ? PLACES.bakery : PLACES.kiosk);
+  const step = stepOf(errand, ui);
+  const pip = indexOf(errand ? errand.path[step] : PLACES.kiosk);
   const card = errand ? CARDS[errand.id] : { picture: 'check', title: 'Hang map', clues: [{ text: '✓ 3 of 3', label: 'Three errands done' }] };
   return {
     ready: compassReady(state), head: errand ? `Errand ${ERRAND_IDS.indexOf(errand.id) + 1} of 3` : '3 of 3 done',
     errand: errand?.id ?? null, pip, routes: routes(state),
-    card: { ...card, clues: card.clues.map(clue => ({ ...clue })), hint: errand ? 'From the kiosk' : 'Choose Hang map.',
-      label: errand ? `${card.title}. ${card.clues.map(clue => `${clue.label}.`).join(' ')} Start at the kiosk.` : LINES.allDone },
+    card: { ...card, clues: card.clues.map(clue => ({ ...clue })), hint: errand ? (step ? (errand.id === 'west' ? 'West 1 more' : step === 1 ? 'East 1, south 1' : 'South 1') : 'From the kiosk') : 'Choose Hang map.',
+      label: errand ? (step ? `${card.title}. ${progressLine(errand.id, step)}` : `${card.title}. ${card.clues.map(clue => `${clue.label}.`).join(' ')} Start at the kiosk.`) : LINES.allDone },
     cells: Array.from({ length: GRID * GRID }, (_, cell) => {
       const place = placeAt(cell);
       return { cell, place, pip: cell === pip,
@@ -135,8 +142,8 @@ function mountField(host, { dispatch = () => {} } = {}) {
   root.addEventListener('focusin', onFocus);
   host.append(root);
 
-  function update(state) {
-    const view = fieldView(state);
+  function update(state, ui = {}) {
+    const view = fieldView(state, ui);
     root.classList.toggle('compass-field--ready', view.ready);
     setText(count, view.head); setText(title, view.card.title); setText(hint, view.card.hint);
     card.setAttribute('aria-label', view.card.label);

@@ -222,7 +222,7 @@ test('a blocked path shows as an undone step, so the checklist is never all done
  const steps=squareSteps(s);
  assert.equal(steps.some(step=>!step.done),true);
  assert.deepEqual(steps.map(step=>[step.id,step.done]),[['rest',false],['tried',true]]);
- assert.equal(steps[0].text,'Move the bench or garden off the path.');
+ assert.equal(steps[0].text,'Choose Remove, then tap the garden. Put a garden by the quiet trees.');
  shortSentences(steps[0].text,'blocked step');
  const clear={...s,placements:[s.placements[0]]};
  assert.equal(encounterReady(clear),true);

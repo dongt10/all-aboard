@@ -5,12 +5,13 @@ import {
 import { figureMarkup } from '../figures/index.js';
 import { icon } from '../icons.js';
 import { gridMove, keyIntent } from '../input.js';
+import { speak as speakWords } from '../voice.js';
 import { INK, PAPER, PAPER_SHADE, WOOD, LANTERN, SUBJECT_THEME } from '../palette.js';
 
 export { LINES, phaseOf };
 export const HELP = [
   'Read the story. Tap a line to hear it.',
-  'Answer the why question. Tap one picture.',
+  'Choose Hear prompt or Hear choices. Then pick an answer.',
   'Tap the three cards in story order, then a lesson.',
   'When the ribbon is full, choose Share ribbon.',
 ];
@@ -27,17 +28,34 @@ function commands(state) {
   ];
 }
 
+function hearText(state, part) {
+  const view = fieldView(state);
+  if (part === 'prompt') return view.prompt;
+  if (part !== 'choices') return null;
+  const choices = view.phase === 'why' ? view.options.map(option => option.label)
+    : view.phase === 'order' ? view.cards.filter(card => !card.placed).map(card => card.detail ?? card.caption)
+      : view.phase === 'lesson' ? view.lessons.map(lesson => lesson.text) : [];
+  return choices.map(text => /[.!?]$/.test(text) ? text : `${text}.`).join(' ');
+}
+
 function act(state, ui, action) {
   if (action?.type === 'command') {
     if (action.id === 'read') return { state, ui, line: storyText(state) };
-    if (action.id === 'next') return { state: nextStory(state), ui, line: LINES.nextStory };
-    if (action.id === 'reset' && state.why) return { state: resetStory(state), ui, line: LINES.startOver };
+    if (action.id === 'next') {
+      const next = nextStory(state);
+      return { state: next, ui, line: ribbonOpening(next) };
+    }
+    if (action.id === 'reset' && state.why) return { state: resetStory(state), ui, line: `${LINES.startOver} ${currentStory(state).question}` };
     return { state, ui };
   }
   if (action?.type !== 'field') return { state, ui };
-  const fields = ['line', 'why', 'card', 'lesson'].filter(key => Object.hasOwn(action, key));
+  const fields = ['line', 'why', 'card', 'lesson', 'hear'].filter(key => Object.hasOwn(action, key));
   if (fields.length !== 1) return { state, ui };
   const key = fields[0];
+  if (key === 'hear') {
+    const line = hearText(state, action.hear);
+    return line ? { state, ui, line } : { state, ui };
+  }
   if (key === 'line') {
     const line = readLine(state, action.line);
     return line ? { state, ui, line } : { state, ui };
@@ -53,17 +71,17 @@ export function fieldView(state) {
     phase, story: story.id,
     head: `Story ${state.story + 1} of ${STORY_COUNT} · ${story.title}`,
     label: story.title, question: story.question,
-    prompt: phase === 'why' ? story.question : phase === 'order' ? LINES.order : phase === 'lesson' ? LINES.lesson : LINES.openingReady,
+    prompt: ribbonOpening(state),
     lines: story.lines.map((text, i) => ({ text, label: readLine(state, i) })),
     options: story.options,
     cards: story.shuffled.map(id => {
       const index = story.cards.findIndex(card => card.id === id), card = story.cards[index];
-      return { ...card, placed: index < state.steps, label: `${card.caption}${index < state.steps ? '. On the ribbon.' : ''}` };
+      return { ...card, placed: index < state.steps, label: `${card.detail ?? card.caption}${index < state.steps ? '. On the ribbon.' : ''}` };
     }),
     lessons: story.lessons,
     band: story.cards.map((card, i) => ({
       number: i + 1, card: i < state.steps ? card : null,
-      label: `${['Beginning', 'Middle', 'End'][i]}: ${i < state.steps ? card.caption : 'Empty'}.`,
+      label: `${['Beginning', 'Middle', 'End'][i]}: ${i < state.steps ? card.detail ?? card.caption : 'Empty'}.`,
     })),
     lesson: state.lesson ? story.lessons.find(lesson => lesson.id === story.lesson) : null,
   };
@@ -103,6 +121,7 @@ function glyph(name) {
 }
 function cardArt(card) {
   if (card.art === 'run') return figureMarkup('math', { scale: 0.5, step: 1 });
+  if (card.id === 'tie') return glyph('sandal') + figureMarkup('math', { scale: 0.375, step: 1 });
   if (card.art === 'drum') return figureMarkup('music', { scale: 0.5 }) + glyph('drum');
   if (card.art === 'stop') return icon('stop', { size: 32 }) + glyph('drum');
   if (card.art === 'together') return figureMarkup('math', { scale: 0.375 })
@@ -114,13 +133,14 @@ const button = name => `<button type="button" class="ribbon-choice ${name}"><spa
 const bandMarkup = () => '<div class="ribbon-band" role="group" aria-label="Beginning, middle, end">'
   + [1, 2, 3].map(n => `<div class="ribbon-slot" role="img"><span class="ribbon-slot__number">${n}</span><span class="ribbon-slot__pic" aria-hidden="true"></span></div>`).join('') + '</div>';
 
-function mountField(host, { dispatch = () => {} } = {}) {
+function mountField(host, { dispatch = () => {}, speak = speakWords } = {}) {
   const doc = host.ownerDocument ?? document, root = doc.createElement('div');
   root.className = 'ribbon-field';
   root.innerHTML = '<section class="ribbon-story"><div class="ribbon-heading"><p class="ribbon-head"></p><p class="ribbon-question"></p></div>'
     + '<div class="ribbon-lines" role="group" aria-label="Story lines">'
     + [1, 2, 3, 4, 5].map(n => `<button type="button" class="ribbon-line"><span class="ribbon-line__tag" aria-hidden="true">${n}</span><span class="ribbon-line__text"></span></button>`).join('')
-    + '</div></section><div class="ribbon-strip">'
+    + '</div><button type="button" class="ribbon-line ribbon-hear-prompt" aria-label="Hear prompt">Hear prompt</button>'
+    + '<button type="button" class="ribbon-line ribbon-hear-choices" aria-label="Hear choices">Hear choices</button></section><div class="ribbon-strip">'
     + `<div class="ribbon-phase ribbon-why" role="group">${Array.from({ length: 4 }, () => button('ribbon-option')).join('')}</div>`
     + `<div class="ribbon-phase ribbon-order" role="group" hidden>${Array.from({ length: 3 }, () => button('ribbon-card')).join('')}${bandMarkup()}</div>`
     + `<div class="ribbon-phase ribbon-lessons" role="group" hidden>${Array.from({ length: 4 }, () => button('ribbon-lesson')).join('')}</div>`
@@ -130,8 +150,12 @@ function mountField(host, { dispatch = () => {} } = {}) {
   const storyCard = root.querySelector('.ribbon-story'), head = root.querySelector('.ribbon-head'), question = root.querySelector('.ribbon-question');
   const panels = { why: root.querySelector('.ribbon-why'), order: root.querySelector('.ribbon-order'), lesson: root.querySelector('.ribbon-lessons'), done: root.querySelector('.ribbon-done') };
   const controls = [];
-  const lines = [...root.querySelectorAll('.ribbon-line')].map((el, i) => {
+  const lines = [...root.querySelectorAll('.ribbon-lines .ribbon-line')].map((el, i) => {
     const record = { el, key: 'line', value: i, text: el.querySelector('.ribbon-line__text') };
+    controls.push(record); return record;
+  });
+  const hears = ['prompt', 'choices'].map(value => {
+    const record = { el: root.querySelector(`.ribbon-hear-${value}`), key: 'hear', value };
     controls.push(record); return record;
   });
   function choices(selector, key, panel) {
@@ -146,8 +170,8 @@ function mountField(host, { dispatch = () => {} } = {}) {
   tagPic.innerHTML = icon('star');
   const setText = (el, value) => { if (el.textContent !== value) el.textContent = value; };
   const setArt = (record, key, markup) => { if (record.art !== key) { record.art = key; record.pic.innerHTML = markup(); } };
-  const available = () => controls.filter(c => !c.panel?.hidden && !c.el.disabled);
-  let cursor = lines[0];
+  const available = () => controls.filter(c => !c.panel?.hidden && !c.el.hidden && !c.el.disabled);
+  let cursor = lines[0], currentState;
   function setCursor(record) {
     cursor = record;
     controls.forEach(c => { c.el.tabIndex = c === record ? 0 : -1; });
@@ -160,7 +184,10 @@ function mountField(host, { dispatch = () => {} } = {}) {
     const control = targetControl(event);
     if (!control || !available().includes(control)) return;
     setCursor(control);
+    const words = control.key === 'hear' && currentState ? hearText(currentState, control.value) : null;
     dispatch({ type: 'field', [control.key]: control.value });
+    // An explicit Hear request works even when automatic reading is off.
+    if (words) speak(words);
   }
   function onFocus(event) {
     const control = targetControl(event);
@@ -171,13 +198,14 @@ function mountField(host, { dispatch = () => {} } = {}) {
     if (!['up', 'down', 'left', 'right'].includes(intent)) return;
     const control = targetControl(event), shown = available();
     if (!control || !shown.includes(control)) return;
-    const strip = shown.filter(c => c.key !== 'line');
+    const reading = shown.filter(c => c.key === 'line' || c.key === 'hear');
+    const strip = shown.filter(c => c.key !== 'line' && c.key !== 'hear');
     let next = control;
-    if (control.key === 'line') {
-      const at = lines.indexOf(control), moved = gridMove(at, intent, 1, lines.length);
-      next = lines[moved];
+    if (reading.includes(control)) {
+      const at = reading.indexOf(control), moved = gridMove(at, intent, 1, reading.length);
+      next = reading[moved];
       if (intent === 'down' && moved === at && strip.length) next = strip[0];
-    } else if (intent === 'up') next = lines.at(-1);
+    } else if (intent === 'up') next = reading.at(-1);
     else next = strip[gridMove(strip.indexOf(control), intent, strip.length, strip.length)];
     // A Down arrow at the bottom belongs to the scene's command menu.
     if (next === control && intent === 'down') return;
@@ -189,13 +217,14 @@ function mountField(host, { dispatch = () => {} } = {}) {
   root.addEventListener('keydown', onKey);
 
   function update(state) {
+    currentState = state;
     const view = fieldView(state), active = doc.activeElement;
     const hadFocus = controls.some(c => c.el === active);
     root.dataset.phase = view.phase;
     storyCard.setAttribute('aria-label', view.label);
     setText(head, view.head);
-    setText(question, view.question);
-    question.hidden = view.phase !== 'why';
+    setText(question, view.prompt);
+    hears[1].el.hidden = view.phase === 'done';
     for (const [phase, panel] of Object.entries(panels)) {
       panel.hidden = phase !== view.phase;
       if (phase === view.phase) panel.setAttribute('aria-label', view.prompt);
@@ -226,7 +255,7 @@ function mountField(host, { dispatch = () => {} } = {}) {
     });
     setText(tagText, view.lesson?.text ?? '');
     const shown = available();
-    if (!shown.includes(cursor)) cursor = shown.find(c => c.key !== 'line') ?? lines.at(-1);
+    if (!shown.includes(cursor)) cursor = shown.find(c => c.key !== 'line' && c.key !== 'hear') ?? lines.at(-1);
     setCursor(cursor);
     if (hadFocus && doc.activeElement !== cursor.el) cursor.el.focus();
   }

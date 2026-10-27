@@ -5,7 +5,7 @@ export const KIND = 'reading';
 export const ACTIVITY = 'ribbon';
 export const GRADES_RIBBON = [2];
 export const STORY_COUNT = 2;
-export const STAMP_RIBBON = 'A story has a beginning, middle, end, and a lesson.';
+export const STAMP_RIBBON = 'Some stories have a lesson.';
 
 export const STORIES = [
   {
@@ -28,7 +28,7 @@ export const STORIES = [
     cards: [
       { id: 'run', caption: 'Taro runs', art: 'run' },
       { id: 'splash', caption: 'Big splash', art: 'puddle' },
-      { id: 'tie', caption: 'Ties sandal', art: 'sandal' },
+      { id: 'tie', caption: 'Ties; walks', detail: 'Ties his sandal, then walks safely', art: 'sandal' },
     ],
     shuffled: ['tie', 'run', 'splash'], lesson: 'fix',
     lessons: [
@@ -91,13 +91,27 @@ const isRibbon = input => Boolean(input) && typeof input === 'object' && !Array.
   && input.kind === KIND && input.activity === ACTIVITY;
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
-export function normalizeRibbon(input, grade = 2, chapter = 1) {
-  const s = isRibbon(input) ? input : {};
+function storyProgress(s = {}) {
   const why = s.why === true;
   const steps = why && Number.isInteger(s.steps) ? clamp(s.steps, 0, 3) : 0;
+  return { why, steps, lesson: steps === 3 && s.lesson === true };
+}
+
+export function normalizeRibbon(input, grade = 2, chapter = 1) {
+  const s = isRibbon(input) ? input : {}, story = isStory(s.story) ? s.story : 0;
+  // The active story lives at the top level for older saves. Keep only the other story's draft.
+  const storyDrafts = {};
+  for (let i = 0; i < STORY_COUNT; i++) {
+    const draft = s.storyDrafts?.[i];
+    if (i !== story && draft && typeof draft === 'object' && !Array.isArray(draft)) {
+      const progress = storyProgress(draft);
+      if (progress.why) storyDrafts[i] = progress;
+    }
+  }
   return {
     kind: KIND, activity: ACTIVITY, grade: Math.round(clamp(grade, 0, 5)), chapter: chapter === 1 ? 1 : 0,
-    found: [], story: isStory(s.story) ? s.story : 0, why, steps, lesson: steps === 3 && s.lesson === true,
+    found: [], story, ...storyProgress(s),
+    ...(Object.keys(storyDrafts).length ? { storyDrafts } : {}),
   };
 }
 
@@ -120,7 +134,8 @@ export function ribbonReady(s) {
 export function ribbonOpening(s) {
   if (ribbonReady(s)) return LINES.openingReady;
   const phase = phaseOf(s);
-  return phase === 'order' ? LINES.order : phase === 'lesson' ? LINES.lesson : LINES.openingFresh;
+  if (phase === 'order') return `Put the story in order. What happened ${['first', 'next', 'last'][s.steps] ?? 'first'}?`;
+  return phase === 'lesson' ? LINES.lesson : currentStory(s).question;
 }
 
 const ignored = state => ({ state, right: false, line: null });
@@ -137,7 +152,7 @@ export function placeCard(s, id) {
   const story = currentStory(s), card = story.cards.find(card => card.id === id);
   if (!card || !Number.isInteger(s.steps) || s.steps < 0 || s.steps > 2) return ignored(s);
   if (id !== story.cards[s.steps].id) return { state: s, right: false, line: LINES.wrongCard(s.steps) };
-  return { state: { ...s, steps: s.steps + 1, lesson: false }, right: true, line: LINES.cardPlaced(s.steps, card.caption) };
+  return { state: { ...s, steps: s.steps + 1, lesson: false }, right: true, line: LINES.cardPlaced(s.steps, card.detail ?? card.caption) };
 }
 
 export function chooseLesson(s, id) {
@@ -151,7 +166,12 @@ export function chooseLesson(s, id) {
 export function resetStory(s) {
   return !s.why && s.steps === 0 && !s.lesson ? s : { ...s, why: false, steps: 0, lesson: false };
 }
-export const nextStory = s => ({ ...s, story: ((isStory(s.story) ? s.story : 0) + 1) % STORY_COUNT, why: false, steps: 0, lesson: false });
+export function nextStory(s) {
+  const current = normalizeRibbon(s, s.grade, s.chapter);
+  const story = (current.story + 1) % STORY_COUNT;
+  const storyDrafts = { ...current.storyDrafts, [current.story]: storyProgress(current) };
+  return normalizeRibbon({ ...current, story, ...storyProgress(storyDrafts[story]), storyDrafts }, s.grade, s.chapter);
+}
 export function readLine(s, i) {
   const lines = currentStory(s).lines;
   return Number.isInteger(i) && i >= 0 && i < lines.length ? `Line ${i + 1}: ${lines[i]}` : null;
