@@ -7,7 +7,7 @@ class WindowTarget extends Target { dispatchEvent(event) { this.fire(event); } }
 const win = new WindowTarget();
 Object.assign(win, { innerWidth: 1920, innerHeight: 1080 });
 const contexts = [], timers = new Map(), frames = new Map();
-let holdResume = false, mediaCalls = 0, sequence = 0;
+let holdResume = false, mediaCalls = 0, sequence = 0, clock = 0;
 const parameter = () => ({ value: 0, events: [], setValueAtTime(value, time) { this.value = value; this.events.push([value, time]); }, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime(value) { this.value = value; } });
 class AudioContext {
   constructor() { Object.assign(this, { currentTime: 0, state: holdResume ? 'suspended' : 'running', sampleRate: 44100, destination: {}, sources: [], resumes: [] }); contexts.push(this); }
@@ -16,7 +16,7 @@ class AudioContext {
     return new Promise((resolve, reject) => this.resumes.push({ resolve: () => { this.state = 'running'; resolve(); }, reject }));
   }
   close() { this.state = 'closed'; return Promise.resolve(); }
-  createGain() { return { gain: parameter(), connect() {}, disconnect() {} }; }
+  createGain() { const node = { gain: parameter(), connect() {}, disconnect() {} }; (this.gains ??= []).push(node); return node; }
   createDynamicsCompressor() { return { threshold: {}, knee: {}, ratio: {}, attack: {}, release: {}, connect() {}, disconnect() {} }; }
   createBiquadFilter() { return { frequency: parameter(), Q: {}, connect() {}, disconnect() {} }; }
   createBuffer(channels, length, sampleRate) { const data = Array.from({ length: channels }, () => new Float32Array(length)); return { numberOfChannels: channels, length, sampleRate, getChannelData: i => data[i] }; }
@@ -41,6 +41,7 @@ Object.assign(globalThis, {
   clearInterval: id => timers.delete(id),
   requestAnimationFrame: fn => { const id = ++sequence; frames.set(id, fn); return id; },
   cancelAnimationFrame: id => frames.delete(id),
+  performance: { now: () => clock },
 });
 
 const { createState, getCreations, getDraft, saveDraft, saveState, loadState } = await import('../src/progress.js');
@@ -61,13 +62,13 @@ const storage = () => { const data = new Map(); return { getItem: key => data.ge
 
 function mount(state = at(1), { pending = false } = {}) {
   doc.body.children = []; doc._active = null; doc.hidden = false;
-  contexts.length = 0; timers.clear(); frames.clear(); mediaCalls = 0; holdResume = pending;
+  contexts.length = 0; timers.clear(); frames.clear(); mediaCalls = 0; holdResume = pending; clock = 0;
   const stage = doc.createElement('div'); stage.className = 'stage'; doc.body.append(stage);
   let scene;
   const ctx = {
     stage, spoken: [], gone: [], getState: () => state,
     commit(next) { state = next; return state; },
-    speak(text) { ctx.spoken.push({ text, audioStopped: !sounding() }); return true; },
+    speak(text) { const utterance = new Target(); ctx.spoken.push({ text, audioStopped: !sounding(), utterance }); return utterance; },
     announce() {}, go(name, params) { ctx.gone.push([name, params]); return Promise.resolve(true); },
     scenes: { busy: false, pause() { scene.pause(); } },
     open: { help: (title, steps) => openHelpWindow(ctx, title, steps) },
@@ -214,7 +215,6 @@ test('pending automatic band playback is canceled by scene interruptions and nev
   const actions = {
     Stop: (ctx, scene) => slot(ctx, 'play').click(),
     Help: ctx => ctx.stage.querySelector('[data-act="help"]').click(),
-    Hear: ctx => ctx.stage.querySelector('[data-act="hear"]').click(),
     presets: ctx => ctx.stage.querySelector('.music-preset').click(),
     'See beat': ctx => slot(ctx, 'quiet').click(),
     hide: () => { doc.hidden = true; doc.dispatchEvent(new Event('visibilitychange')); },
@@ -239,19 +239,31 @@ test('pending automatic band playback is canceled by scene interruptions and nev
   }
 });
 
-test('Read to me allows explicit Play and See beat, while Hear stops sound before narration', async () => {
+test('Read to me keeps explicit Play and See beat active during narration', async () => {
   const state = at(3); state.settings.autoRead = true;
   const run = mount(state);
   try {
     await tick(); assert.equal(live().length, 0); assert.ok(run.ctx.spoken.length > 0);
     slot(run.ctx, 'play').click(); await tick();
     assert.equal(label(run.ctx, 'play'), 'Stop'); assert.ok(sounding(), 'transport feedback does not cancel explicit playback');
+    const master = live()[0].gains[0].gain;
+    const fullVolume = master.value;
     run.ctx.stage.querySelector('[data-act="hear"]').click();
-    assert.equal(run.ctx.spoken.at(-1).audioStopped, true);
-    assert.equal(label(run.ctx, 'play'), 'Play band');
+    assert.equal(run.ctx.spoken.at(-1).audioStopped, false);
+    assert.equal(label(run.ctx, 'play'), 'Stop');
+    assert.equal(master.value, fullVolume * .25, 'narration ducks the live band');
+    run.ctx.spoken.at(-1).utterance.fire(new Event('end'));
+    assert.equal(master.value, fullVolume, 'speech completion restores band volume');
+    run.ctx.stage.querySelector('button.music-lantern[data-beat="0"]').click();
+    assert.equal(label(run.ctx, 'play'), 'Stop', 'automatic narration after editing keeps playback active');
+    slot(run.ctx, 'tunes').click();
+    assert.equal(master.value, fullVolume, 'opening Sounds releases canceled narration ducking');
+    closeWindow(run.ctx.stage);
     slot(run.ctx, 'quiet').click(); await tick();
     assert.equal(label(run.ctx, 'quiet'), 'Stop', 'Read to me does not cancel the silent beat display');
     assert.equal(sounding(), false);
+    run.ctx.stage.querySelector('button.music-lantern[data-beat="1"]').click();
+    assert.equal(label(run.ctx, 'quiet'), 'Stop', 'automatic narration keeps the beat display active');
   } finally { run.cleanup(); }
 });
 
@@ -267,9 +279,10 @@ test('grade 2 Echo with Read to me finishes eight beats and leaves Minecraft mel
     const copied = getDraft(run.ctx.getState(), 'music');
     assert.equal(copied.preset, 'minecraft');
     assert.deepEqual(copied.tracks.find(track => track.id === 'melody').notes, patternsFor('minecraft').melody[0]);
-    assert.ok(copied.tracks.find(track => track.id === 'percussion').notes.every(note => note === null));
+    const existing = copied.tracks.find(track => track.id === 'percussion').notes;
+    assert.deepEqual(existing, defaultBandFor(2).tracks.find(track => track.id === 'percussion').notes);
     assert.equal(slot(run.ctx, 'save').disabled, true, 'listening to Echo does not finish the lesson');
-    for (const [beat, on] of pickEcho(0).entries()) if (on) run.ctx.stage.querySelector(`button.music-lantern[data-beat="${beat}"]`).click();
+    for (const [beat, on] of pickEcho(0).entries()) if (on !== (existing[beat] !== null)) run.ctx.stage.querySelector(`button.music-lantern[data-beat="${beat}"]`).click();
     assert.equal(run.ctx.stage.querySelector('.dlg__text').textContent, ECHO_LINES.matched);
     assert.equal(slot(run.ctx, 'save').disabled, false);
     assert.equal(sounding(), false);
@@ -293,6 +306,34 @@ test('explicit quiet preference survives storage reload and a new preset stays e
     slot(reopened.ctx, 'play').click(); await tick();
     assert.ok(sounding()); assert.equal(reopened.ctx.getState().settings.musicAutoplay, true);
   } finally { reopened.cleanup(); }
+});
+
+test('quiet preference and Read to me skip preset audition', async () => {
+  for (const setting of ['musicAutoplay', 'autoRead']) {
+    const state = at(3); state.settings[setting] = setting === 'autoRead';
+    const run = mount(state);
+    try {
+      await tick(); choosePreset(run.ctx, 'meadow'); await tick();
+      assert.equal(getDraft(run.ctx.getState(), 'music').preset, 'meadow');
+      assert.equal(live().length, 0, `${setting} prevents preset audio`);
+    } finally { run.cleanup(); }
+  }
+});
+
+test('quiet Echo starts visually without audio and preserves the child rail', async () => {
+  const state = at(2); state.settings.musicAutoplay = false;
+  const initial = defaultBandFor(2).tracks.find(track => track.id === 'percussion').notes;
+  const run = mount(state);
+  try {
+    run.ctx.stage.querySelector('[data-sign="echo"]').click(); await tick();
+    assert.equal(live().length, 0);
+    assert.ok(run.ctx.stage.querySelector('[data-sign="echo"]').classList.contains('is-busy'));
+    assert.ok(run.ctx.stage.querySelector('button.music-lantern[data-beat="0"]').classList.contains('is-lit'));
+    clock = 10000; for (const timer of [...timers.values()]) timer.fn();
+    assert.equal(run.ctx.stage.querySelector('[data-sign="echo"]').classList.contains('is-busy'), false);
+    assert.deepEqual(getDraft(run.ctx.getState(), 'music').tracks.find(track => track.id === 'percussion').notes, initial);
+    assert.equal(live().length, 0);
+  } finally { run.cleanup(); }
 });
 
 test('published Minecraft edits and B phrase drive the same notes in stage, WAV rendering and parade', async () => {

@@ -41,10 +41,13 @@ const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 const slot = (stage, id) => stage.querySelectorAll('.cmd-slot').find(b => b.dataset.id === id);
 const at = grade => (grade === 0 ? { ...createState(), chapter: 0 } : { ...createState(), chapter: 1, grade });
 const text = ctx => ctx.stage.querySelector('.dlg__text').textContent;
-function completeLesson(ctx, grade) {
+async function completeLesson(ctx, grade) {
   if (grade === 0) { slot(ctx.stage, 'quiet').click(); return; }
   const lanterns = ctx.stage.querySelectorAll('button.music-lantern');
   if (grade === 2) {
+    fakeTimers();
+    ctx.stage.querySelector('[data-sign="echo"]').click();
+    await tick(); runTicks(8); realTimers();
     pickEcho(0).forEach((on, i) => { if ((lanterns[i].getAttribute('aria-pressed') === 'true') !== on) lanterns[i].click(); });
   } else lanterns[grade === 1 ? 1 : 0].click();
 }
@@ -127,7 +130,7 @@ test('each grade finishes its lesson and the published band stays ready after st
     const ctx = fakeCtx(at(grade)), scene = createMusicScene(ctx); scene.mount();
     try {
       assert.equal(slot(ctx.stage, 'save').disabled, true, `grade ${grade} starts unready`);
-      completeLesson(ctx, grade);
+      await completeLesson(ctx, grade);
       assert.equal(slot(ctx.stage, 'save').disabled, false);
       slot(ctx.stage, 'save').click(); await tick();
       const card = ctx.stage.querySelector('.item-get');
@@ -135,7 +138,7 @@ test('each grade finishes its lesson and the published band stays ready after st
       card.firstElementChild.click(); await tick();
       assert.ok(getCreations(ctx.getState()).music);
       assert.equal(isEdited(getCreations(ctx.getState()).music, grade), grade > 0, 'only K may send an untouched score');
-      assert.equal(lessonDone(getCreations(ctx.getState()).music, {}, grade), grade > 0, 'later lessons survive without scene flags');
+      assert.equal(lessonDone(getCreations(ctx.getState()).music, {}, grade), grade > 0 && grade !== 2, 'scores alone do not prove Echo participation');
       assert.equal(saveState(ctx.getState(), storage), true);
     } finally { scene.destroy(); }
     const restored = loadState(storage);
@@ -149,7 +152,7 @@ test('each grade finishes its lesson and the published band stays ready after st
   }
 });
 
-test('matching lesson drafts survive reload without publishing or saving scene flags', () => {
+test('saved edits survive reload but a stock rhythm alone cannot prove Echo participation', () => {
   for (const preset of ['minecraft', 'meadow']) for (const grade of [1, 2, 3, 4, 5]) {
     const state = at(grade), band = defaultBandFor(grade, preset);
     const changed = grade === 1 ? toggleBeat(band, 'percussion', 1)
@@ -160,7 +163,7 @@ test('matching lesson drafts survive reload without publishing or saving scene f
     assert.equal(getCreations(restored).music, undefined);
     const ctx = fakeCtx(restored), scene = createMusicScene(ctx); scene.mount();
     try {
-      assert.equal(slot(ctx.stage, 'save').disabled, false, `${preset}, grade ${grade} saved lesson is ready`);
+      assert.equal(slot(ctx.stage, 'save').disabled, grade === 2, `${preset}, grade ${grade} requires the lesson evidence`);
       for (const key of ['played', 'playedOnce', 'echoed', 'published']) assert.equal(Object.hasOwn(getDraft(ctx.getState(), 'music'), key), false);
     } finally { scene.destroy(); }
   }
@@ -348,7 +351,8 @@ test('audible Echo lights follow scheduled audio after a delayed tick and stop a
     for (const timer of [...timers.values()]) timer.fn();
     paint();
     assert.equal(text(ctx), ECHO_LINES.copy);
-    assert.ok(lanterns.every(l => l.classList.contains('is-rest') && !l.classList.contains('is-lit')));
+    assert.ok(lanterns.every(l => !l.classList.contains('is-lit')));
+    assert.deepEqual(getDraft(ctx.getState(), 'music').tracks[3].notes, defaultBandFor(2).tracks[3].notes);
     assert.equal(timers.size, 0, 'audio scheduler is stopped');
     assert.equal(frames.size, 0, 'stopping from onBeat leaves no animation frame');
     // If the browser suspends a later demonstration, it must not stay busy waiting for beats.
@@ -385,7 +389,7 @@ test('silent Echo uses elapsed time after delayed callbacks at every speed', asy
   } finally { realTimers(); }
 });
 
-test('grade 2: Echo plays a demo at the band’s speed, clears Cricket, a live match ends it, a wrong copy is told', async () => {
+test('grade 2: Echo preserves Cricket, a live match ends it, a wrong copy is told', async () => {
   fakeTimers();
   try {
     const ctx = fakeCtx(at(2)), scene = createMusicScene(ctx); scene.mount();
@@ -400,7 +404,8 @@ test('grade 2: Echo plays a demo at the band’s speed, clears Cricket, a live m
     assert.ok(ls[0].classList.contains('is-lit'), 'beat 1 lit by the ticker (pattern 0 starts with a sound)');
     runTicks(8);
     assert.match(text(ctx), /Your turn/);
-    assert.ok(ls.every(l => l.classList.contains('is-rest')), 'rail cleared to rests');
+    assert.deepEqual(getDraft(ctx.getState(), 'music').tracks[3].notes, defaultBandFor(2).tracks[3].notes, 'demo preserves the score');
+    ls.forEach(l => { if (l.getAttribute('aria-pressed') === 'true') l.click(); });
     assert.ok(!echo.classList.contains('is-busy'));
     assert.equal(timers.size, 0, 'the demo clock is gone');
     assert.equal(slot(ctx.stage, 'save').disabled, true, 'watching the demo and clearing Cricket do not complete Echo');
@@ -455,16 +460,17 @@ test('Echo retries replay the target until a successful copy unlocks the next rh
     const echo = ctx.stage.querySelector('[data-sign="echo"]');
     const lanterns = ctx.stage.querySelectorAll('button.music-lantern');
     const demonstrate = async () => {
+      const before = (getDraft(ctx.getState(), 'music') ?? defaultBandFor(2)).tracks[3].notes;
       echo.click(); await tick();
       const mask = [lanterns[0].classList.contains('is-lit')];
       for (let beat = 1; beat < 8; beat++) { runTicks(1); mask.push(lanterns[beat].classList.contains('is-lit')); }
       runTicks(1);
-      assert.ok(lanterns.every(l => l.classList.contains('is-rest')));
+      assert.deepEqual(getDraft(ctx.getState(), 'music').tracks[3].notes, before, 'replay preserves the exact child score');
       return mask;
     };
     const first = await demonstrate();
     assert.deepEqual(first, [true, false, false, true, false, false, true, false]);
-    for (const beat of [1, 2, 4]) lanterns[beat].click();
+    lanterns.forEach((l, i) => { if ((l.getAttribute('aria-pressed') === 'true') !== [1, 2, 4].includes(i)) l.click(); });
     assert.equal(text(ctx), ECHO_LINES.notYet);
     assert.deepEqual(await demonstrate(), first, 'an incorrect copy retries the same target');
     // Interrupt a retry before the demonstration finishes, then replay the same target again.
@@ -472,7 +478,7 @@ test('Echo retries replay the target until a successful copy unlocks the next rh
     scene.pause();
     assert.equal(text(ctx), ECHO_LINES.stopped);
     assert.deepEqual(await demonstrate(), first, 'stopping a demo does not skip its target');
-    for (const beat of [0, 3, 6]) lanterns[beat].click();
+    lanterns.forEach((l, i) => { if ((l.getAttribute('aria-pressed') === 'true') !== [0, 3, 6].includes(i)) l.click(); });
     assert.equal(text(ctx), ECHO_LINES.matched);
     assert.deepEqual(await demonstrate(), [true, true, false, false, true, true, false, false]);
   } finally { scene.destroy(); realTimers(); }
@@ -677,4 +683,55 @@ test('Sounds edit feedback reaches a live region inside the modal with Read to m
     assert.equal(ctx.stage.querySelector('.win [aria-live="polite"]'), live, 'panel repaint keeps the live region');
     for (let at = live; at; at = at.parentElement) assert.equal(at.inert, false);
   } finally { scene.destroy(); }
+});
+
+test('an untouched visit creates no music draft, while explicit play and edits do', async () => {
+  for (const grade of [0, 1, 2, 3, 4, 5]) {
+    for (const action of ['leave', 'quiet', 'edit']) {
+      const state = at(grade); state.settings.musicAutoplay = false;
+      const ctx = fakeCtx(state), scene = createMusicScene(ctx); scene.mount();
+      try {
+        if (action === 'quiet') slot(ctx.stage, 'quiet').click();
+        if (action === 'edit') ctx.stage.querySelector('[data-sign="speed"]').click();
+        scene.handleIntent('b'); await tick();
+        assert.equal(Boolean(getDraft(ctx.getState(), 'music')), action !== 'leave', `grade ${grade}: ${action}`);
+        assert.equal(ctx.gone.at(-1)[0], 'village');
+      } finally { scene.destroy(); }
+    }
+  }
+});
+
+test('Echo lights and copy finish while audio resume never settles; a late resume cannot play', async () => {
+  fakeTimers();
+  const original = globalThis.AudioContext;
+  let resume, starts = 0;
+  const parameter = () => ({ setValueAtTime() {}, setTargetAtTime() {} });
+  globalThis.AudioContext = class {
+    constructor() { this.state = 'running'; this.currentTime = 0; this.destination = {}; }
+    resume() { return new Promise(resolve => { resume = resolve; }); }
+    close() { return Promise.resolve(); }
+    createGain() { return { gain: parameter(), connect() {}, disconnect() {} }; }
+    createDynamicsCompressor() { return { threshold: {}, knee: {}, ratio: {}, attack: {}, release: {}, connect() {}, disconnect() {} }; }
+    createOscillator() { starts++; throw new Error('a canceled resume must never schedule notes'); }
+  };
+  const state = at(2); state.settings.autoRead = true;
+  const ctx = fakeCtx(state), scene = createMusicScene(ctx); scene.mount();
+  try {
+    const before = defaultBandFor(2).tracks[3].notes;
+    ctx.stage.querySelector('[data-sign="echo"]').click();
+    const lanterns = ctx.stage.querySelectorAll('button.music-lantern');
+    assert.ok(lanterns[0].classList.contains('is-lit'), 'visual first beat does not wait for resume');
+    runTicks(3);
+    assert.ok(lanterns[3].classList.contains('is-lit'));
+    runTicks(5);
+    assert.equal(text(ctx), ECHO_LINES.copy);
+    assert.equal(timers.size, 0);
+    assert.deepEqual(getDraft(ctx.getState(), 'music').tracks[3].notes, before);
+    resume(); await tick();
+    assert.equal(starts, 0);
+    assert.equal(text(ctx), ECHO_LINES.copy);
+  } finally {
+    scene.destroy(); realTimers();
+    if (original === undefined) delete globalThis.AudioContext; else globalThis.AudioContext = original;
+  }
 });
