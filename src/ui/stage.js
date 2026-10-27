@@ -24,9 +24,22 @@ export function visibleViewport(host) {
   const editing = active?.matches('input, textarea, select') || active?.isContentEditable;
   const standalone = host.navigator?.standalone || host.matchMedia?.('(display-mode: standalone), (display-mode: fullscreen)').matches;
   if (standalone && visible.scale === 1 && !editing) {
-    // iOS Home Screen launches can retain Safari's old visual height and offsets.
-    // Only trust the larger layout height without browser bars, zoom, or a keyboard.
-    visible.height = Math.max(visible.height, host.document?.documentElement?.clientHeight || 0);
+    const screen = host.screen;
+    const direction = screen?.orientation?.type;
+    if (/iPhone|iPod/.test(host.navigator?.userAgent ?? '') &&
+        screen?.width > 0 && screen?.height > 0 && /^(portrait|landscape)-/.test(direction)) {
+      // On iPhone Home Screen cold launches, inner/visual/client height and 100dvh
+      // can ALL exclude the portrait status bar (956x378 on a 956x440 screen).
+      // screen dimensions stay portrait-based on iOS; orientation is independent
+      // of the stale web viewport, including after background/rotation.
+      const short = Math.min(screen.width, screen.height), long = Math.max(screen.width, screen.height);
+      const landscape = direction.startsWith('landscape');
+      visible.width = landscape ? long : short;
+      visible.height = landscape ? short : long;
+      visible.screenSized = true;
+    } else {
+      visible.height = Math.max(visible.height, host.document?.documentElement?.clientHeight || 0);
+    }
     visible.left = 0;
     visible.top = 0;
   }
@@ -45,6 +58,8 @@ const playAnyway = {
 };
 
 export function mountStage(root) {
+  const body = document.body;
+  const bodySize = { width: body.style.width, height: body.style.height };
   const viewport = document.createElement('div');
   viewport.className = 'stage-viewport';
   const stage = document.createElement('div');
@@ -78,8 +93,13 @@ export function mountStage(root) {
         left: parseFloat(padding.paddingLeft), right: parseFloat(padding.paddingRight),
         top: parseFloat(padding.paddingTop), bottom: parseFloat(padding.paddingBottom),
       };
-      const measurement = [view.width, view.height, view.left, view.top, ...Object.values(safeArea)].join(',');
+      const measurement = [view.width, view.height, view.left, view.top, view.screenSized, ...Object.values(safeArea)].join(',');
       if (measurement !== lastMeasurement) {
+        // A fixed body remains clipped to WebKit's stale launch viewport even
+        // with an explicit height. Put this screen-sized body in document flow.
+        body.classList.toggle('standalone-screen', Boolean(view.screenSized));
+        body.style.width = view.screenSized ? `${view.width}px` : bodySize.width;
+        body.style.height = view.screenSized ? `${view.height}px` : bodySize.height;
         viewport.style.left = `${view.left}px`;
         viewport.style.top = `${view.top}px`;
         viewport.style.width = `${view.width}px`;
@@ -151,6 +171,9 @@ export function mountStage(root) {
     orientation?.removeEventListener('change', settle);
     visualViewport?.removeEventListener('resize', fit);
     visualViewport?.removeEventListener('scroll', fit);
+    body.style.width = bodySize.width;
+    body.style.height = bodySize.height;
+    body.classList.remove('standalone-screen');
     viewport.remove();
   } };
 }

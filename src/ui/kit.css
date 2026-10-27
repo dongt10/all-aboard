@@ -20,6 +20,9 @@ body.game {
   padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   touch-action: manipulation; overscroll-behavior: none;
 }
+/* iPhone Home Screen launches can clip fixed body layers at a stale status-bar
+   height. stage.js supplies the oriented screen size; keep that body in flow. */
+body.game.standalone-screen { position: static; overflow: visible; }
 .stage {
   position: absolute; left: 0; top: 0; width: 960px; height: 540px; overflow: hidden; transform-origin: 0 0;
   background: var(--sky); color: var(--ink); font-family: var(--font-read); font-size: var(--text-body); line-height: 1.35;
