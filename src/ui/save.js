@@ -75,7 +75,7 @@ export const gradeChoices = () => GRADE_CHOICES.map(choice => ({ ...choice }));
 
 // Kindergarten keeps the last elementary grade, so switching back lands where the child left off.
 export function chooseGrade(state, choice) {
-  return choice.chapter === 0 ? { ...state, chapter: 0, hasStarted: true } : { ...state, chapter: 1, grade: choice.grade, hasStarted: true };
+  return choice.chapter === 0 ? { ...state, chapter: 0 } : { ...state, chapter: 1, grade: choice.grade };
 }
 
 export const isChosenGrade = (state, choice) => state.chapter === choice.chapter && (choice.chapter === 0 || state.grade === choice.grade);

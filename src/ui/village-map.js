@@ -30,12 +30,12 @@ export async function loadRoad(src = ROAD_MASK, { blocked } = {}) {
     const finish = (error, mask) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
       img.onload = img.onerror = null;
       if (error) reject(error);
       else { cachedMask = mask; cachedSrc = src; resolve(mask); }
     };
-    const timer = setTimeout(() => finish(new Error('The village map took too long to load.')), 3000);
+    // Slow connections can still deliver a valid map. Keep listening until the
+    // image loads or reports an actual error; elapsed time is not a failure.
     img.onload = () => {
       if (settled) return;
       try {

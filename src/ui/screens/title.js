@@ -80,7 +80,6 @@ export function createTitleScene(ctx) {
     }
   }
   const start = onceAtATime(async () => {
-    if (!ctx.getState().hasStarted) ctx.commit({ ...ctx.getState(), hasStarted: true });
     await ctx.go('village');
   });
 
