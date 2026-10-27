@@ -2,10 +2,16 @@
 
 Changes to All Aboard, grouped by release.
 
-## Unreleased
+## 2026-10-27 · v0.3.0
 
 ### Added
 
+- Neighbors react to what you made. Back in the village, the neighbor whose creation you just added says one true thing about it: Taro counts the crates or the plates and slices, Momo names the shaded tray or the cup you changed, Sora lists what you packed, Yuki counts the stamps and names the colors, Hana names the bench, garden and sign, the errands or the crew, and Kiko names the friends who play, the speed, the tune's direction and the form. A short sign is read back word for word by its reader (Momo, Taro, Pip, Nori, Sora, Yuki or Kiko) when the sign was for them. Every line comes from the saved creation; when the save cannot support a detail, the neighbor just says thank you.
+- Try another: once a neighbor's thing is made, the encounter offers a second request for every activity except music: a different starting load, crate target or slice count, the other cup condition, a tray that starts shaded, the pond or bay chain, three different things to pack, the other story or a new tale deck, a new pattern or mirror count, a new sign prompt, a new square goal, a different errand set, the other Help Day set. The request is saved with the draft, the stamp stays, and the creation at the stall stays until the new one is finished. Old saves open as the first request.
+- Show me: Help in every encounter has a Show me button that plays the neighbor's short example on separate work (two to six steps, said aloud with Read to me), then hands the turn back with the child's exact work restored. Next and Stop chips, A advances and B stops; Calm motion and the device's reduce-motion setting step on tap instead of a timer.
+- Help shows one step at a time: a big Step 1 of 4, the step's picture, Hear, Back and Next (Got it on the last step).
+- A Now / Next / Finish picture strip beside every activity field: the current step and the next one with a picture each, the finish command's name, and a green Finish once the work is ready. The step comes from the saved work, so it moves as the child goes.
+- Phones: a new save on a phone starts with Bigger words on (Comfort can turn it off and the choice is kept); nothing a child reads is smaller than 20 logical pixels on a phone; title toggles, HUD buttons, the command menu, the More chip, window buttons, music lanterns and Sounds controls grow to 56 or 64 logical pixels inside their existing boxes, without moving any part of the 960×540 scene.
 - A title-screen Full screen toggle on supported browsers, with a readable message if the browser refuses; iPhone Safari instead shows a dismissible, remembered Add to Home Screen tip with Hear.
 - A landscape Home Screen manifest and 192, 512 and Apple 180 px icons made from Pip’s existing standing sprite.
 - Taro’s crate rows for grade 2: build equal rows, read their sum, pair crates to see odd or even, and Send cart when the rows match the order.

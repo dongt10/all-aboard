@@ -7,7 +7,7 @@ All Aboard is a playable village adventure for **Kindergarten and grades 1–5**
 **[Play now](https://playallaboard.com)** — no installation needed.
 
 1. Choose a character and grade, then select **Start** (or **Continue** on a return visit).
-2. Visit a neighbor and follow the activity’s Help steps.
+2. Visit a neighbor and follow Help one step at a time, or choose **Show me** to watch the neighbor’s example.
 3. Finish creations and join the parade from the festival board.
 
 ## Credits
@@ -44,7 +44,7 @@ There are no packages to install, API keys to add, or accounts to create.
 
 Open **[http://127.0.0.1:4173](http://127.0.0.1:4173)** in your browser. Keep Terminal running while you play; press **Control + C** in Terminal to stop the server. This address works on the computer running the game.
 
-**On a phone:** Open [playallaboard.com](https://playallaboard.com) and turn the phone sideways. The game fits the visible screen, keeping controls clear of the camera cutout and home indicator. For full screen on iPhone Safari, choose **Share → Add to Home Screen**, then open All Aboard from its icon. The title screen shows this tip once until dismissed, with **Hear** to read it. Browsers that support it also have a **Full screen** button on the title screen. **Bigger words** and browser pinch zoom are available; portrait still offers **Play anyway**.
+**On a phone:** Open [playallaboard.com](https://playallaboard.com) and turn the phone sideways. The game fits the visible screen, keeping controls clear of the camera cutout and home indicator. For full screen on iPhone Safari, choose **Share → Add to Home Screen**, then open All Aboard from its icon. The title screen shows this tip once until dismissed, with **Hear** to read it. Browsers that support it also have a **Full screen** button on the title screen. A new save on a phone starts with **Bigger words** on (Comfort can turn it off, and the choice is kept), text never drops below 20 logical pixels, and the main buttons are larger. Browser pinch zoom is available; portrait still offers **Play anyway**.
 
 <details>
 <summary><strong>Having trouble starting?</strong></summary>
@@ -64,6 +64,8 @@ Open **[http://127.0.0.1:4173](http://127.0.0.1:4173)** in your browser. Keep Te
 - **Open the Guide** (top right) to meet the whole cast. It is the Matsuri Guide, “the town’s character book.” Each neighbor’s page says what you’ll learn, and shows the stamp once you make their thing. Choose **Find** for an arrow that leads you to them, or **Visit** to go straight to their activity. The header counts your stamps, “0 of 7 stamps.”
 - **Help each neighbor make something.** Kindergarten and grade 1 balance Taro’s cart, shade Momo’s ice, pack Sora’s story bag, and plan Hana’s square. Grade 2 builds Taro’s crate rows, compares cups in Momo’s bean test, follows Hana’s compass errands, and puts Sora’s story ribbon in order. Grades 3–5 share pizza, build a food-chain chart, name tales with evidence, and match helpers to jobs. Every grade also stamps Yuki’s banner, writes Fumi’s sign, and makes a band with Kiko, with goals that grow by grade. The table below explains each task.
 - **Finish your creation.** Each encounter shows at most four commands. The green finish command is last and stays gray until the work is ready: **Send cart**, **Serve ice**, **Share story**, **Open square**, **Plant bed**, **Hang map**, **Share ribbon**, **Serve pizza**, **Pin chart**, **Share tales**, **Start day**, **Hang banner**, **Put up sign**, or **Send band**. In the story bag, **Share story** appears after all three things are packed. Help names the steps and the finish. A wrong try explains why and keeps your work. Finishing shows what you made, then puts it at that neighbor’s stall.
+- **Neighbors notice.** Back in the village, the neighbor says something true about what you made: Taro counts the crates, Yuki counts the stamps and names the colors, Hana names the bench and garden, and a short sign is read back word for word by the neighbor it was for. Kiko celebrates a sent band.
+- **Try another.** Once a stall is done, its encounter offers **Try another**: a different load, slice count, story, pattern, errand set or sign prompt (every activity except music). Your stamp stays, and the creation at the stall stays until you finish the new one.
 - **Festival board** (bottom left) reads “Festival board · 0 of 7” and fills in as you make things. After your first creation, the **Parade** button appears beside it.
 - **Parade.** Everyone who helped marches with what you made. **Play band** plays your band if you made one with Kiko. After two laps (right away with Calm motion) the line stops and the dialogue says “The parade is over. Make more, and march again!” **March again** restarts it.
 - **The finale at seven.** With all seven made, the board says “7 of 7 · Festival complete!” and the parade ends with “Everyone marched! You made the whole festival.”
@@ -80,7 +82,7 @@ Everything saves in this browser, separately for Kindergarten and each grade.
 | Back (B) | Esc, X, or Backspace | ← Village, or a window’s close button |
 | Next page | Enter, Space, or Z (the A action) | Tap the dialogue |
 
-Every dialogue box has a **Hear** tab that reads the current line and a **Help** tab with numbered steps for that screen. In Fumi’s text field, Esc moves focus to the commands; press it again to return to the village. Other keys stay in the field.
+Every dialogue box has a **Hear** tab that reads the current line and a **Help** tab that shows that screen’s steps one at a time (Step 1 of 4, with Hear, Back and Next). In an encounter, Help also offers **Show me**: the neighbor plays a short example on separate work, with Next and Stop, then hands your work back exactly as it was. Beside the field, a **Now / Next / Finish** strip shows the current step with a picture and lights up Finish when your work is ready. In Fumi’s text field, Esc moves focus to the commands; press it again to return to the village. Other keys stay in the field.
 
 Tap a house or grass and you stop at the road’s edge. With nobody nearby, Enter shows a walking hint that closes after three seconds and moves above the player when needed. Read to me finishes the spoken hint before the closing delay.
 
