@@ -528,7 +528,8 @@ function speechFixture(t) {
   const utterances = [];
   for (const [key, value] of Object.entries({
     SpeechSynthesisUtterance: class extends Target { constructor(text) { super(); this.text = text; } },
-    speechSynthesis: { cancel() {}, speak: utterance => utterances.push(utterance) },
+    speechSynthesis: { cancel() {}, speak: utterance => utterances.push(utterance),
+      getVoices: () => [{ name: 'Test narrator', lang: 'en-US', localService: true }] },
   })) {
     const original = Object.getOwnPropertyDescriptor(globalThis, key);
     Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });

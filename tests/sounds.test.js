@@ -4,12 +4,42 @@ import { readFileSync } from 'node:fs';
 import { createDefaultBand, createBandPreset, PATTERNS } from '../src/audio.js';
 import { CAST } from '../src/music.js';
 import { setTrackNotes, toggleBeat, cycleNote, noteLabel, setPattern } from '../src/ui/band.js';
-import { LEVELS, levelOf, noteStep, LEAD_LINES, leadLine, soundsPlan, soundsHeight, BODY_BUDGET, hintLine, tuneLine, beatLine, levelLine, playsPattern, soundsPanelMarkup, focusKey, keepFocus, nextTabId, levelEdit } from '../src/ui/screens/sounds.js';
+import { LEVELS, levelOf, noteStep, LEAD_LINES, leadLine, soundsPlan, soundsHeight, BODY_BUDGET, hintLine, tuneLine, beatLine, levelLine, playsPattern, soundsPanelMarkup, openSoundsWindow, focusKey, keepFocus, nextTabId, levelEdit } from '../src/ui/screens/sounds.js';
+import { Doc, Event } from './helpers/dom.js';
 import { declarations, withoutComments, resolveVars } from './helpers/css.js';
 import { creationMarkup } from '../src/ui/creations.js';
 
 const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const count = (html, re) => (html.match(re) ?? []).length;
+
+test('mounted musician tabs control the panel and label it as selection changes', () => {
+  const previous = globalThis.document, doc = new Doc();
+  globalThis.document = doc;
+  try {
+    const stage = doc.createElement('div'); doc.body.append(stage);
+    const win = openSoundsWindow({ stage }, { getBand: createDefaultBand, getSelected: () => 'bass' });
+    const panel = win.body.querySelector('[role="tabpanel"]');
+    const tabs = win.body.querySelectorAll('[role="tab"]');
+    const ids = tabs.map(tab => tab.getAttribute('id'));
+    assert.equal(new Set(ids).size, CAST.length);
+    for (const tab of tabs) assert.equal(tab.getAttribute('aria-controls'), panel.getAttribute('id'));
+    const check = id => {
+      const selected = win.body.querySelector(`[data-tab="${id}"]`);
+      assert.equal(selected.getAttribute('aria-selected'), 'true');
+      assert.equal(panel.getAttribute('aria-labelledby'), selected.getAttribute('id'));
+      assert.equal(tabs.filter(tab => tab.getAttribute('aria-selected') === 'true').length, 1);
+      return selected;
+    };
+    check('bass');
+    win.body.querySelector('[data-tab="voice"]').click();
+    const voice = check('voice');
+    voice.dispatchEvent(new Event('keydown', { key: 'ArrowRight' }));
+    check(nextTabId('voice', 'ArrowRight'));
+    win.close();
+  } finally {
+    if (previous === undefined) delete globalThis.document; else globalThis.document = previous;
+  }
+});
 const onePage = line => { assert.ok(typeof line === 'string' && line.length <= 56, `${line} (${line?.length})`); for (const s of line.split(/(?<=[.!?])\s+/)) assert.ok(s.length <= 56, s); };
 
 test('K sets a friend loud or soft with two buttons; 0.7 is the line between them', () => {

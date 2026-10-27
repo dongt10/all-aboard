@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import { Doc } from './helpers/dom.js';
 import { ALLOW_REMOTE_VOICES, pickVoice } from '../src/ui/voice.js';
 
 const voice = (name, extra = {}) => ({ name, lang: 'en-US', localService: true, ...extra });
@@ -40,13 +41,14 @@ test('name matching is case insensitive and respects word boundaries', () => {
   assert.equal(pickVoice([voice('Samanthabelle'), ava]), ava);
 });
 
-test('remote voices including defaults are excluded; missing locality counts as local', () => {
+test('remote voices and voices with unknown locality are excluded', () => {
   assert.equal(ALLOW_REMOTE_VOICES, false);
   const remote = [voice('Microsoft Jenny Online (Natural)', { localService: false, default: true }),
     voice('Samantha (Premium)', { localService: false }), voice('Google US English', { localService: false })];
   const local = voice('Other'), unknown = voice('Samantha', { localService: undefined });
   assert.equal(pickVoice([...remote, local]), local);
-  assert.equal(pickVoice([...remote, local, unknown]), unknown);
+  assert.equal(pickVoice([...remote, local, unknown]), local);
+  assert.equal(pickVoice([unknown]), null);
   assert.equal(pickVoice(remote), null);
 });
 
@@ -139,39 +141,37 @@ test('module discovers voices immediately; speak returns the actual configured e
   }
   f.speak('Next page');
   assert.deepEqual(f.calls.map(call => call[0]), ['cancel', 'speak', 'cancel', 'speak']);
-  assert.equal(f.reads, 1, 'selection is cached between inventory events');
+  assert.equal(f.reads, 3, 'each request refreshes the inventory');
 });
 
 for (const property of [false, true]) test(`first Hear is synchronous; every inventory event refreshes selection (property=${property})`, async t => {
   const f = await fixture(t, { property });
   const first = f.speak('Hello');
-  assert.deepEqual(f.calls, [['cancel'], ['speak', first]], 'no timer, promise, or voiceschanged wait');
-  assert.equal(first.lang, 'en-US');
-  assert.equal(first.voice, null);
+  assert.equal(first, false);
+  assert.deepEqual(f.calls, [['cancel']]);
   const samantha = voice('Samantha'), ava = voice('Ava');
   f.change([ava, samantha]);
-  assert.equal(f.reads, 2);
-  assert.equal(f.calls.length, 2, 'inventory changes never replay speech');
+  assert.equal(f.reads, 3);
+  assert.equal(f.calls.length, 1, 'inventory changes never replay speech');
   assert.equal(f.speak('Hello again').voice, samantha);
-  assert.equal(first.voice, null, 'existing utterance stays intact');
   f.change([ava]);
   assert.equal(f.speak('New inventory').voice, ava);
   f.change([]);
-  assert.equal(f.speak('Empty again').voice, null);
-  assert.equal(f.reads, 4);
+  assert.equal(f.speak('Empty again'), false);
+  assert.equal(f.reads, 8);
   if (property) assert.equal(f.previousEvents, 3, 'fallback preserves the previous property handler');
   else assert.equal(typeof f.synth.onvoiceschanged, 'function', 'event registration preserves the property handler');
 });
 
-test('minimal synth without discovery methods still speaks and stops', async t => {
+test('minimal synth without discovery methods does not speak and can stop', async t => {
   const f = await fixture(t, { minimal: true });
-  assert.equal(f.speak('Hello').lang, 'en-US');
+  assert.equal(f.speak('Hello'), false);
   assert.equal(f.stopSpeaking(), undefined);
-  assert.deepEqual(f.calls.map(call => call[0]), ['cancel', 'speak', 'cancel']);
+  assert.deepEqual(f.calls.map(call => call[0]), ['cancel', 'cancel']);
 });
 
 test('empty and nullish inputs return false after cancelling; string conversion is unchanged', async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, { voices: [voice('Samantha')] });
   for (const input of ['', ' \n\t ', null, undefined]) assert.equal(f.speak(input), false);
   assert.deepEqual(f.calls, Array.from({ length: 4 }, () => ['cancel']));
   assert.equal(f.speak(0).text, '0');
@@ -187,10 +187,125 @@ for (const missing of ['synthMissing', 'utteranceMissing']) test(`unavailable sp
 });
 
 test('stopSpeaking cancels before and after speech and never schedules a restart', async t => {
-  const f = await fixture(t);
+  const f = await fixture(t, { voices: [voice('Samantha')] });
   f.stopSpeaking();
   f.speak('Hello');
   f.stopSpeaking();
   f.change([voice('Samantha')]);
   assert.deepEqual(f.calls.map(call => call[0]), ['cancel', 'cancel', 'speak', 'cancel']);
+});
+
+
+function withDocument(t) {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  const doc = new Doc();
+  doc.body.style.removeProperty = function (name) { delete this[name]; };
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: doc });
+  t.after(() => original ? Object.defineProperty(globalThis, 'document', original) : delete globalThis.document);
+  return doc;
+}
+
+test('failure notice persists, discovery updates it, and Hear retries without replaying', async t => {
+  const doc = withDocument(t);
+  const f = await fixture(t);
+  assert.equal(f.speak('Hello'), false);
+  const notice = doc.body.querySelector('.voice-status');
+  assert.equal(notice.getAttribute('role'), 'status');
+  assert.match(notice.textContent, /unavailable.*English voice on this device.*press Hear/i);
+  assert.equal(notice.children.length, 0);
+  f.change([voice('Samantha')]);
+  assert.match(notice.textContent, /ready.*press Hear/i);
+  assert.equal(f.calls.filter(([call]) => call === 'speak').length, 0);
+  f.change([]);
+  assert.match(notice.textContent, /Voice unavailable/);
+  f.change([voice('Samantha')]);
+  const spoken = f.speak('Hello');
+  spoken.dispatchEvent(new Event('error'));
+  assert.match(notice.textContent, /Voice failed/);
+  f.speak('Hello').dispatchEvent(new Event('end'));
+  assert.equal(notice.isConnected, false);
+});
+
+for (const options of [{ synthMissing: true }, { utteranceMissing: true }, { voices: [voice('Remote', { localService: false })] }, { voices: [voice('Unknown', { localService: undefined })] }]) {
+  test('unavailable APIs or unconfirmed voices show status and never speak ' + JSON.stringify(options), async t => {
+    const doc = withDocument(t);
+    const f = await fixture(t, options);
+    assert.equal(f.speak('Hello'), false);
+    assert.match(doc.body.querySelector('.voice-status').textContent, /Voice unavailable/);
+    assert.equal(f.calls.some(([call]) => call === 'speak'), false);
+  });
+}
+
+test('thrown and asynchronous synthesis errors show status; canceled errors do not', async t => {
+  const doc = withDocument(t);
+  const f = await fixture(t, { voices: [voice('Samantha')] });
+  f.synth.speak = () => { throw new Error('failed'); };
+  assert.equal(f.speak('Hello'), false);
+  assert.match(doc.body.querySelector('.voice-status').textContent, /Voice failed/);
+  f.synth.speak = () => {};
+  const ok = f.speak('Next');
+  ok.dispatchEvent(new Event('end'));
+  for (const error of ['canceled', 'interrupted']) {
+    const spoken = f.speak('Next');
+    const event = new Event('error'); event.error = error;
+    spoken.dispatchEvent(event);
+    assert.equal(doc.body.querySelector('.voice-status'), null);
+  }
+  f.speak('Next').dispatchEvent(new Event('error'));
+  assert.match(doc.body.querySelector('.voice-status').textContent, /Voice failed/);
+});
+
+test('events from superseded or stopped requests do not change the notice', async t => {
+  const doc = withDocument(t);
+  const f = await fixture(t, { voices: [voice('Samantha')] });
+  const old = f.speak('Old'), current = f.speak('Current');
+  current.dispatchEvent(new Event('error'));
+  const notice = doc.body.querySelector('.voice-status');
+  old.dispatchEvent(new Event('end'));
+  assert.equal(notice.isConnected, true);
+  const next = f.speak('Next');
+  next.dispatchEvent(new Event('end'));
+  old.dispatchEvent(new Event('error'));
+  assert.equal(doc.body.querySelector('.voice-status'), null);
+  f.stopSpeaking();
+  next.dispatchEvent(new Event('error'));
+  assert.equal(doc.body.querySelector('.voice-status'), null);
+});
+
+test('Hear refreshes voices even when no discovery event arrives', async t => {
+  const f = await fixture(t, { voices: [] });
+  assert.equal(f.speak('Hello'), false);
+  const local = voice('Samantha');
+  f.synth.getVoices = () => [local];
+  assert.equal(f.speak('Hello').voice, local);
+});
+
+test('notice height reserves stage space and resize observer tracks wrapping', async t => {
+  const doc = withDocument(t);
+  let height = 40, observer, resizes = 0;
+  const originalWindow = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  const originalObserver = Object.getOwnPropertyDescriptor(globalThis, 'ResizeObserver');
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: { dispatchEvent(event) { if (event.type === 'resize') resizes++; } } });
+  Object.defineProperty(globalThis, 'ResizeObserver', { configurable: true, value: class {
+    constructor(callback) { this.callback = callback; observer = this; }
+    observe(el) { el.getBoundingClientRect = () => ({ height }); }
+    disconnect() { this.disconnected = true; }
+  } });
+  t.after(() => {
+    originalWindow ? Object.defineProperty(globalThis, 'window', originalWindow) : delete globalThis.window;
+    originalObserver ? Object.defineProperty(globalThis, 'ResizeObserver', originalObserver) : delete globalThis.ResizeObserver;
+  });
+  const f = await fixture(t);
+  f.speak('Hello');
+  assert.equal(doc.body.style['--voice-status-height'], '40px');
+  assert.equal(resizes, 1);
+  height = 72;
+  observer.callback();
+  assert.equal(doc.body.style['--voice-status-height'], '72px');
+  assert.equal(resizes, 2);
+  f.change([voice('Samantha')]);
+  f.speak('Hello').dispatchEvent(new Event('end'));
+  assert.equal(doc.body.style['--voice-status-height'], undefined);
+  assert.equal(observer.disconnected, true);
+  assert.equal(resizes, 3);
 });

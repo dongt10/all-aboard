@@ -5,7 +5,8 @@ import { Doc, El, Event, Target, pressKey } from './helpers/dom.js';
 
 const doc = new Doc();
 doc.fonts = new Target();
-const speech = { cancels: 0, cancel() { this.cancels++; }, speak() {} };
+const speech = { cancels: 0, cancel() { this.cancels++; }, speak() {},
+  getVoices: () => [{ name: 'Test narrator', lang: 'en-US', localService: true }] };
 const resizeWindow = Object.assign(new Target(), { innerWidth: 1920, innerHeight: 1080 });
 const observers = new Set();
 Object.assign(globalThis, {
@@ -17,7 +18,7 @@ Object.assign(globalThis, {
     disconnect() { observers.delete(this); }
   },
   speechSynthesis: speech,
-  SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } },
+  SpeechSynthesisUtterance: class extends Target { constructor(text) { super(); this.text = text; } },
   requestAnimationFrame: () => 0,
   cancelAnimationFrame: () => {},
 });

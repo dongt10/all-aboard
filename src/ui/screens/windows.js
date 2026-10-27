@@ -4,7 +4,7 @@ import { keyIntent, gridMove } from '../input.js';
 import { figureMarkup } from '../figures/index.js';
 import { SUBJECT_THEME } from '../palette.js';
 import { toggleSetting, chooseGrade, gradeChoices, isChosenGrade } from '../save.js';
-import { guideEntries, stampCount } from '../guide.js';
+import { guideEntries, stampCount, stampHeading, guideNarration } from '../guide.js';
 import { creationMarkup } from '../creations.js';
 import { getCreations } from '../../progress.js';
 import { renderBandPreview, encodeWav } from '../../audio.js';
@@ -172,9 +172,10 @@ function guidePage(entry, state) {
   const earned = Boolean(entry.stamp?.earned);
   const made = earned ? guideCreation(entry.id, state) : '';
   const stamp = !entry.stamp ? '' : earned
-    ? `<div class="guide-stamp guide-stamp--earned"><span class="guide-stamp__seal" aria-hidden="true">${icon(theme.icon)}</span><p><strong>Learned:</strong> ${esc(entry.stamp.learned)}</p></div>`
-    : `<div class="guide-stamp"><span class="guide-stamp__seal" aria-hidden="true"></span><p><strong>You’ll learn:</strong> ${esc(entry.stamp.learned)}</p></div>`;
+    ? `<div class="guide-stamp guide-stamp--earned"><span class="guide-stamp__seal" aria-hidden="true">${icon(theme.icon)}</span><p><strong>${stampHeading(entry.stamp)}:</strong> ${esc(entry.stamp.learned)}</p></div>`
+    : `<div class="guide-stamp"><span class="guide-stamp__seal" aria-hidden="true"></span><p><strong>${stampHeading(entry.stamp)}:</strong> ${esc(entry.stamp.learned)}</p></div>`;
   const buttons = [
+    `<button type="button" class="px-button" data-action="hear">${icon('hear')}<span>Hear</span></button>`,
     entry.canFind ? `<button type="button" class="px-button" data-action="find">${icon('map')}<span>Find</span></button>` : '',
     entry.canVisit ? `<button type="button" class="px-button px-button--finish" data-action="visit">${icon('next')}<span>Visit</span></button>` : '',
   ].join('');
@@ -238,11 +239,16 @@ export function openGuideWindow(ctx, { id } = {}) {
     <section class="guide-page" aria-live="polite"></section>`;
   const tiles = [...body.querySelectorAll('.guide-tile')];
   const page = body.querySelector('.guide-page');
+  const narrate = () => ctx.speak(guideNarration(entries[index], {
+    hasSong: entries[index].id === 'music' && Boolean(getCreations(state).music),
+  }));
   function show(i) {
+    stopSpeaking();
     index = i;
     tiles.forEach((tile, k) => tile.setAttribute('aria-pressed', String(k === i)));
     setRoving(tiles, i);
     page.innerHTML = guidePage(entries[i], state);
+    if (handle && ctx.getState().settings.autoRead) narrate();
   }
   let handle = null, closed = false;
   const recorder = createRecorder(() => getCreations(ctx.getState()).music, {
@@ -254,6 +260,7 @@ export function openGuideWindow(ctx, { id } = {}) {
     if (tile) { show(Number(tile.dataset.index)); return; }
     const action = event.target.closest('[data-action]')?.dataset.action;
     if (!action) return;
+    if (action === 'hear') { narrate(); return; }
     if (action === 'record') { recorder.record(); return; }
     const target = entries[index].id;
     handle?.close();
@@ -261,7 +268,8 @@ export function openGuideWindow(ctx, { id } = {}) {
     else ctx.go(target === 'music' ? 'music' : 'encounter', { id: target });
   });
   show(index);
-  handle = open(ctx, 'guide', { title: 'Matsuri Guide', body, initialFocus: () => tiles[index], onClose: () => { closed = true; recorder.dispose(); } });
+  handle = open(ctx, 'guide', { title: 'Matsuri Guide', body, initialFocus: () => tiles[index], onClose: () => { closed = true; stopSpeaking(); recorder.dispose(); } });
+  if (handle && ctx.getState().settings.autoRead) narrate();
   const head = handle && body.closest('.win')?.querySelector('.win__head');
   if (head) {   // the subtitle and the stamp count sit in the header, beside the title
     const title = head.querySelector('.win__title');

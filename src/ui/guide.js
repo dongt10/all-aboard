@@ -11,7 +11,7 @@ import { CHARACTERS } from '../data.js';
 import { getCompleted, getRewards } from '../progress.js';
 import { SUBJECT_THEME } from './palette.js';
 
-// What each stamp says, by the lowest grade it applies to (0 is Kindergarten). The last row at or below the grade wins.
+// Topics explored, not an assessment of mastery. The last row at or below the grade wins.
 const STAMPS = {
   math: [[0, 'Same number on both sides is equal.'], [1, 'Different crates can weigh the same.'], [2, STAMP_ROWS], [3, STAMP_PIZZA], [4, 'Sharing equally is dividing: 12 ÷ 4 = 3 each.'], [5, STAMP_PIZZA_HALVES]],
   science: [[0, 'Shade keeps the sun off the ice.'], [2, STAMP_BEANS], [3, STAMP_CHAIN], [4, 'A pond chain keeps one tenth at each step too.'], [5, 'Only 10% of energy moves up each step of a chain.']],
@@ -22,6 +22,19 @@ const STAMPS = {
   music: [[0, 'Music can be fast or slow, high or low.'], [1, 'Rests are part of a rhythm.'], [3, 'A tune can go up, down, or stay the same.'], [4, 'A steady part holds up a changing tune.']],
 };
 const LEGACY_STAMPS = { science: 'Shade makes ice melt slower.' };
+
+export const stampHeading = stamp => stamp.earned ? 'We explored' : 'Let’s explore';
+
+// Read the same biography, topic and available actions that appear on the selected page.
+export function guideNarration(entry, { hasSong = false } = {}) {
+  return [
+    `${entry.name}.`, `${entry.species}.`, `${entry.role.replace(' · ', '. ')}.`, entry.bio,
+    entry.stamp ? `${stampHeading(entry.stamp)}. ${entry.stamp.learned}` : '',
+    hasSong ? 'Save song keeps your band to listen to later.' : '',
+    entry.canFind ? `Choose Find to see ${entry.name} in the village.` : '',
+    entry.canVisit ? `Choose Visit to go to ${entry.name}.` : '',
+  ].filter(Boolean).join(' ');
+}
 
 // A missing grade reads as Kindergarten here and in encounters.js gradeBand.
 export function learnedText(subject, grade = 0) {
