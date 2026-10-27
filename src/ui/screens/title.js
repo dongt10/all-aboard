@@ -2,7 +2,7 @@ import { icon } from '../icons.js';
 import { figureMarkup } from '../figures/index.js';
 import { onceAtATime } from '../scenes.js';
 import { chooseAvatar, chooseGrade, gradeChoices } from '../save.js';
-import { comfortMarkup, bindComfort, gradeTilesMarkup, syncGradeTiles, setRoving } from './windows.js';
+import { comfortMarkup, bindComfort, gradeTilesMarkup, syncGradeTiles, setRoving, openCreditsWindow } from './windows.js';
 
 export { gradeChoices, chooseGrade };
 
@@ -28,11 +28,11 @@ export function createTitleScene(ctx) {
     setRoving(buttons, buttons.findIndex(button => button.dataset.avatar === chosen));
   }
 
-  // Arrow rows, top to bottom: who you are, grade tiles, Start, comfort toggles.
+  // Arrow rows, top to bottom: who you are, grade tiles, Start/Credits, comfort toggles.
   const rows = () => [
     [...root.querySelectorAll('.avatar-choice')],
     [...root.querySelectorAll('.grade-tile')],
-    [root.querySelector('.title-start')],
+    [root.querySelector('.title-start'), root.querySelector('.title-credits')],
     [...root.querySelectorAll('.comfort-toggle')],
   ];
   function moveFocus(intent) {
@@ -47,7 +47,7 @@ export function createTitleScene(ctx) {
     }
     if (!target) return true;
     const group = all.find(row => row.includes(target));
-    if (group.length > 1 && !target.classList.contains('comfort-toggle')) setRoving(group, group.indexOf(target));   // toggles stay separate Tab stops
+    if (target.matches('.avatar-choice, .grade-tile')) setRoving(group, group.indexOf(target));   // commands and toggles stay separate Tab stops
     target.focus();
     return true;
   }
@@ -72,6 +72,7 @@ export function createTitleScene(ctx) {
         <p class="px-chip title__grade-label" id="title-grade">Your grade</p>
         <div class="title__grades grade-tiles" role="group" aria-labelledby="title-grade">${gradeTilesMarkup()}</div>
         <button type="button" class="px-button px-button--finish title-start">${icon('play')}<span>${state.hasStarted ? 'Continue' : 'Start'}</span></button>
+        <button type="button" class="px-button title-credits">Credits</button>
         <div class="title__comfort" role="group" aria-label="Comfort">${comfortMarkup()}</div>`;
       syncAvatars();
       syncGradeTiles(root, state);
@@ -87,6 +88,7 @@ export function createTitleScene(ctx) {
         }
       });
       root.querySelector('.title-start').addEventListener('click', () => start());
+      root.querySelector('.title-credits').addEventListener('click', () => openCreditsWindow(ctx));
       ctx.stage.append(root);
       root.querySelector('.title-start').focus();
     },

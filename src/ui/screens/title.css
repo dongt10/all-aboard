@@ -33,6 +33,7 @@
 .grade-tile__word { font-size: var(--text-small); line-height: 1.05; hyphens: manual; }
 
 .title-start { position: absolute; left: 320px; top: 368px; width: 320px; height: 64px; font-size: 28px; }
+.title-credits { position: absolute; right: 66px; top: 376px; width: 200px; height: 48px; }
 .title__comfort { position: absolute; left: 0; right: 0; top: 458px; display: flex; justify-content: center; gap: 16px; }
 .title__comfort .px-toggle { width: 280px; height: 48px; justify-content: space-between; white-space: nowrap; }
 
