@@ -1,4 +1,6 @@
 import { icon } from '../icons.js';
+import { openWindow } from '../window.js';
+import { stopSpeaking } from '../voice.js';
 import { figureMarkup } from '../figures/index.js';
 import { onceAtATime } from '../scenes.js';
 import { chooseAvatar, chooseGrade, gradeChoices } from '../save.js';
@@ -6,12 +8,77 @@ import { comfortMarkup, bindComfort, gradeTilesMarkup, syncGradeTiles, setRoving
 
 export { gradeChoices, chooseGrade };
 
+const TIP_KEY = 'all-aboard-fullscreen-tip-dismissed';
+const TIP = 'For full screen: Share, then Add to Home Screen.';
+let tipDismissed = false;
+
+function shouldShowTip() {
+  const nav = globalThis.navigator;
+  const ua = nav?.userAgent ?? '';
+  if (!/iPhone/i.test(ua) || !/Safari/i.test(ua) || /CriOS|FxiOS|EdgiOS|OPiOS|DuckDuckGo/i.test(ua)) return false;
+  if (nav.standalone || globalThis.matchMedia?.('(display-mode: standalone)').matches || globalThis.matchMedia?.('(display-mode: fullscreen)').matches) return false;
+  try { return !tipDismissed && globalThis.localStorage?.getItem(TIP_KEY) !== '1'; } catch { return !tipDismissed; }
+}
+function dismissTip() {
+  tipDismissed = true;
+  try { globalThis.localStorage?.setItem(TIP_KEY, '1'); } catch { /* Keep the dismissal for this tab. */ }
+}
+
 const AVATARS = [{ id: 'boy', label: 'Boy' }, { id: 'girl', label: 'Girl' }];
 const ARROWS = new Set(['up', 'down', 'left', 'right']);
 const centerX = el => { const box = el.getBoundingClientRect(); return box.left + box.width / 2; };
 
 export function createTitleScene(ctx) {
-  let root = null;
+  let root = null, dialog = null, pending = false, lockedForEntry = false, generation = 0;
+  const fullscreenElement = () => document.fullscreenElement || document.webkitFullscreenElement;
+  const target = () => document.documentElement;
+  const available = () => Boolean(!/iPhone/i.test(globalThis.navigator?.userAgent ?? '') && target() && (target().requestFullscreen || target().webkitRequestFullscreen) && (document.exitFullscreen || document.webkitExitFullscreen) && document.fullscreenEnabled !== false && document.webkitFullscreenEnabled !== false);
+  function syncFullscreen() {
+    const button = root?.querySelector('.title-fullscreen');
+    if (!button) return;
+    const active = Boolean(fullscreenElement());
+    if (!active) lockedForEntry = false;
+    else if (!lockedForEntry) {
+      lockedForEntry = true;
+      try { Promise.resolve(globalThis.screen?.orientation?.lock?.('landscape')).catch(() => {}); } catch { /* Orientation lock is optional. */ }
+    }
+    button.querySelector('span').textContent = active ? 'Exit full screen' : 'Full screen';
+    button.setAttribute('aria-pressed', String(active));
+  }
+  function showMessage(text, onClose) {
+    const body = document.createElement('div');
+    body.className = 'fullscreen-message';
+    body.innerHTML = `<p></p><div class="fullscreen-message__actions"><button type="button" class="px-icon-button" data-action="hear">${icon('hear')}<span>Hear</span></button><button type="button" class="px-button px-button--finish" data-action="done"><span>Got it</span></button></div>`;
+    body.querySelector('p').textContent = text;
+    body.addEventListener('click', event => {
+      const action = event.target.closest('[data-action]')?.dataset.action;
+      if (action === 'hear') ctx.speak?.(text);
+      if (action === 'done') dialog?.close();
+    });
+    dialog = openWindow(ctx.stage, { title: 'Full screen', body, initialFocus: '[data-action="done"]', onClose: () => { dialog = null; stopSpeaking(); onClose?.(); } });
+  }
+  const failure = () => {
+    pending = false;
+    if (root && !ctx.stage.querySelector('.win-backdrop')) showMessage('Full screen could not be opened or closed. Please try again.');
+  };
+  function changed() { pending = false; syncFullscreen(); }
+  async function toggleFullscreen() {
+    if (pending) return;
+    pending = true;
+    const mine = generation;
+    try {
+      const element = fullscreenElement() ? document : target();
+      const request = element === document ? document.exitFullscreen || document.webkitExitFullscreen : element.requestFullscreen || element.webkitRequestFullscreen;
+      const result = request.call(element);
+      // Older WebKit returns nothing and signals completion through an event.
+      if (result && typeof result.then === 'function') {
+        await result;
+        if (mine === generation && root) { pending = false; syncFullscreen(); }
+      }
+    } catch {
+      if (mine === generation) failure();
+    }
+  }
   const start = onceAtATime(async () => {
     if (!ctx.getState().hasStarted) ctx.commit({ ...ctx.getState(), hasStarted: true });
     await ctx.go('village');
@@ -32,7 +99,7 @@ export function createTitleScene(ctx) {
   const rows = () => [
     [...root.querySelectorAll('.avatar-choice')],
     [...root.querySelectorAll('.grade-tile')],
-    [root.querySelector('.title-start')],
+    [...root.querySelectorAll('.title-fullscreen, .title-start')],
     [...root.querySelectorAll('.comfort-toggle')],
   ];
   function moveFocus(intent) {
@@ -47,7 +114,7 @@ export function createTitleScene(ctx) {
     }
     if (!target) return true;
     const group = all.find(row => row.includes(target));
-    if (group.length > 1 && !target.classList.contains('comfort-toggle')) setRoving(group, group.indexOf(target));   // toggles stay separate Tab stops
+    if (target.classList.contains('avatar-choice') || target.classList.contains('grade-tile')) setRoving(group, group.indexOf(target));   // toggles stay separate Tab stops
     target.focus();
     return true;
   }
@@ -71,6 +138,7 @@ export function createTitleScene(ctx) {
         </div>
         <p class="px-chip title__grade-label" id="title-grade">Your grade</p>
         <div class="title__grades grade-tiles" role="group" aria-labelledby="title-grade">${gradeTilesMarkup()}</div>
+        ${available() ? '<button type="button" class="px-button title-fullscreen" aria-pressed="false"><span>Full screen</span></button>' : ''}
         <button type="button" class="px-button px-button--finish title-start">${icon('play')}<span>${state.hasStarted ? 'Continue' : 'Start'}</span></button>
         <div class="title__comfort" role="group" aria-label="Comfort">${comfortMarkup()}</div>`;
       syncAvatars();
@@ -86,11 +154,18 @@ export function createTitleScene(ctx) {
           root.querySelector('.title-start span').textContent = ctx.getState().hasStarted ? 'Continue' : 'Start';
         }
       });
+      root.querySelector('.title-fullscreen')?.addEventListener('click', toggleFullscreen);
+      document.addEventListener('fullscreenchange', changed);
+      document.addEventListener('webkitfullscreenchange', changed);
+      document.addEventListener('fullscreenerror', failure);
+      document.addEventListener('webkitfullscreenerror', failure);
+      syncFullscreen();
       root.querySelector('.title-start').addEventListener('click', () => start());
       ctx.stage.append(root);
       root.querySelector('.title-start').focus();
+      if (shouldShowTip()) showMessage(TIP, dismissTip);
     },
-    destroy() { root?.remove(); root = null; },
+    destroy() { generation++; pending = false; dialog?.close(); document.removeEventListener('fullscreenchange', changed); document.removeEventListener('webkitfullscreenchange', changed); document.removeEventListener('fullscreenerror', failure); document.removeEventListener('webkitfullscreenerror', failure); root?.remove(); root = null; },
     handleIntent(intent) { return ARROWS.has(intent) ? moveFocus(intent) : false; },
   };
 }

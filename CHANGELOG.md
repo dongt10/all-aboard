@@ -6,6 +6,8 @@ Changes to All Aboard, grouped by release.
 
 ### Added
 
+- A title-screen Full screen toggle on supported browsers, with a readable message if the browser refuses; iPhone Safari instead shows a dismissible, remembered Add to Home Screen tip with Hear.
+- A landscape Home Screen manifest and 192, 512 and Apple 180 px icons made from Pip’s existing standing sprite.
 - Taro’s crate rows for grade 2: build equal rows, read their sum, pair crates to see odd or even, and Send cart when the rows match the order.
 - Momo’s bean test for grade 2: change one cup’s water or sunlight, compare two weeks of growth, and build a garden bed card with Seed, Sun, Water and Bee before Plant bed.
 - Hana’s compass errands for grade 2: follow three map clues, learn whose job each delivery helps, and Hang map after all three errands.
@@ -35,6 +37,7 @@ Changes to All Aboard, grouped by release.
 
 ### Fixed
 
+- Phone stage fitting follows the visible viewport and safe-area insets as browser bars move or the device rotates. Pinch zoom keeps its magnification, touch no longer triggers double-tap zoom, and phone margins use the scene’s palette while the central 960×540 playfield stays intact.
 - Read-aloud selects a preferred local English voice and uses a calm pace with neutral pitch.
 - The Enter walking hint closes after three seconds and chooses a clear dialogue position when available, otherwise the position with less player overlap. Read to me finishes speaking before the closing delay.
 - Taro’s starting crates stay tied to the cart; crates added by the child can still be removed.
