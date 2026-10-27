@@ -240,10 +240,15 @@ test('Pip\'s welcome and the village Help use short sentences a page can hold', 
   assert.deepEqual(paginate(WELCOME_LINE, PAGE_CHARS.large), sentences, 'Bigger words breaks between the two sentences');
   assert.equal(paginate(WELCOME_LINE, PAGE_CHARS.normal).length, 1, 'one page at the normal size');
   assert.deepEqual(HELP_STEPS, [
-    'Tap a neighbor, or walk to one and press Enter.',   // Enter is a real A key (input.js); the A key itself walks left
+    'Tap a neighbor to walk over and talk.',
+    'Tap the path, or use arrow keys to walk.',
+    'Press Enter near a neighbor to talk.',
     'Make one thing and the Parade opens.',
     'Make all seven for the big finale.',
     'Open the Guide to find a neighbor or see your stamps.',
+    'An exclamation mark means something new to make.',
+    'Three dots mean you can keep working.',
+    'A check mark means you made something.',
   ]);
   for (const step of HELP_STEPS) assert.ok(step.length <= 56, `${step} fits a Bigger-words page`);
 });
@@ -363,13 +368,15 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
   const stage = doc.createElement('div'), gone = [], opened = [], spoken = [], announced = [];
   stage.className = `stage${calm ? ' calm' : ''}${large ? ' large-text' : ''}`;
   doc.body.append(stage);
-  const scene = createVillageScene({
-    stage, walkable, getState: () => state, announce: text => announced.push(text),
+  const ctx = {
+    stage, walkable, getState: () => state, commit: next => { state = next; }, announce: text => announced.push(text),
     go: (...args) => { gone.push(args); return true; },
     speak: text => { spoken.push(text); return voice(text); },
     open: Object.fromEntries(['grade', 'guide', 'comfort', 'pause', 'help'].map(act => [act, () => opened.push(act)])),
-  }, options);
-  const mounted = scene.mount();
+  };
+  const scene = createVillageScene(ctx, options);
+  const mountResult = scene.mount();
+  const mounted = new Promise(resolve => setImmediate(resolve));
   const root = stage.querySelector('.village');
   root.getBoundingClientRect = () => ({ left: 0, top: 0, width: 960, height: 540 });
   const tick = (ms = 16) => {
@@ -383,7 +390,7 @@ function villageFixture(t, { calm = false, large = false, state = createState(),
   };
   const tap = (x, y) => root.querySelector('.village-map').dispatchEvent(new Event('click', { clientX: x, clientY: y }));
   t.after(() => { scene.destroy(); restore.forEach(reset => reset()); });
-  return { doc, scene, root, stage, gone, opened, spoken, announced, tick, pos, tap, mounted, frames };
+  return { doc, scene, root, stage, ctx, mountResult, gone, opened, spoken, announced, tick, pos, tap, mounted, frames };
 }
 
 test('the scene uses the fixed-size background and the supplied furniture geometry', t => {
@@ -538,41 +545,37 @@ function speechFixture(t) {
 }
 
 for (const calm of [false, true]) for (const large of [false, true]) {
-  test(`opening welcome closes after ${large ? 6 : 4}s on its last page and leaves Pip's name visible (calm=${calm})`, t => {
+  test(`welcome waits for dismissal through time and movement (calm=${calm}, large=${large})`, t => {
     const clock = openingClock(t), f = villageFixture(t, { calm, large });
     const box = f.root.querySelector('.village-dialogue');
     if (large) {
-      assert.equal(f.root.querySelector('.dlg__text').textContent, 'Welcome to Willow Bay!');
       clock.advance(60000);
-      assert.equal(box.hidden, false, 'page one never times out');
-      assert.equal(clock.callbacks.length, 0);
-      f.scene.handleIntent('a');
-      assert.equal(f.root.querySelector('.dlg__text').textContent, 'Tap a neighbor to help them make something.');
+      assert.equal(box.hidden, false);
+      f.root.querySelector('.dlg__more').click();
     }
-    const delay = large ? 6000 : 4000;
-    clock.advance(delay - 1);
-    assert.equal(box.hidden, false);
-    clock.advance(1);
+    clock.advance(60000);
+    f.scene.handleIntent('up'); f.tick(100);
+    assert.equal(box.hidden, false, 'walking does not dismiss directions');
+    f.tap(500, 320); f.tick(100);
+    assert.equal(box.hidden, false, 'ground taps do not dismiss directions');
+    const done = f.root.querySelector('[data-act="dismiss-welcome"]');
+    assert.equal(done.hidden, false);
+    done.focus(); done.click();
     assert.equal(box.hidden, true);
-    f.tick();
-    const pip = f.root.querySelector('.village-actor[data-id="pip"]');
-    assert.equal(pip.classList.contains('village-actor--near'), false, 'the name is not swapped for Talk');
-    const name = pip.querySelector('.village-name');
-    assert.equal(name.hidden, false);
-    assert.equal(name.textContent, 'Pip');
     assert.equal(f.doc.activeElement, f.root);
+    assert.equal(clock.callbacks.length, 0, 'welcome has no deadline');
   });
 }
 
-for (const via of ['more', 'text']) test(`turning the welcome via ${via} starts the last-page timeout and restores focus`, t => {
+for (const via of ['more', 'text']) test(`turning the welcome via ${via} keeps the last page until dismissal`, t => {
   const clock = openingClock(t), f = villageFixture(t, { large: true });
   f.root.querySelector('.dlg__more').focus();
   f.root.querySelector(via === 'more' ? '.dlg__more' : '.dlg__text').click();
-  clock.advance(5999);
+  clock.advance(60000);
   assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
-  clock.advance(1);
+  f.scene.handleIntent('b');
   assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
-  assert.equal(f.doc.activeElement, f.root, 'focus leaves the dismissed box');
+  assert.equal(f.doc.activeElement, f.root);
 });
 
 for (const large of [false, true]) test(`a rebuilt village's creation celebration closes and leaves Kiko · Music visible (large=${large})`, t => {
@@ -598,7 +601,7 @@ test('a child-started neighbor conversation cancels the opening timeout and stay
   f.root.querySelector('.village-actor[data-id="pip"]').click();
   f.tick();
   const line = f.root.querySelector('.dlg__text').textContent;
-  assert.match(line, /I delivered every invitation/);
+  assert.equal(line, WELCOME_LINE, 'Pip replays the directions');
   assert.equal(f.root.querySelector('.village-dialogue').classList.contains('village-dialogue--top'), dialogueBox(f.pos(), line) === 'top', 'Pip uses a corner clear of the player');
   clock.advance(60000);
   assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
@@ -623,21 +626,20 @@ for (const input of ['Escape', 'step', 'destroy', 'pause', 'guide', 'help', 'win
       backdrop.className = 'win-backdrop';
       f.stage.append(backdrop); f.tick();
     }
-    if (input === 'Escape' || input === 'step') assert.equal(box.hidden, true, 'closes immediately');
+    if (input === 'Escape') assert.equal(box.hidden, true, 'explicit dismissal closes immediately');
+    if (input === 'step') assert.equal(box.hidden, false, 'movement leaves welcome visible');
     clock.advance(60000);
     assert.ok(clock.callbacks.every(callback => callback.mock.callCount() === 0), 'cancelled callback never runs');
   });
 }
 
-test('last-page A cancels the opening timer and starts a fresh three-second hint timer', t => {
+test('last-page A replaces directions with a three-second walking hint', t => {
   const clock = openingClock(t), f = villageFixture(t, { calm: true });
   clock.advance(2000);
-  const welcomeTimer = clock.callbacks.at(-1);
   f.scene.handleIntent('a');
   assert.equal(f.root.querySelector('.dlg__text').textContent, WALK_HINT);
   clock.advance(2999);
   assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
-  assert.equal(welcomeTimer.mock.callCount(), 0);
   clock.advance(1);
   assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
   assert.equal(clock.callbacks.at(-1).mock.callCount(), 1);
@@ -646,6 +648,7 @@ test('last-page A cancels the opening timer and starts a fresh three-second hint
 for (const large of [false, true]) test(`the Enter hint closes by itself after 3 s and uses a clear corner on the crossroads (large=${large})`, t => {
   const clock = openingClock(t), f = villageFixture(t, { calm: true, large });
   const box = f.root.querySelector('.village-dialogue');
+  f.scene.handleIntent('b');
   for (const [feet, top] of [[PLAYER_START, true], [{ x: 500, y: 225 }, false], [{ x: 500, y: 510 }, true]]) {
     f.tap(feet.x, feet.y); f.tick();
     assert.deepEqual(f.pos(), feet);
@@ -694,7 +697,7 @@ test('the hint waits three seconds after speech; B cancels late speech and its t
   assert.equal(hintTimer.mock.callCount(), 0);
 });
 
-for (const large of [false, true]) test(`Read to me waits for the final page's speech end, then ${large ? 6 : 4}s`, t => {
+for (const large of [false, true]) test(`welcome stays after speech ends (large=${large})`, t => {
   const clock = openingClock(t), utterances = speechFixture(t);
   const f = villageFixture(t, { large, state: readAloudState(), voice: speak });
   if (large) {
@@ -709,10 +712,11 @@ for (const large of [false, true]) test(`Read to me waits for the final page's s
   clock.advance((large ? 6000 : 4000) - 1);
   assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
   clock.advance(1);
-  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  assert.equal(clock.callbacks.length, 0);
 });
 
-for (const voiceKind of ['no end event', 'boolean success', 'unavailable']) test(`Read to me timeout fallback: ${voiceKind}`, t => {
+for (const voiceKind of ['no end event', 'boolean success', 'unavailable']) test(`welcome stays without speech completion: ${voiceKind}`, t => {
   const clock = openingClock(t);
   speechFixture(t);
   const voice = voiceKind === 'no end event' ? speak : () => voiceKind === 'boolean success';
@@ -722,10 +726,11 @@ for (const voiceKind of ['no end event', 'boolean success', 'unavailable']) test
   clock.advance(delay - 1);
   assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
   clock.advance(1);
-  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  assert.equal(clock.callbacks.length, 0);
 });
 
-test('Hear restarts the opening speech wait; Escape removes listeners so late speech cannot restart it', t => {
+test('Hear leaves the welcome open; Escape dismisses it even with late speech', t => {
   const clock = openingClock(t), utterances = speechFixture(t);
   const f = villageFixture(t, { state: readAloudState(), voice: speak });
   clock.advance(3000);
@@ -742,7 +747,7 @@ test('Hear restarts the opening speech wait; Escape removes listeners so late sp
   assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
 });
 
-for (const calm of [false, true]) for (const focus of ['actor', 'root']) for (const [key, label] of A_KEY_CASES) {
+for (const calm of [false, true]) for (const focus of ['root']) for (const [key, label] of A_KEY_CASES) {
   test(`${label} with ${focus} focus and nobody near gives one hint without clicking or walking (calm=${calm})`, t => {
     const f = villageFixture(t, { calm, focus: focus === 'actor' ? 'writing' : undefined, state: readAloudState() });
     const target = f.doc.activeElement, before = f.pos();
@@ -771,7 +776,7 @@ for (const calm of [false, true]) for (const focus of ['actor', 'root']) for (co
   });
 }
 
-for (const focus of ['actor', 'root', 'chip']) for (const [key, label] of A_KEY_CASES) {
+for (const focus of ['root', 'chip']) for (const [key, label] of A_KEY_CASES) {
   test(`${label} with ${focus} focus talks to the Talk-chip neighbor without a click or walk`, t => {
     const f = villageFixture(t, { calm: true });
     const goal = talkPoint('community');
@@ -784,13 +789,13 @@ for (const focus of ['actor', 'root', 'chip']) for (const [key, label] of A_KEY_
     target.addEventListener('click', () => clicks++);
     assert.equal(pressKey(target, 'keydown', key).defaultPrevented, true);
     pressKey(target, 'keyup', key);
-    assert.deepEqual(f.gone, [['encounter', { id: 'community' }]], 'Hana answers even when Sora has focus');
+    assert.deepEqual(f.gone, [['encounter', { id: 'community' }]], 'Hana answers from the movement surface or Talk chip');
     assert.deepEqual(f.pos(), goal);
     assert.equal(clicks, 0);
   });
 }
 
-for (const focus of ['actor', 'root']) for (const [key, label] of A_KEY_CASES) {
+for (const focus of ['root']) for (const [key, label] of A_KEY_CASES) {
   test(`${label} with ${focus} focus reads the next page before showing the walking hint`, t => {
     const f = villageFixture(t, { calm: true, large: true, focus: focus === 'actor' ? 'writing' : undefined, state: readAloudState() });
     const target = f.doc.activeElement, text = f.root.querySelector('.dlg__text'), more = f.root.querySelector('.dlg__more');
@@ -866,12 +871,13 @@ for (const [key, label] of A_KEY_CASES.slice(0, 2)) for (const act of ['grade', 
     if (act === 'parade') assert.deepEqual(f.gone, [['parade']]);
     else if (act === 'hear') assert.equal(f.spoken.at(-1), before);
     else if (act === 'more') assert.notEqual(text.textContent, before);
+    else if (act === 'help') assert.ok(f.stage.querySelector('.village-help'));
     else assert.deepEqual(f.opened, [act]);
   });
 }
 
 test('an open window leaves A keydowns and keyups untouched, even after a claimed Space', t => {
-  const f = villageFixture(t, { calm: true, focus: 'writing' });
+  const f = villageFixture(t, { calm: true });
   const actor = f.doc.activeElement;
   pressKey(actor, 'keydown', ' ');
   const before = f.root.querySelector('.dlg__text').textContent;
@@ -1208,12 +1214,11 @@ test('reward sign exposes its natural wrapping board before measured scaling', (
 });
 
 
-for (const failure of ['error', 'timeout', 'size', 'empty']) test(`map ${failure} shows a persistent explanation and Retry restores walking`, async t => {
+for (const failure of ['error', 'size', 'empty']) test(`map ${failure} shows a persistent explanation and Retry restores walking`, async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const images = pendingRoad(t), f = villageFixture(t, { walkable: null, calm: true });
   const lateLoad = images[0].onload;
   if (failure === 'error') images[0].onerror();
-  if (failure === 'timeout') { t.mock.timers.tick(2999); assert.equal(f.frames.size, 0); t.mock.timers.tick(1); }
   if (failure === 'size') { images[0].naturalWidth = 1; images[0].onload(); }
   if (failure === 'empty') {
     const create = f.doc.createElement.bind(f.doc);
@@ -1312,4 +1317,144 @@ test('high neighbors lower their badges so the full status mark clears the HUD',
       assert.ok(feet.y - 80 + drop + 32 <= STAGE.height, `${id} badge bottom`);
     }
   }
+});
+
+// Keyboard focus chooses the same actor as tapping, even beside another neighbor.
+for (const calm of [false, true]) for (const id of ['reading', 'writing', 'music', 'pip']) for (const [key, label] of A_KEY_CASES) {
+  test(`${label} activates focused ${id} instead of nearby Hana (calm=${calm})`, t => {
+    const f = villageFixture(t, { calm, large: true });
+    f.tap(...Object.values(talkPoint('community')));
+    for (let i = 0; i < 20; i++) f.tick(100);
+    assert.equal(f.root.querySelector('.village-talk').getAttribute('aria-label'), 'Talk to Hana');
+    const actor = f.root.querySelector(`.village-actor[data-id="${id}"]`);
+    actor.focus();
+    assert.equal(pressKey(actor, 'keydown', key).defaultPrevented, true);
+    assert.equal(pressKey(actor, 'keydown', key, { repeat: true }).defaultPrevented, true);
+    const release = pressKey(actor, 'keyup', key);
+    if (key === ' ') assert.equal(release.defaultPrevented, true);
+    for (let i = 0; i < 20; i++) f.tick(100);
+    if (id === 'pip') {
+      assert.deepEqual(f.gone, []);
+      assert.equal(f.root.querySelector('.dlg__speaker').textContent, 'Pip');
+      assert.equal(f.root.querySelector('.dlg__text').textContent, 'Welcome to Willow Bay!');
+    } else assert.deepEqual(f.gone, id === 'music' ? [['music']] : [['encounter', { id }]]);
+    assert.notDeepEqual(f.pos(), talkPoint('community'));
+  });
+}
+
+for (const large of [false, true]) test(`persistent Help pictures, legend and Hear work after a creation (large=${large})`, async t => {
+  const { HELP_STEPS } = await import('../src/ui/screens/village.js');
+  const f = villageFixture(t, { large, state: publishCreation(createState(), 'art', { kind: 'art' }) });
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+  const help = f.root.querySelector('[data-act="village-help"]');
+  assert.equal(help.textContent, 'Help');
+  help.focus(); pressKey(help, 'keydown', 'Enter');
+  const panel = f.stage.querySelector('.village-help');
+  assert.ok(panel, 'Help does not depend on an open dialogue');
+  assert.equal(f.root.inert, true);
+  const next = panel.querySelector('[data-help="next"]');
+  assert.equal(f.doc.activeElement, next);
+  assert.equal(f.stage.querySelector('.win').querySelectorAll('button').length, 4);
+  for (let page = 0; page < HELP_STEPS.length; page++) {
+    assert.equal(panel.querySelector('.village-help__text').textContent, HELP_STEPS[page]);
+    assert.ok(HELP_STEPS[page].length <= 56);
+    assert.ok(panel.querySelector('.village-help__picture').innerHTML.length > 0);
+    panel.querySelector('[data-help="hear"]').click();
+    assert.equal(f.spoken.at(-1), HELP_STEPS[page]);
+    if (page === 1) assert.match(panel.querySelector('.village-help__picture').textContent, /↑.*← ↓ →/s);
+    if (page === 6) assert.equal(panel.querySelector('.village-help__mark').textContent, '!');
+    if (page === 7) assert.equal(panel.querySelector('.village-help__mark').textContent, '...');
+    next.click();
+  }
+  assert.equal(f.stage.querySelector('.win-backdrop'), null);
+  assert.equal(f.doc.activeElement, help);
+  assert.equal(f.root.inert, false);
+  help.click();
+  const back = f.stage.querySelector('[data-help="back"]');
+  assert.equal(back.disabled, true);
+  f.stage.querySelector('[data-help="next"]').click();
+  back.focus(); back.click();
+  assert.equal(f.doc.activeElement, f.stage.querySelector('[data-help="next"]'));
+  assert.equal(f.stage.querySelector('.village-help__text').textContent, HELP_STEPS[0]);
+  pressKey(f.stage.querySelector('[data-help="next"]'), 'keydown', 'Escape');
+  assert.equal(f.stage.querySelector('.win-backdrop'), null);
+  assert.equal(f.doc.activeElement, help);
+});
+
+const mountedPosition = stage => {
+  const el = stage.querySelector('.village-player');
+  return { x: parseFloat(el.style.left) + 32, y: parseFloat(el.style.top) + 57 };
+};
+
+for (const params of [{ guide: 'reading' }, { focus: 'math' }, { focus: 'music', celebrate: 'music' }]) {
+  test(`rebuilding the village preserves position for ${JSON.stringify(params)}`, t => {
+    const f = villageFixture(t, { calm: true });
+    f.tap(500, 320);
+    const before = f.pos();
+    assert.notDeepEqual(before, PLAYER_START);
+    f.scene.destroy();
+    const returned = createVillageScene(f.ctx, params);
+    returned.mount();
+    t.after(() => returned.destroy());
+    assert.deepEqual(mountedPosition(f.stage), before);
+    if (params.focus) assert.equal(f.doc.activeElement.dataset.id, params.focus);
+    if (params.guide) assert.equal(f.stage.querySelector('.village-pointer').hidden, false);
+  });
+}
+
+test('return position is rechecked against newly blocked road and stays separate by grade', t => {
+  const f = villageFixture(t, { calm: true });
+  f.tap(500, 320);
+  f.scene.destroy();
+  f.ctx.walkable = createWalkable(maskFromRGBA(readPNG(new URL(`../${ROAD_MASK}`, import.meta.url))), {
+    blocked: [{ x: 490, y: 310, w: 20, h: 20 }],
+  });
+  let scene = createVillageScene(f.ctx);
+  scene.mount();
+  const adjusted = mountedPosition(f.stage);
+  assert.notDeepEqual(adjusted, { x: 500, y: 320 });
+  assert.ok(road().isWalkable(adjusted));
+  assert.ok(Math.hypot(adjusted.x - 500, adjusted.y - 320) < 96);
+  f.ctx.commit({ ...f.ctx.getState(), chapter: 1, grade: 3 });
+  scene.destroy();
+  scene = createVillageScene(f.ctx);
+  scene.mount();
+  assert.deepEqual(mountedPosition(f.stage), PLAYER_START);
+  scene.destroy();
+  f.ctx.commit({ ...f.ctx.getState(), chapter: 0 });
+  scene = createVillageScene(f.ctx);
+  scene.mount();
+  assert.deepEqual(mountedPosition(f.stage), adjusted);
+  scene.destroy();
+});
+
+test('only mounting the village starts the save', t => {
+  const f = villageFixture(t);
+  assert.equal(f.ctx.getState().hasStarted, true);
+  let commits = 0;
+  f.scene.destroy();
+  const scene = createVillageScene({ ...f.ctx, commit: () => commits++ });
+  scene.mount();
+  assert.equal(commits, 0, 'returning does not rewrite the started flag');
+  scene.destroy();
+});
+
+test('slow loading leaves Help available and a late valid road unlocks walking', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const images = pendingRoad(t), f = villageFixture(t, { walkable: null, calm: true });
+  assert.equal(f.mountResult, undefined, 'mount does not hold the scene manager busy');
+  assert.equal(f.root.querySelector('.village-loading').hidden, false);
+  t.mock.timers.tick(10000);
+  f.scene.handleIntent('up');
+  assert.deepEqual(f.pos(), PLAYER_START);
+  f.root.querySelector('[data-act="village-help"]').click();
+  assert.ok(f.stage.querySelector('.village-help'));
+  f.stage.querySelector('.win__close').click();
+  assert.equal(f.root.querySelector('.village-map-error'), null);
+  supplyRoadPixels(t, f.doc);
+  images[0].onload();
+  await f.mounted;
+  assert.equal(f.root.querySelector('.village-loading').hidden, true);
+  f.scene.handleIntent('up');
+  assert.notDeepEqual(f.pos(), PLAYER_START);
 });

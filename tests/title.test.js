@@ -12,7 +12,7 @@ test('grade tiles are Kindergarten then grades 1–5', () => {
 test('choosing Kindergarten keeps the last elementary grade for later', () => {
   const state = { ...createState(), chapter: 1, grade: 4 };
   const next = chooseGrade(state, gradeChoices()[0]);
-  assert.deepEqual([next.chapter, next.grade, next.hasStarted], [0, 4, true]);
+  assert.deepEqual([next.chapter, next.grade, next.hasStarted], [0, 4, false]);
   assert.equal(state.chapter, 1);
   const two = chooseGrade(createState(), gradeChoices()[2]);
   assert.deepEqual([two.chapter, two.grade], [1, 2]);
@@ -48,7 +48,7 @@ function installDocument(t) {
   return doc;
 }
 
-test('choosing a title grade immediately shows the label saved for reload', t => {
+test('choosing any title grade keeps Start before play, including after reload', t => {
   const doc = installDocument(t);
   for (let tile = 0; tile < gradeChoices().length; tile++) {
     let state = createState();
@@ -58,16 +58,48 @@ test('choosing a title grade immediately shows the label saved for reload', t =>
     scene.mount();
     assert.equal(doc.body.querySelector('.title-start span').textContent, 'Start');
     doc.body.querySelectorAll('.grade-tile')[tile].click();
-    assert.equal(state.hasStarted, true);
-    assert.equal(doc.body.querySelector('.title-start span').textContent, 'Continue');
+    assert.equal(state.hasStarted, false);
+    assert.equal(doc.body.querySelector('.title-start span').textContent, 'Start');
     assert.deepEqual(visits, [], 'choosing a grade does not navigate');
     scene.destroy();
     state = normalizeState(JSON.parse(JSON.stringify(state)));
     scene = createTitleScene(ctx);
     scene.mount();
-    assert.equal(doc.body.querySelector('.title-start span').textContent, 'Continue');
+    assert.equal(doc.body.querySelector('.title-start span').textContent, 'Start');
     scene.destroy();
   }
+});
+
+test('grade selection preserves Continue for a save that has entered the village', t => {
+  const doc = installDocument(t);
+  let state = { ...createState(), hasStarted: true };
+  const ctx = { stage: doc.body, getState: () => state, commit: next => { state = normalizeState(next); }, announce() {} };
+  const scene = createTitleScene(ctx);
+  scene.mount();
+  for (const tile of doc.body.querySelectorAll('.grade-tile')) {
+    tile.click();
+    assert.equal(state.hasStarted, true);
+    assert.equal(doc.body.querySelector('.title-start span').textContent, 'Continue');
+  }
+  scene.destroy();
+});
+
+test('a refused village transition does not mark a title save as started', async t => {
+  const doc = installDocument(t);
+  let state = createState();
+  const visits = [];
+  const ctx = {
+    stage: doc.body, getState: () => state, commit: next => { state = normalizeState(next); }, announce() {},
+    go: async name => { visits.push(name); return false; },
+  };
+  const scene = createTitleScene(ctx);
+  scene.mount();
+  doc.body.querySelector('.title-start').click();
+  await flush();
+  assert.deepEqual(visits, ['village']);
+  assert.equal(state.hasStarted, false);
+  assert.equal(doc.body.querySelector('.title-start span').textContent, 'Start');
+  scene.destroy();
 });
 
 test('the live style guide Help action closes with Got it and restores focus', async t => {

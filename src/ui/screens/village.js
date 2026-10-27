@@ -5,26 +5,43 @@ import { SUBJECT_THEME } from '../palette.js';
 import { icon } from '../icons.js';
 import { figureMarkup, playerFigureId } from '../figures/index.js';
 import { createDialogue } from '../dialogue.js';
+import { openWindow } from '../window.js';
+import { stopSpeaking } from '../voice.js';
 import { onceAtATime } from '../scenes.js';
 import { creationMarkup, creationLabel, fitSignPreviews } from '../creations.js';
 import {
   SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, nearestNeighbor,
-  setRoad, road, loadRoad, roadPath, talkGoal, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, stallSVG, easelRect,
+  setRoad, road, loadRoad, clampWalk, roadPath, talkGoal, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, stallSVG, easelRect,
 } from '../village-map.js';
 import { BACKGROUND, STALLS, EASELS } from '../village-layout.js';
 
 const SIDE = {
-  pip: { name: 'Pip', line: 'I delivered every invitation! Except this one. Oh. It’s mine.' },
+  pip: { name: 'Pip' },
   nori: { name: 'Nori', line: 'You can go anywhere first. I’m going slowly. That’s my favorite speed.' },
 };
 // Pip greets every visit until the first creation is made in this grade. Each sentence fits one Bigger-words page.
 export const WELCOME_LINE = 'Welcome to Willow Bay! Tap a neighbor to help them make something.';
 export const HELP_STEPS = [
-  'Tap a neighbor, or walk to one and press Enter.',
+  'Tap a neighbor to walk over and talk.',
+  'Tap the path, or use arrow keys to walk.',
+  'Press Enter near a neighbor to talk.',
   'Make one thing and the Parade opens.',
   'Make all seven for the big finale.',
   'Open the Guide to find a neighbor or see your stamps.',
+  'An exclamation mark means something new to make.',
+  'Three dots mean you can keep working.',
+  'A check mark means you made something.',
 ];
+// Positions belong to this game stage and grade, not a browser-wide singleton or the saved work.
+const villagePositions = new WeakMap();
+const TAP_PICTURE = '<svg viewBox="0 0 64 64" width="64" height="64" aria-hidden="true"><path d="M25 51V25a5 5 0 0 1 10 0v13l4-5 6 5 5-1 5 6-5 17H32l-15-16a5 5 0 0 1 7-7l6 6" fill="var(--paper)" stroke="currentColor" stroke-width="3"/><path d="M17 20l-5-5m18-2V5m13 15 6-5" stroke="currentColor" stroke-width="3"/></svg>';
+const helpPicture = page => [
+  TAP_PICTURE + figureMarkup('pip'),
+  TAP_PICTURE + '<span>↑<br>← ↓ →</span>',
+  '<span class="px-chip">Enter</span>' + figureMarkup('pip'),
+  icon('star', { size: 56 }), icon('star', { size: 56 }), icon('map', { size: 56 }),
+  '<span class="village-help__mark">!</span>', '<span class="village-help__mark">...</span>', icon('check', { size: 56 }),
+][page];
 export const CELEBRATE_LINE = 'That’s going straight into the festival!';
 const A_KEYS = new Set(['Enter', ' ', 'z', 'Z']);
 const WALK_HINT = 'Walk up to a neighbor, then press Enter.';
@@ -47,7 +64,7 @@ export function dialogueBox(feet, words) {
 }
 
 // A belongs to the village when its root, an actor button or the Talk chip has focus, even with nobody near.
-// `near` is kept in the call signature but never gates key ownership; aAction decides what the press does.
+// `near` never gates key ownership; actor focus walks to that actor, while the root and Talk use aAction.
 // `button` means an actor or Talk button only. HUD, Parade and dialogue controls keep their own keys.
 export function talkKeyWins(near, { button = false, onRoot = false, inVillage = false, inDialogue = false } = {}) {
   return (button || onRoot) && inVillage && !inDialogue;
@@ -113,7 +130,10 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   const actors = new Map();          // id → { id, el, fig, pos, target, facing, step, clock, waitUntil, render }
   const player = { pos: { ...PLAYER_START }, target: null, path: [], tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
   let near = null;
-  let timing = null, closeTimer = null, unwatchSpeech = null;
+  let timing = null, closeTimer = null, unwatchSpeech = null, welcomeOpen = false, helpWindow = null;
+  const scope = () => { const s = ctx.getState(); return s.chapter === 1 ? `grade-${s.grade}` : 'kindergarten'; };
+  const positionScope = scope();
+  const savedPosition = villagePositions.get(ctx.stage)?.get(positionScope);
 
   const state = () => ctx.getState();
   const largeText = () => Boolean(ctx.stage?.classList.contains('large-text'));
@@ -124,7 +144,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   const visit = onceAtATime(async id => {
     hush();
     if (id === findTarget) clearFind();
-    if (SIDE[id]) { say(id, SIDE[id].line); return; }
+    if (SIDE[id]) { say(id, id === 'pip' ? WELCOME_LINE : SIDE[id].line); return; }
     if (leaving) return;
     leaving = true;
     const went = await (id === 'music' ? ctx.go('music') : ctx.go('encounter', { id }));
@@ -170,7 +190,9 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   function say(id, words, { opening = false, closeAfter = null } = {}) {
     cancelOpening();
     if (!dialogue || mapFailed) return;
-    if (opening || closeAfter !== null) timing = { closeAfter };
+    welcomeOpen = words === WELCOME_LINE;
+    if (!welcomeOpen && (opening || closeAfter !== null)) timing = { closeAfter };
+    root.querySelector('[data-act="dismiss-welcome"]').hidden = !welcomeOpen;
     const host = root.querySelector('.village-dialogue');
     const box = dialogueBox(player.pos, words);
     host.classList.toggle('village-dialogue--top', box === 'top');
@@ -183,7 +205,39 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (!host || host.hidden || mapFailed) return;
     const held = host.contains(document.activeElement);
     host.hidden = true;
+    welcomeOpen = false;
     if (held) root.focus({ preventScroll: true });   // focus never falls back to <body>
+  }
+
+  function openHelp() {
+    if (helpWindow || ctx.stage?.querySelector('.win-backdrop')) return;
+    cancelOpening();
+    paused = true;
+    player.target = null; player.path = []; player.tapWalk = false; player.visitOnArrive = null;
+    stopSpeaking();
+    const body = document.createElement('div');
+    body.className = 'village-help';
+    body.innerHTML = '<div class="village-help__picture" aria-hidden="true"></div><p class="village-help__text" aria-live="polite"></p><div class="village-help__buttons"><button type="button" class="px-button" data-help="hear">Hear</button><button type="button" class="px-button" data-help="back">Back</button><button type="button" class="px-button" data-help="next">Next</button></div>';
+    let page = 0;
+    const render = () => {
+      stopSpeaking();
+      body.querySelector('.village-help__picture').innerHTML = helpPicture(page);
+      body.querySelector('.village-help__text').textContent = HELP_STEPS[page];
+      const back = body.querySelector('[data-help="back"]');
+      if (page === 0 && document.activeElement === back) body.querySelector('[data-help="next"]').focus();
+      back.disabled = page === 0;
+      body.querySelector('[data-help="next"]').textContent = page === HELP_STEPS.length - 1 ? 'Got it' : 'Next';
+      if (state().settings?.autoRead) ctx.speak?.(HELP_STEPS[page]);
+    };
+    body.addEventListener('click', event => {
+      const act = event.target.closest('[data-help]')?.dataset.help;
+      if (act === 'hear') ctx.speak?.(HELP_STEPS[page]);
+      if (act === 'next' && page === HELP_STEPS.length - 1) { helpWindow?.close(); return; }
+      if (act === 'back' && page > 0) { page--; render(); }
+      if (act === 'next') { page++; render(); }
+    });
+    helpWindow = openWindow(ctx.stage, { title: 'Village help', body, initialFocus: '[data-help="next"]', onClose: () => { helpWindow = null; paused = false; stopSpeaking(); } });
+    render();
   }
 
   /* ---------- Markup ---------- */
@@ -236,12 +290,14 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
         <button type="button" class="px-chip village-grade" data-act="grade">${esc(gradeLabel(s))}</button>
         <h1 class="village-hud__title">Willow Bay</h1>
         <nav class="village-hud__buttons" aria-label="Menu">
+          <button type="button" class="px-icon-button" data-act="village-help">${icon('help')}<span>Help</span></button>
           <button type="button" class="px-icon-button" data-act="guide">${icon('map')}<span>Guide</span></button>
           <button type="button" class="px-icon-button" data-act="comfort">${icon('settings')}<span>Comfort</span></button>
           <button type="button" class="px-icon-button" data-act="pause">${icon('pause')}<span>Pause</span></button>
         </nav>
       </header>
       ${boardMarkup(made)}
+      <p class="px-chip village-loading" role="status" hidden>Loading map…</p>
       <div class="village-dialogue" hidden></div>`;
 
     for (const el of root.querySelectorAll('.village-actor[data-id]')) {
@@ -250,11 +306,18 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     }
     dialogue = createDialogue(root.querySelector('.village-dialogue'), {
       speak: text => ctx.speak?.(text),
-      onHelp: () => { cancelOpening(); paused = true; ctx.open?.help?.('Willow Bay', [...HELP_STEPS]); },
+      onHelp: openHelp,
       isLarge: largeText,
       autoRead: () => Boolean(state().settings?.autoRead),
       onPage,
     });
+    const done = document.createElement('button');
+    done.setAttribute('type', 'button');
+    done.className = 'px-chip village-welcome-done';
+    done.dataset.act = 'dismiss-welcome';
+    done.textContent = 'Got it';
+    done.hidden = true;
+    root.querySelector('.village-dialogue').append(done);
   }
 
   /* ---------- Drawing ---------- */
@@ -269,6 +332,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (a.drawn !== key) { a.fig.innerHTML = figureMarkup(a.id, { facing: a.facing, step: a.step }); a.drawn = key; }
   }
   function drawPlayer() {
+    if (welcomeOpen) root.querySelector('.village-dialogue').classList.toggle('village-dialogue--top', dialogueBox(player.pos, WELCOME_LINE) === 'top');
     const el = root.querySelector('.village-player');
     el.style.left = px(player.pos.x - 32);
     el.style.top = px(player.pos.y - 57);
@@ -413,7 +477,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     player.speed = Math.max(PLAYER_SPEED, length / (TAP_WALK_MS / 1000));
   }
   function stepBy(intent) {
-    hush();
+    if (!welcomeOpen) hush();
     player.facing = FACING_FOR[intent];
     if (!ready) { drawPlayer(); return; }
     if (player.tapWalk) { player.target = null; player.path = []; player.tapWalk = false; player.clock = 0; }
@@ -452,11 +516,17 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (!talkKeyWins(near, focus)) return;
     event.preventDefault();
     if (event.key === ' ') swallowSpaceUp = true;
-    if (!event.repeat) pressA();
+    if (!event.repeat) {
+      const actor = target?.closest?.('.village-actor[data-id]');
+      if (actor) walkTo(actor.dataset.id);
+      else pressA();
+    }
   }
 
   function onClick(event) {
     const act = event.target.closest('[data-act]')?.dataset.act;
+    if (act === 'village-help') { openHelp(); return; }
+    if (act === 'dismiss-welcome') { hush(); return; }
     if (act === 'retry-road') { startRoad(); return; }
     if (act && ['grade', 'guide', 'comfort', 'pause'].includes(act)) { cancelOpening(); paused = true; ctx.open?.[act]?.(); return; }
     if (event.target.closest('.village-parade')) { if (canStartParade(state())) ctx.go('parade'); return; }
@@ -469,7 +539,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       const point = { x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height };
       const path = roadPath(player.pos, point);
       if (!path) return;
-      hush();
+      if (!welcomeOpen) hush();
       player.visitOnArrive = null;
       player.speed = PLAYER_SPEED * 1.5;
       player.clock = 0;
@@ -490,6 +560,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   async function startRoad() {
     if (mapLoading || !alive) return;
     mapLoading = true;
+    root.querySelector('.village-loading').hidden = false;
     const retry = root.querySelector('[data-act="retry-road"]');
     if (retry) { retry.disabled = true; retry.textContent = 'Loading…'; }
     try {
@@ -501,7 +572,9 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       if (!alive) return;
       mapFailed = false;
       if (retry) { root.querySelector('.village-map-error')?.remove(); hush(); }
+      if (savedPosition) player.pos = clampWalk(savedPosition) ?? { ...PLAYER_START };
       ready = true;
+      drawPlayer(); drawTalk(); drawFind();
       frame = nextFrame(tick);
     } catch {
       if (!alive) return;
@@ -522,11 +595,12 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       button.disabled = false;
       button.textContent = 'Retry';
       ctx.announce?.(`${words} We need the map to walk safely. Check your connection, then choose Retry.`);
-    } finally { mapLoading = false; }
+    } finally { mapLoading = false; if (alive) root.querySelector('.village-loading').hidden = true; }
   }
 
   return {
-    async mount() {
+    mount() {
+      if (!state().hasStarted) ctx.commit?.({ ...state(), hasStarted: true });
       build();
       ctx.stage.append(root);
       previews = fitSignPreviews(root, 64, 40);
@@ -543,7 +617,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       if (findTarget) ctx.announce?.(`Find ${nameOf(findTarget)}. Follow the arrow.`);
       const button = focus && root.querySelector(`.village-actor[data-id="${focus}"]`);
       (button || root).focus({ preventScroll: true });   // the welcome never takes focus from the player controls
-      await startRoad();
+      // Loading must not hold the scene transition curtain or lock its menu controls.
+      void startRoad();
     },
     handleIntent(intent) {
       if (!root) return false;
@@ -561,6 +636,11 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       player.visitOnArrive = null;
     },
     destroy() {
+      if (alive && ready) {
+        if (!villagePositions.has(ctx.stage)) villagePositions.set(ctx.stage, new Map());
+        villagePositions.get(ctx.stage).set(positionScope, { ...player.pos });
+      }
+      helpWindow?.close();
       cancelOpening();
       alive = false;
       cancelFrame(frame);
