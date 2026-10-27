@@ -73,7 +73,7 @@ export const LINES = {
   openingReady: 'Your rows are ready. Send cart, or make a new order.',
   notReady: 'The rows changed. Make equal rows again.',
   ready: (rows, perRow, sum) => `${rows} rows of ${perRow}. ${sum}. Choose Send cart.`,
-  gaps: 'Rows with gaps are not equal rows.',
+  gaps: 'Equal counts! Close the gaps to make a solid block.',
   unequal: 'Count each row. Are the rows the same?',
   misaligned: 'Line up the rows so the crates make a block.',
   fewer: (count, left) => `${count} crates on the cart. ${left} more to go.`,
@@ -94,8 +94,8 @@ export function placeLine(s) {
   const r = rowsReport(s);
   if (rowsReady(s)) return LINES.ready(r.rows, r.perRow, r.sum);
   if (r.count === 0) return LINES.empty;
-  if (!r.contiguous) return LINES.gaps;
   if (!r.equal) return LINES.unequal;
+  if (!r.contiguous) return LINES.gaps;
   if (!r.aligned) return LINES.misaligned;
   if (r.count > s.target) return LINES.more(r.count, r.count - s.target);
   return LINES.fewer(r.count, s.target - r.count);

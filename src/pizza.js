@@ -106,8 +106,8 @@ export const PIZZA_LINES = {
   cutAlready: 'The slices are already halves.',
   readyOpening: 'Fair shares! Choose Serve pizza, or make a new pizza.',
   fairNeedsCut: 'Fair! New pizza brings one with leftovers to cut.',
-  takeSlice: 'One slice back on the pizza.',
-  takeHalf: 'One half back on the pizza.',
+  takeSlice: name => `One slice back from ${name}.`,
+  takeHalf: name => `One half back from ${name}.`,
   opening: s => `Share Momo’s ${s.slices} slices equally among 4 friends.`,
   openingHalves: s => `Momo baked ${s.slices} slices. Can 4 friends share fairly?`,
   gave: (name, n) => `${name} gets a slice. ${n} left on the pizza.`,
@@ -120,7 +120,7 @@ export const PIZZA_LINES = {
   fair: (slices, share) => `${slices} ÷ 4 = ${share / 2} ${share === 2 ? 'slice' : 'slices'} each! Choose Serve pizza.`,
   fairMixed: (slices, share) => `${slices} ÷ 4 = ${shareWords(share)} each! Choose Serve pizza.`,
   fresh: n => `A new pizza with ${n} slices. Share it out!`,
-  cut: n => `Every slice is cut in half. Now there are ${n} halves.`,
+  cut: n => `I cut the ${n / 2} ${n === 2 ? 'slice' : 'slices'} left into ${n} halves.`,
 };
 
 export function pizzaOpening(s) {
@@ -144,11 +144,10 @@ export function giveLine(s, i, wasTried) {
   if (r.remaining === 0) return PIZZA_LINES.gaveLast(name, s.halves);
   return s.halves ? PIZZA_LINES.gaveHalf(name, r.remaining) : PIZZA_LINES.gave(name, r.remainingWhole);
 }
-export function takeLine(s, wasTried, units = pieceUnits(s)) {
-  const nudge = nudgeLine(s);
-  if (nudge) return nudge;
-  if (wasTried) return PIZZA_LINES.changed;
-  return units === 1 ? PIZZA_LINES.takeHalf : PIZZA_LINES.takeSlice;
+export function takeLine(s, wasTried, units = pieceUnits(s), i = 0) {
+  const name = FRIENDS[i].name;
+  const returned = units === 1 ? PIZZA_LINES.takeHalf(name) : PIZZA_LINES.takeSlice(name);
+  return returned + (wasTried ? ' Choose Dig in! to check.' : '');
 }
 // What Dig in! says about this state (s.tried is true by the time this runs).
 export function tryLine(s) {

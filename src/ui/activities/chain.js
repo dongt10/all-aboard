@@ -12,7 +12,7 @@ export const CARDS = CHAIN_CARDS.map(id => ({ id, ...CARD_WORDS[id], glyph: CARD
 export const cardsFor = grade => chainFor(grade).cards.map(id => ({ id, ...CARD_WORDS[id], glyph: CARD_GLYPHS[id] }));
 export const helpFor = grade => [
   'Tap a card: who gets the sun’s energy next?',
-  `Tap a number: each step keeps ${tenthWord(grade)}.`,
+  `For this example, use ${tenthWord(grade)} each step.`,
   'Fill every plate, then choose Shine!',
   'Choose Pin chart.',
 ];
@@ -167,7 +167,11 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
       arrow.setAttribute('role', 'img');
       arrow.setAttribute('aria-label', 'Divide by 10.');
     } else if (i === 1) {
-      node('span', 'chain-source-gap', row).setAttribute('aria-hidden', 'true');
+      const arrow = node('span', 'chain-source-gap', row);
+      // Keep the arrow inside the existing 16px gap; sunlight is labeled on the Sun card.
+      arrow.innerHTML = ARROW_ART.replace('width="20" height="20"', 'width="16" height="16"');
+      arrow.setAttribute('role', 'img');
+      arrow.setAttribute('aria-label', 'Sunlight to plant.');
     }
     const plate = node('div', i ? 'chain-plate chain-plate--empty' : 'chain-sun-card', row);
     plate.setAttribute('role', 'group');

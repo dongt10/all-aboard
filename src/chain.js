@@ -7,7 +7,7 @@
 import { INK, PAPER, PAPER_SHADE, SEA, LANTERN, VERMILION } from './ui/palette.js';
 
 export const GRADES_CHAIN = [3, 4, 5];
-export const STAMP_CHAIN = 'Only about one tenth of energy moves up a food chain.';
+export const STAMP_CHAIN = 'This chart uses one tenth. Real transfer varies.';
 
 export const CHAIN_CARDS = ['plant', 'fish', 'otter', 'gull'];
 export const EATS = { plant: 'sun', fish: 'plant', otter: 'fish', gull: 'fish', pondweed: 'sun', snail: 'pondweed', koi: 'snail', frog: 'snail' };
@@ -156,13 +156,13 @@ export function placeEnergy(s, n, grade = s.grade) {
 }
 
 export const LINES = {
-  opening: 'Every bite started as sunlight. Who uses it first?',
-  openingPart: 'Let’s finish the chart.',
-  openingReady: 'Your sunbeam chart is ready. Pin it, or start over.',
+  opening: 'This chart shows pretend energy units. Groups grow over the same time. We compare their new growth. For this example, use one tenth. Real transfer varies. Who uses sunlight first?',
+  openingPart: 'These are pretend energy units for new growth. Groups grow over the same time. This example uses one tenth. Real transfer varies. Let’s finish the chart.',
+  openingReady: 'These are pretend energy units for new growth. Groups grow over the same time. This example uses one tenth. Real transfer varies. Your chart is ready. Pin it, or start over.',
   needCard1: 'Who uses sunlight first? Tap a card.',
   needCard2: 'Who eats sea plants? Tap a card.',
   needCard3: 'Who eats little fish? Tap a card.',
-  needNumber: plate => `How much energy reaches plate ${plate}? Tap a number.`,
+  needNumber: plate => `How many pretend units for plate ${plate}? Tap a number.`,
   allSet: 'All set! Choose Shine!',
   ready: 'Ready! Choose Pin chart.',
   placed: {
@@ -172,17 +172,17 @@ export const LINES = {
   used: 'That card is already on the chart.',
   full: 'Every plate is full.',
   wrongSun: plural => `${plural} cannot use sunlight.`,
-  wrongFood: (plural, food) => `${plural} do not eat ${food}.`,
+  wrongFood: () => 'For this chart, choose what comes next.',
   question: (slot, grade = 3) => chainFor(grade).questions[slot],
   nowhereEmpty: 'Fill a plate first. Who uses sunlight first?',
   nowhereFull: 'Every number is in.',
-  same: 'All of it? No. Most energy is used to live and move.',
-  high: tenth => `Too much. Only about ${tenth} moves up each step.`,
-  low: tenth => `Too little. About ${tenth} moves up, not less.`,
+  same: 'For this example, use one tenth at each step.',
+  high: tenth => `For this example, use ${tenth} at each step.`,
+  low: tenth => `For this example, use ${tenth} at each step.`,
   first: (grade = 3) => chainFor(grade).firstHint,
   firstNumber: (value, grade = 3) => `Plate 1 gets ${value}. ${chainFor(grade).firstNumber}`,
   number: (plate, value, prev, tenth) => `Plate ${plate} gets ${value}. ${capital(tenth)} of ${prev} is ${value}.`,
-  shine: tenth => `Sunlight pours in! Only ${tenth} moves up each step. Choose Pin chart.`,
+  shine: tenth => `This example uses ${tenth} at each step. Real transfer varies. Choose Pin chart.`,
   shineHint: 'Choose Shine!',
   reset: 'The chart is empty again. Start with the sun.',
   notReady: 'Something changed. Choose Shine!',

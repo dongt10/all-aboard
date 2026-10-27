@@ -176,7 +176,7 @@ test('all wrong cards explain the food and preserve the same state', () => {
   for (const card of ['otter', 'gull']) {
     const result = activity.act(state, ui, field({ card }));
     assert.equal(result.state, state);
-    assert.equal(result.line, `${CARDS.find(c => c.id === card).plural} do not eat sea plants. Who nibbles sea plants?`);
+    assert.equal(result.line, 'For this chart, choose what comes next. Who nibbles sea plants?');
   }
   assert.equal(placeCard(state, 'plant').status, 'used');
   assert.equal(placeCard(full(), 'gull').status, 'full');
@@ -296,7 +296,7 @@ test('each grade has its exact cards, biggest plant number and six tiles', () =>
     for (const card of content.cards.slice(2)) {
       const tried = activity.act(state, ui, field({ card }));
       assert.equal(tried.state, state);
-      assert.equal(tried.line, `${CARD_WORDS[card].plural} do not eat ${content.food[1]}. ${content.questions[1]}`);
+      assert.equal(tried.line, `For this chart, choose what comes next. ${content.questions[1]}`);
     }
     for (const card of Object.keys(CARD_WORDS).filter(id => !content.cards.includes(id))) {
       assert.equal(placeCard(state, card).status, 'unknown');
@@ -374,6 +374,10 @@ test('pond field keeps its nodes through play and labels both feeding arrows at 
       const sun = host.querySelector('.chain-sun-card');
       assert.equal(sun.querySelectorAll('.chain-block, .chain-energy').length, 0);
       assert.equal(sun.textContent.trim(), 'Sunsunlight');
+      const sunlight = host.querySelector('.chain-source-gap');
+      assert.equal(sunlight.getAttribute('aria-label'), 'Sunlight to plant.');
+      assert.match(sunlight.innerHTML, /<svg.*width="16" height="16"/);
+      assert.doesNotMatch(sunlight.textContent, /÷10/);
       for (const arrow of host.querySelectorAll('.chain-arrow')) {
         assert.equal(arrow.getAttribute('aria-label'), 'Divide by 10.');
         assert.equal(arrow.querySelector('.chain-step').textContent, '÷10');
@@ -400,7 +404,7 @@ test('all reachable lines and templates fit the 56-character sentence rule', () 
   assert.equal(HELP.at(-1), 'Choose Pin chart.');
   for (const grade of GRADES_CHAIN) {
     helpFor(grade).forEach(shortSentences);
-    assert.equal(activity.helpFor(grade)[1], `Tap a number: each step keeps ${tenthWord(grade)}.`);
+    assert.equal(activity.helpFor(grade)[1], `For this example, use ${tenthWord(grade)} each step.`);
     const seen = new Set(), queue = [start(grade).state];
     while (queue.length) {
       const state = queue.shift(), key = JSON.stringify(state);
@@ -585,4 +589,22 @@ test('chain placeholders and enlarged tale tags use tokens with room for the tag
   const font = parseFloat(declarations(tokens, '.large-text')['--text-small']);
   assert.ok(parseFloat(tag.height) >= font + 4, '20px line plus two 2px borders');
   for (const css of [chain, tales]) assert.doesNotMatch(css, /font-size:\s*\d/);
+});
+
+test('energy example and pond feedback avoid universal claims', () => {
+  for (const line of [LINES.opening, LINES.openingPart, LINES.openingReady]) {
+    assert.match(line, /pretend energy units/);
+    assert.match(line, /new growth/);
+    assert.match(line, /same time/);
+    assert.match(line, /Real transfer varies/);
+  }
+  assert.match(LINES.opening, /Groups grow over the same time/);
+  assert.match(LINES.opening, /new growth/);
+  assert.match(LINES.opening, /Real transfer varies/);
+  assert.match(STAMP_CHAIN, /Real transfer varies/);
+  const state = placeCard(start(4).state, 'pondweed').state;
+  const result = activity.act(state, {}, field({ card: 'koi' }));
+  assert.equal(result.state, state);
+  assert.match(result.line, /For this chart/);
+  assert.doesNotMatch(result.line, /do not eat/);
 });
