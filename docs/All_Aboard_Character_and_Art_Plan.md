@@ -174,7 +174,7 @@ The rough front end needs five views.
 
 ### Connecting the backend
 
-The backend supplies the chapter, grade, activity content, dialogue, available supports, and progress.
+In the current static game, “backend” means the in-browser game logic that supplies the chapter, grade, activity content, dialogue, available supports, and progress. There is no remote application server or cloud save service. The [architecture guide](architecture.md) explains grade registration, local drafts and completed creations, and the static build.
 
 **Keep text, numbers, and lesson instructions separate from the artwork.** This lets the front end display different languages and difficulty levels.
 
