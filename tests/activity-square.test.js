@@ -102,11 +102,11 @@ test('Next step names one step at a time, per band', () => {
 test('a blocked path names the item in the way, before anything else', () => {
   let s = start(3);
   s = field(s, { cell: PATH });
-  assert.equal(blockedLine(s.state), 'Move the bench off the path.');
-  assert.equal(nextNeed(s.state), 'Move the bench off the path.');
-  assert.equal(cmd(s, 'invite').line, 'Move the bench off the path.');
+  assert.equal(blockedLine(s.state), 'Choose Remove, then tap the bench. Put a bench off the path.');
+  assert.equal(nextNeed(s.state), 'Choose Remove, then tap the bench. Put a bench off the path.');
+  assert.equal(cmd(s, 'invite').line, 'Choose Remove, then tap the bench. Put a bench off the path.');
   s = field(s, { tool: 'quiet' }); s = field(s, { cell: PATH });
-  assert.equal(nextNeed(s.state), 'Move the garden off the path.');
+  assert.equal(nextNeed(s.state), 'Choose Remove, then tap the garden. Put a garden by the quiet trees.');
   // A sign on the path is fine: people walk past signs.
   s = field(s, { tool: 'sign' }); s = field(s, { cell: PATH });
   assert.equal(blockedLine(s.state), null);
@@ -170,7 +170,7 @@ test('placing, replacing, removing and the 12-item limit each say what happened'
   s = field(s, { cell: BESIDE_STAGE });
   assert.equal(s.line, 'That item is already here. Choose another place.');
   s = field(s, { tool: 'sign' }); s = field(s, { cell: BESIDE_STAGE });
-  assert.equal(s.line, 'Placed. Choose Try it when you are ready.');
+  assert.equal(s.line, 'Replaced the bench with a sign. Choose Try it when you are ready.');
   assert.deepEqual(s.state.placements, [{ item: 'sign', x: 70, y: 10 }]);
   s = field(s, { tool: 'remove' }); s = field(s, { cell: BESIDE_STAGE });
   assert.equal(s.line, 'Removed. Choose Try it when you are ready.');
@@ -203,7 +203,21 @@ test('changing the map after Try it undoes the walk and says so, keeping the wor
   // A blocking item after the walk-through is explained on the next Try it.
   s = field(s, { tool: 'quiet' }); s = field(s, { cell: PATH });
   assert.equal(s.line, 'Something changed. Choose Try it again.');
-  assert.equal(cmd(s, 'invite').line, 'Move the garden off the path.');
+  assert.equal(cmd(s, 'invite').line, 'Choose Remove, then tap the garden. Put a garden by the quiet trees.');
+});
+
+test('replacement names both items before and after Try it and retains other work', () => {
+  for (const tried of [false, true]) for (const [oldItem, newItem] of [['bench', 'quiet'], ['quiet', 'sign'], ['sign', 'bench']]) {
+    const base = start(1);
+    const state = { ...base.state, tried, placements: [{ item: oldItem, ...cellPosition(QUIET) }, { item: 'bench', ...cellPosition(OFF_PATH) }] };
+    const result = square.act(state, { tool: newItem }, { type: 'field', cell: QUIET });
+    const word = item => item === 'quiet' ? 'garden' : item;
+    assert.equal(result.line, `Replaced the ${word(oldItem)} with a ${word(newItem)}. ${tried ? 'Choose Try it again.' : 'Choose Try it when you are ready.'}`);
+    assert.ok(fitsOnePage(result.line));
+    assert.ok(result.line.length <= 96);
+    assert.equal(result.state.tried, false);
+    assert.deepEqual(result.state.placements.find(p => p.x === 50 && p.y === 90), state.placements[1]);
+  }
 });
 
 test('a saved square from today still loads, and an old grade-3 save without a sign is just not ready', () => {

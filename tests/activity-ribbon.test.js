@@ -14,6 +14,7 @@ import { routeIntent } from '../src/ui/input.js';
 import { FIGURE_IDS } from '../src/ui/figures/index.js';
 import { Doc, Event, pressKey } from './helpers/dom.js';
 import { controlStyle, declarations } from './helpers/css.js';
+import { createState, saveDraft, saveState, loadState, getDraft, getCompleted } from '../src/progress.js';
 
 const cmd = id => ({ type: 'command', id });
 const field = data => ({ type: 'field', ...data });
@@ -64,7 +65,7 @@ test('two cast stories preserve all five lines, options, cards, shuffles and les
       id: 'sandal', who: 'math', question: 'Why did Taro fall in the puddle?',
       lines: ['Taro ran to the festival.', 'His sandal was loose, but he kept going.', 'Splash! He fell in a puddle.', 'Now Taro sat down and tied his sandal.', 'Then he walked on, slow and safe.'],
       options: ['Loose sandal', 'Rain', 'A big wave', 'Too sleepy'],
-      cards: ['Taro runs', 'Big splash', 'Ties sandal'], shuffled: ['tie', 'run', 'splash'],
+      cards: ['Taro runs', 'Big splash', 'Ties; walks'], shuffled: ['tie', 'run', 'splash'],
       lessons: ['Fix problems before they grow.', 'Run faster.', 'Stay home on busy days.', 'Puddles are fun.'],
       whyYes: 'Yes! His sandal was loose. Now put the story in order.',
       lessonYes: 'Yes! Fix small problems early. Choose Share ribbon.',
@@ -121,7 +122,7 @@ test('standalone contract starts fresh from legacy reading saves and resumes eve
     assert.equal(ribbon.opening(state), ribbonOpening(state));
   }
   assert.deepEqual(phases(0).map(phaseOf), ['why', 'order', 'order', 'order', 'lesson', 'done']);
-  assert.equal(ribbon.opening(fresh.state), 'Here is a short story. Read it, then answer my question.');
+  assert.equal(ribbon.opening(fresh.state), STORIES[0].question);
   assert.equal(ribbonOpening(phases(0)[1]), 'Put the story in order. What happened first?');
   assert.equal(ribbonOpening(phases(0)[4]), 'Pick the lesson of the story.');
   assert.equal(ribbonOpening(ready()), 'Your ribbon is ready. Share it, or try the next story.');
@@ -211,7 +212,7 @@ for (const [index, story] of STORIES.entries()) test(`${story.id}: wrong tries, 
       assert.equal(wrong.line, `Not yet. What happened ${['first', 'next', 'last'][i]}?`);
     }
     const placed = step(s, field({ card: card.id })); fits(placed.line);
-    assert.equal(placed.line, `${['Beginning', 'Middle', 'End'][i]}: ${card.caption}.${i === 2 ? ' In order! Now pick the lesson.' : ''}`);
+    assert.equal(placed.line, `${['Beginning', 'Middle', 'End'][i]}: ${card.detail ?? card.caption}.${i === 2 ? ' In order! Now pick the lesson.' : ''}`);
     assert.equal(placed.state.steps, i + 1); assert.equal(s.state.steps, i);
     assert.equal(placed.state.lesson, false); assert.equal(ribbonReady(placed.state), false);
     s = freeze(placed);
@@ -238,10 +239,10 @@ for (const [index, story] of STORIES.entries()) test(`${story.id}: wrong tries, 
   assert.equal(reread.line, story.lines.join(' ')); fits(reread.line);
   const reset = step(s, cmd('reset')); fits(reset.line);
   assert.deepEqual(reset.state, snapshot({ story: index })); assert.equal(reset.ui, s.ui);
-  assert.equal(reset.line, 'The ribbon is empty. Read the story again.');
+  assert.equal(reset.line, `The ribbon is empty. Read the story again. ${story.question}`);
   const next = step(s, cmd('next')); fits(next.line);
-  assert.deepEqual(next.state, snapshot({ story: (index + 1) % 2 })); assert.equal(next.ui, s.ui);
-  assert.equal(next.line, 'A new story! Read it, then answer my question.');
+  assert.deepEqual(next.state, snapshot({ story: (index + 1) % 2, storyDrafts: { [index]: { why: true, steps: 3, lesson: true } } })); assert.equal(next.ui, s.ui);
+  assert.equal(next.line, STORIES[(index + 1) % 2].question);
 });
 
 test('stale and malformed actions cannot skip phases or change state or ui identities', () => {
@@ -267,7 +268,7 @@ test('stale and malformed actions cannot skip phases or change state or ui ident
       assert.equal(result.state, state); assert.equal(result.ui, s.ui); fits(result.line);
     }
     assert.equal(step(s, cmd('read')).state, state);
-    assert.deepEqual(step(s, cmd('next')).state, snapshot({ story: (story + 1) % 2 }));
+    assert.deepEqual(step(s, cmd('next')).state, snapshot({ story: (story + 1) % 2, ...(state.why ? { storyDrafts: { [story]: { why: true, steps: state.steps, lesson: state.lesson } } } : {}) }));
     assert.equal(phaseOf(state), phase);
   }
 });
@@ -286,10 +287,89 @@ test('pure helpers ignore wrong-phase input and preserve replay identity when no
   assert.equal(storyText(fresh), STORIES[0].lines.join(' '));
 });
 
+test('each story keeps its own draft through switching, save/load, and an explicit reset', () => {
+  for (const first of phases(0)) for (const second of phases(1)) {
+    let state = nextStory(first);
+    // Work on the second story without changing the first story's saved draft.
+    state = { ...state, why: second.why, steps: second.steps, lesson: second.lesson };
+    const storage = { value: null, getItem() { return this.value; }, setItem(key, value) { this.value = value; } };
+    const game = saveDraft({ ...createState(), chapter: 1, grade: 2 }, 'reading', state);
+    assert.equal(saveState(game, storage), true);
+    const loaded = loadState(storage);
+    assert.deepEqual(getCompleted(loaded), [], 'a ready draft never publishes itself');
+    const restored = nextStory(ribbon.start(getDraft(loaded, 'reading')).state);
+    for (const key of ['story', 'why', 'steps', 'lesson']) assert.equal(restored[key], first[key]);
+    if (first.why && first.steps < 3) assert.match(ribbonOpening(restored), new RegExp(`What happened ${['first', 'next', 'last'][first.steps]}\\?`));
+    const back = nextStory(restored);
+    for (const key of ['story', 'why', 'steps', 'lesson']) assert.equal(back[key], second[key]);
+    const reset = resetStory(restored);
+    assert.equal(reset.why, false);
+    const other = nextStory(reset);
+    for (const key of ['story', 'why', 'steps', 'lesson']) assert.equal(other[key], second[key]);
+    assert.equal(nextStory(other).why, false, 'Start over clears only the active draft');
+  }
+});
+
+test('inactive ribbon drafts are bounded, repaired, and cannot override the active story', () => {
+  const state = normalizeRibbon(snapshot({ storyDrafts: {
+    0: { why: true, steps: 3, lesson: true },
+    1: { why: true, steps: 99, lesson: true, extra: 'discard' },
+    2: { why: true, steps: 3, lesson: true },
+  } }));
+  assert.equal(state.why, false);
+  assert.deepEqual(state.storyDrafts, { 1: { why: true, steps: 3, lesson: true } });
+  assert.deepEqual(cleanRibbonCreation(state), state);
+  for (const bad of [null, [], 'ready', { why: false, steps: 3, lesson: true }]) {
+    assert.deepEqual(normalizeRibbon(snapshot({ storyDrafts: { 1: bad } })), snapshot());
+  }
+});
+
+test('the final sandal card includes the safe resolution in its picture, label, and spoken feedback', () => {
+  const state = snapshot({ why: true, steps: 2 });
+  const card = fieldView(state).cards.find(card => card.id === 'tie');
+  assert.equal(card.caption, 'Ties; walks');
+  assert.ok(card.caption.length <= 12);
+  assert.equal(card.label, 'Ties his sandal, then walks safely');
+  assert.match(placeCard(state, 'tie').line, /Ties his sandal, then walks safely/);
+  const env = mount(); env.set({ state, ui: {} });
+  const art = env.root.querySelector('.ribbon-card .ribbon-choice__pic').innerHTML;
+  assert.match(art, /<svg/); assert.match(art, /figure--math/);
+  env.mounted.destroy();
+});
+
+test('Hear prompt and Hear choices read every phase without choosing or saving an answer', () => {
+  const spoken = [], env = mount(words => spoken.push(words));
+  const hearPrompt = env.root.querySelector('.ribbon-hear-prompt');
+  const hearChoices = env.root.querySelector('.ribbon-hear-choices');
+  for (const story of [0, 1]) for (const state of phases(story)) {
+    env.set({ state, ui: {} });
+    hearPrompt.focus(); pressKey(hearPrompt, 'keydown', 'Enter');
+    assert.equal(env.session.state, state);
+    assert.equal(env.session.line, fieldView(state).prompt); fits(env.session.line);
+    assert.equal(spoken.at(-1), env.session.line);
+    if (phaseOf(state) === 'order') assert.match(env.session.line, new RegExp(`What happened ${['first', 'next', 'last'][state.steps]}\\?`));
+    assert.equal(hearChoices.hidden, phaseOf(state) === 'done');
+    if (phaseOf(state) === 'done') continue;
+    hearChoices.focus(); pressKey(hearChoices, 'keydown', ' '); pressKey(hearChoices, 'keyup', ' ');
+    assert.equal(env.session.state, state);
+    const expected = phaseOf(state) === 'why' ? STORIES[story].options.map(option => option.label)
+      : phaseOf(state) === 'order' ? fieldView(state).cards.filter(card => !card.placed).map(card => card.detail ?? card.caption)
+        : STORIES[story].lessons.map(lesson => lesson.text);
+    for (const text of expected) assert.ok(env.session.line.includes(text));
+    fits(env.session.line);
+    assert.equal(spoken.at(-1), env.session.line);
+    assert.deepEqual(env.actions.at(-1), field({ hear: 'choices' }));
+    for (const action of [field({ hear: 'unknown' }), field({ hear: 'prompt', why: STORIES[story].why })]) {
+      assert.deepEqual(step(env.session, action), { state, ui: env.session.ui });
+    }
+  }
+  env.mounted.destroy();
+});
+
 test('every child-facing sentence and field label fits, including both sets of wrong feedback', () => {
-  assert.deepEqual(HELP, ['Read the story. Tap a line to hear it.', 'Answer the why question. Tap one picture.', 'Tap the three cards in story order, then a lesson.', 'When the ribbon is full, choose Share ribbon.']);
+  assert.deepEqual(HELP, ['Read the story. Tap a line to hear it.', 'Choose Hear prompt or Hear choices. Then pick an answer.', 'Tap the three cards in story order, then a lesson.', 'When the ribbon is full, choose Share ribbon.']);
   assert.equal(ribbon.help, HELP); assert.equal(ribbon.notReadyLine, 'The ribbon changed. Fill it again.');
-  assert.equal(STAMP_RIBBON, 'A story has a beginning, middle, end, and a lesson.');
+  assert.equal(STAMP_RIBBON, 'Some stories have a lesson.');
   for (const line of [...HELP, STAMP_RIBBON, ...Object.values(LINES).filter(value => typeof value === 'string')]) fits(line);
   for (const story of STORIES) {
     for (const text of [story.title, story.question, story.whyYes, story.lessonYes, ...story.lines,
@@ -334,10 +414,10 @@ test('creation SVG always draws a ribbon, its numbered slots and its earned less
   } finally { STORIES[0].title = title; }
 });
 
-function mount() {
+function mount(speak = () => false) {
   const doc = new Doc(), host = doc.createElement('section'); doc.body.append(host);
   let session = ribbon.start(); const actions = [];
-  const mounted = ribbon.mountField(host, { grade: 2, dispatch(action) {
+  const mounted = ribbon.mountField(host, { grade: 2, speak, dispatch(action) {
     actions.push(action); session = step(session, action); mounted.update(session.state, session.ui);
   } });
   mounted.update(session.state, session.ui);
@@ -351,7 +431,7 @@ const arrow = (button, key) => { const event = new Event('keydown', { key }); bu
 
 test('mounted field keeps lines and buttons, displays only the active strip, and recovers focus', () => {
   const env = mount(), { root, doc, mounted, host } = env;
-  const buttons = root.querySelectorAll('button'), lines = root.querySelectorAll('.ribbon-line');
+  const buttons = root.querySelectorAll('button'), lines = root.querySelectorAll('.ribbon-lines .ribbon-line');
   const options = root.querySelectorAll('.ribbon-option'), cards = root.querySelectorAll('.ribbon-card'), lessons = root.querySelectorAll('.ribbon-lesson');
   const panels = root.querySelectorAll('.ribbon-phase');
   const checkPhase = phase => {
@@ -369,8 +449,8 @@ test('mounted field keeps lines and buttons, displays only the active strip, and
   assert.equal(env.session.state.why, false); assert.equal(doc.activeElement, options[1]);
   options[0].focus(); options[0].click(); checkPhase('order');
   assert.equal(doc.activeElement, cards[0]);
-  assert.equal(root.querySelector('.ribbon-question').hidden, true);
-  assert.deepEqual(cards.map(card => card.querySelector('.ribbon-choice__text').textContent), ['Ties sandal', 'Taro runs', 'Big splash']);
+  assert.equal(root.querySelector('.ribbon-question').textContent, LINES.order);
+  assert.deepEqual(cards.map(card => card.querySelector('.ribbon-choice__text').textContent), ['Ties; walks', 'Taro runs', 'Big splash']);
   assert.match(cards[1].querySelector('.ribbon-choice__pic').innerHTML, /figure--math.*background-position:0px/);
   for (const index of [1, 2, 0]) {
     cards[index].focus(); cards[index].click();
@@ -405,16 +485,20 @@ test('mounted field keeps lines and buttons, displays only the active strip, and
 
 test('keyboard roves through story lines and the active strip, then yields Down to commands', () => {
   const env = mount(), { root, doc } = env;
-  const lines = root.querySelectorAll('.ribbon-line'), options = root.querySelectorAll('.ribbon-option');
+  const lines = root.querySelectorAll('.ribbon-lines .ribbon-line'), options = root.querySelectorAll('.ribbon-option');
   lines[0].focus();
   for (let i = 0; i < 4; i++) {
     assert.equal(arrow(lines[i], 'ArrowDown').defaultPrevented, true); assert.equal(doc.activeElement, lines[i + 1]);
   }
-  arrow(lines[4], 'ArrowDown'); assert.equal(doc.activeElement, options[0]);
+  const hearPrompt = root.querySelector('.ribbon-hear-prompt'), hearChoices = root.querySelector('.ribbon-hear-choices');
+  arrow(lines[4], 'ArrowDown'); assert.equal(doc.activeElement, hearPrompt);
+  arrow(hearPrompt, 'ArrowDown'); assert.equal(doc.activeElement, hearChoices);
+  arrow(hearChoices, 'ArrowDown'); assert.equal(doc.activeElement, options[0]);
   for (let i = 0; i < 3; i++) { arrow(options[i], 'ArrowRight'); assert.equal(doc.activeElement, options[i + 1]); }
   assert.equal(arrow(options[3], 'ArrowDown').defaultPrevented, false);
   arrow(options[3], 'ArrowLeft'); assert.equal(doc.activeElement, options[2]);
-  arrow(options[2], 'ArrowUp'); assert.equal(doc.activeElement, lines[4]);
+  arrow(options[2], 'ArrowUp'); assert.equal(doc.activeElement, hearChoices);
+  arrow(hearChoices, 'ArrowUp'); arrow(hearPrompt, 'ArrowUp'); assert.equal(doc.activeElement, lines[4]);
   assert.equal(arrow(lines[4], 'Tab').defaultPrevented, false);
   const modified = new Event('keydown', { key: 'ArrowUp', ctrlKey: true }); lines[4].dispatchEvent(modified);
   assert.equal(modified.defaultPrevented, false); assert.equal(doc.activeElement, lines[4]);
@@ -433,7 +517,9 @@ test('keyboard roves through story lines and the active strip, then yields Down 
   assert.equal(arrow(cards[2], 'ArrowDown').defaultPrevented, false);
   env.set({ state: ready(), ui: {} });
   assert.equal(doc.activeElement, lines[4]);
-  assert.equal(arrow(lines[4], 'ArrowDown').defaultPrevented, false);
+  assert.equal(arrow(lines[4], 'ArrowDown').defaultPrevented, true);
+  assert.equal(doc.activeElement, hearPrompt);
+  assert.equal(arrow(hearPrompt, 'ArrowDown').defaultPrevented, false);
   env.mounted.destroy();
 });
 
@@ -477,7 +563,7 @@ test('field typography grows with tokens and the planned rectangles stay within 
     const tag = controlStyle(env.root.querySelector('.ribbon-line__tag'), allCSS);
     assert.equal(tag.width, large ? '20px' : '24px'); assert.equal(tag.height, large ? '20px' : '24px');
     assert.notEqual(controlStyle(env.root.querySelector('.ribbon-question'), allCSS).display, 'none');
-    for (const line of env.root.querySelectorAll('.ribbon-line')) assert.notEqual(controlStyle(line, allCSS).display, 'none');
+    for (const line of env.root.querySelectorAll('.ribbon-lines .ribbon-line')) assert.notEqual(controlStyle(line, allCSS).display, 'none');
   }
   assert.doesNotMatch(css, /font-size:\s*\d|text-overflow:\s*ellipsis|linear-gradient|radial-gradient/);
   env.mounted.destroy();
