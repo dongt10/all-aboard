@@ -13,7 +13,7 @@ Changes to All Aboard, grouped by release.
 - Hana’s compass errands for grade 2: follow three map clues, learn whose job each delivery helps, and Hang map after all three errands.
 - Sora’s story ribbon for grade 2: two five-line stories with why questions, beginning/middle/end cards and lesson tags, saved with Share ribbon.
 - Pattern and mirror goals for Yuki’s banner, from free stamping in K to six matching stamps in two colors in grades 4–5.
-- Sentence and describing-word goals for Fumi’s sign, with phrase/word tiles and a short hint for the next step.
+- Scenario-based writing for Fumi’s signs, with reader-specific prompts, word and sentence hints, reasons in grades 3–5, and different readers in grade 5. Children can fix or keep marked words and try another prompt.
 - The grade-4 pond food chain and Help Day set B, with Momo, Sora, Yuki and Fumi in four new jobs.
 - Finished tales can be reread from their labels or filled book slots, with all three lines visible and the proof highlighted.
 - Grade-2 activity routing, saves, creation pictures and Guide stamps, while older untagged creations keep their original pictures and learned statements.

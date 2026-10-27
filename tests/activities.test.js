@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { ACTIVITIES, activityFor } from '../src/ui/registry.js';
 import { encounterReady, gradeBand, normalizeEncounterSnapshot } from '../src/encounters.js';
 import { arrangeCommands } from '../src/ui/menu.js';
+import { scenariosFor } from '../src/sign-scenarios.js';
 
 // [chapter, grade] for Kindergarten and grades 1 to 5.
 const SCOPES = [[0, 0], [1, 1], [1, 2], [1, 3], [1, 4], [1, 5]];
@@ -31,7 +32,11 @@ const readyFor = (kind, grade) => {
       : [6, 11, 7, 10].map(cell => stamp(cell)).concat(grade >= 4 ? [12, 17].map(cell => stamp(cell, 'circle', '#559fc7')) : []);
     return { ...READY.art, stamps };
   }
-  if (kind === 'writing') return { kind, text: grade === 0 ? 'Hello friend!' : grade < 3 ? 'Hello!' : 'Welcome, neighbors! The lanterns are bright.' };
+  if (kind === 'writing') {
+    if (grade < 3) return { kind, text: grade === 0 ? 'Hello friend!' : 'Hello!' };
+    const scenario = scenariosFor(grade)[0];
+    return { kind, scenario: scenario.id, text: scenario.example };
+  }
   if (grade === 2) return {
     math: { kind, activity: 'rows', target: 12, crates: [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13] },
     science: { kind, activity: 'beans', change: 'water', weeks: 2, bed: ['seed', 'sun', 'water', 'bee'] },

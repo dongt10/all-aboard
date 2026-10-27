@@ -105,3 +105,107 @@ test('sign goals, hints, openings and help fit both dialogue sizes', () => {
     for (const limit of Object.values(PAGE_CHARS)) for (const page of paginate(line, limit)) assert.ok(page.length <= limit);
   }
 });
+
+test('scenario normalization keeps valid optional data and reconciles scenario tiles', async () => {
+  const { scenariosFor } = await import('../src/sign-scenarios.js');
+  const item = scenariosFor(1)[0];
+  const tiles = item.tiles.phrases.slice(0, 2);
+  const input = { text: tiles.join(' '), scenario: item.id, tiles, kept: ['NASA', 'nasa', 'Word'], ignored: true };
+  assert.deepEqual(normalizeSign(input, 1), { text: input.text, scenario: item.id, tiles, kept: ['nasa', 'word'] });
+  assert.deepEqual(normalizeSign({ text: '', scenario: 2, kept: ['ok', 3] }, 1), { text: '' });
+  assert.equal(normalizeSign({ kept: Array.from({ length: 25 }, (_, i) => `w${i}`) }, 1).kept.length, 20);
+  assert.deepEqual(normalizeSign({ text: input.text, scenario: 'missing', tiles }, 1).tiles,
+    tiles.every(tile => signWords(1).includes(tile)) ? tiles : []);
+});
+
+test('a scenario sign retains legitimate legacy tile history', async () => {
+  const { scenariosFor } = await import('../src/sign-scenarios.js');
+  const scenario = scenariosFor(1)[0];
+  const tiles = ['Welcome', 'Come'];
+  assert.deepEqual(normalizeSign({ text: tiles.join(' '), scenario: scenario.id, tiles }, 1).tiles, tiles);
+});
+
+test('scenario opening, checker options, and issue ordering integrate', async () => {
+  const { scenariosFor } = await import('../src/sign-scenarios.js');
+  const item = scenariosFor(1)[0];
+  const draft = { ...state('', 1), scenario: item.id };
+  assert.equal(signOpening(draft), item.prompt);
+  const report = signReport('hello!', 1, { vocabulary: item.vocabulary });
+  assert.ok(report.missing.length);
+  assert.equal(report.missing[0], signHint({ ...draft, text: 'hello!' }));
+  assert.equal(signReady({ ...draft, text: item.example }), true);
+  for (const grade of [1, 2, 3, 4, 5]) assert.ok(signHelp(grade).includes('Tap a marked word for a hint. Fix it or Keep it.'));
+  for (const item of [0, 1, 2, 3, 4, 5].flatMap(scenariosFor)) assert.ok(item.prompt.length <= 56);
+});
+
+test('scenario collection has usable band-specific content and deterministic selection', async () => {
+  const { SIGN_SCENARIOS, scenariosFor, scenarioById, scenarioOrder, nextScenario, tilesFor } = await import('../src/sign-scenarios.js');
+  assert.ok(Object.isFrozen(SIGN_SCENARIOS));
+  assert.equal(scenarioById('missing', 1), null);
+  for (const grade of [0, 1, 2, 3, 4, 5]) {
+    const items = scenariosFor(grade), order = scenarioOrder(grade, 123);
+    assert.ok(items.length >= 2);
+    assert.deepEqual(order, scenarioOrder(grade, 123));
+    assert.deepEqual(new Set(order), new Set(items.map(item => item.id)));
+    for (const item of items) {
+      assert.equal(scenarioById(item.id, grade), item);
+      assert.deepEqual(tilesFor(item, grade), item.tiles);
+      assert.ok(item.tiles.phrases.length > 0);
+      assert.equal(signReady({ ...state(item.example, grade), scenario: item.id }), true, item.id);
+      assert.ok(item.tiles.phrases.every(tile => /[\p{L}\p{N}]/u.test(tile)));
+    }
+    const current = order[0];
+    assert.equal(nextScenario(grade, { seed: 123, current }).id, order[1]);
+    assert.equal(nextScenario(grade, { seed: 123, current, seen: order.slice(1) }).id, current);
+    assert.equal(nextScenario(grade, { seed: 123, current, seen: order }).id, order[1]);
+  }
+});
+
+test('scenario prompt remains visible when ready and reason goal affects readiness', async () => {
+  const { scenariosFor } = await import('../src/sign-scenarios.js');
+  const item = scenariosFor(3).find(scenario => scenario.goal === 'reason');
+  assert.ok(item);
+  const draft = { ...state(item.example, 3), scenario: item.id };
+  assert.equal(signReady(draft), true);
+  assert.equal(signOpening(draft), item.prompt);
+  assert.equal(signReady({ ...draft, text: 'Hello! We are bright.' }), false);
+  assert.ok(signReport('Hello! We are bright.', 3, { goal: item.goal }).missing.includes('Tell why. Use because or so.'));
+});
+
+test('normalization retains only valid optional metadata and is idempotent', () => {
+  assert.deepEqual(normalizeSign({ text: 'Hello', scenario: null, kept: 'hello', tiles: null, other: 1 }, 0), { text: 'Hello', tiles: [] });
+  assert.deepEqual(normalizeSign({ scenario: '', kept: ['Hi', 'HI', 'HELLO'], tiles: [] }, 0), { text: '', scenario: '', kept: ['hi', 'hello'], tiles: [] });
+  const normalized = normalizeSign({ scenario: 'retired', kept: ['Hello', 'hello'], text: 'Hi' }, 1);
+  assert.deepEqual(normalizeSign(normalized, 1), normalized);
+});
+
+test('report lists every checker issue with blocking issues first', async () => {
+  const { checkSign } = await import('../src/sign-check.js');
+  const text = 'mysteryzz hello';
+  const checked = checkSign(text, { grade: 3 });
+  const expected = [...checked.issues].sort((a, b) => Number(b.blocking) - Number(a.blocking)).map(issue => issue.line);
+  assert.ok(checked.issues.some(issue => issue.blocking));
+  assert.ok(checked.issues.some(issue => !issue.blocking));
+  assert.deepEqual(signReport(text, 3).missing, expected);
+});
+
+test('legacy reports and checker agree on scenario describing vocabulary', async () => {
+  const { scenariosFor, tilesFor } = await import('../src/sign-scenarios.js');
+  for (const item of scenariosFor(3)) for (const tile of tilesFor(item, 3).describing) {
+    const vocabulary = [...item.vocabulary, tile];
+    const text = `Hello! It is ${tile.replace(/[.!?]+$/, '')}.`;
+    const result = signReport(text, 3, { vocabulary, goal: 'two-sentences-describing' });
+    assert.equal(result.describing, true, `${item.id}: ${tile}`);
+    assert.ok(!result.missing.includes(SIGN_RULE_LINES.describing));
+  }
+});
+
+test('kept words persist through normalization and the scenario readiness path', async () => {
+  const { scenariosFor } = await import('../src/sign-scenarios.js');
+  const scenario = scenariosFor(1)[0].id;
+  const draft = { kind: 'writing', grade: 1, ...normalizeSign({ text: 'Hello frend!', scenario, kept: ['FREND'] }, 1) };
+  assert.equal(signReady(draft), true);
+  assert.equal(signHint(draft), '');
+  assert.equal(signReady({ ...draft, kept: [] }), false);
+  assert.match(signHint({ ...draft, kept: [] }), /frend/);
+});

@@ -1,14 +1,14 @@
-/* Fumi's sign (writing). Fits the 520×268 field; scrolls vertically only as a last resort. */
+/* Fumi's sign (writing). The board and controls share a fixed 520×268 field. */
 .sign-field {
   box-sizing: border-box; width: 100%; max-width: 520px; height: 100%; max-height: 268px;
-  display: flex; flex-direction: column; align-items: center; padding: 8px 8px 10px;
-  overflow-x: hidden; overflow-y: auto; font-family: var(--font-read); color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; padding: 6px 8px;
+  overflow: visible; font-family: var(--font-read); color: var(--ink);
 }
 
 /* The wooden sign: a plank frame with a light face so ink text keeps its contrast. */
 .sign-board {
   --board-light: #dfa777; --board-shade: #815035;
-  position: relative; box-sizing: border-box; flex: 0 0 auto; width: 100%; padding: 8px;
+  position: relative; box-sizing: border-box; flex: 1 1 0; min-height: 0; width: 100%; padding: 4px; display: flex;
   background: var(--wood); border: 4px solid var(--board-shade); outline: 1px solid var(--ink); outline-offset: -1px;
   box-shadow: inset 2px 3px 0 var(--board-light), inset -2px -4px 0 var(--board-shade);
   transition: background-color .2s;
@@ -21,14 +21,15 @@
 .sign-board::after { bottom: 2px; }
 .sign-board--ready { background: var(--writing); --board-light: #d6c4ff; --board-shade: #70578f; }
 .sign-face {
-  box-sizing: border-box; display: block; width: 100%; min-height: calc(var(--text-field) * 1.3 * 2 + 16px); margin: 0;
-  padding: 6px 10px; background: var(--path); border: 3px solid #c9a776; border-radius: 0;
+  box-sizing: border-box; display: block; width: 100%; min-height: 0; margin: 0;
+  padding: 4px 10px; background: var(--path); border: 3px solid #c9a776; border-radius: 0;
   outline: 1px solid var(--ink); outline-offset: -1px;
   box-shadow: inset 2px 2px 0 #ffecc5, inset -2px -2px 0 #c9a776;
-  font: 700 var(--text-field)/1.3 var(--font-read); color: var(--ink); text-align: center;
+  font: 700 var(--text-field)/1.05 var(--font-read); color: var(--ink); text-align: center;
   overflow-wrap: anywhere; white-space: pre-wrap;
 }
-.sign-input { height: calc(var(--text-field) * 1.3 * 3 + 18px); resize: none; overflow-y: auto; }
+.sign-input { height: 100%; flex: 1 1 auto; resize: none; overflow-y: auto; }
+.sign-display { min-height: 80px; align-content: center; }
 .sign-input::placeholder, .sign-placeholder { color: var(--ink-soft); font-weight: 400; opacity: 1; }
 .sign-input:focus-visible { background: var(--paper); outline: 4px solid var(--ink); outline-offset: 3px; box-shadow: 0 0 0 3px var(--paper); }
 .sign-post {
@@ -37,9 +38,10 @@
 }
 .sign-post::after { content: ''; position: absolute; left: 3px; top: 2px; width: 1px; height: 4px; background: #815035; }
 
-/* Four columns keep arrow movement in step with the words. Columns fit their longest word. */
-.sign-tiles { flex: 0 0 auto; display: grid; grid-template-columns: repeat(4, max-content); justify-content: center; gap: 8px 10px; width: 100%; padding: 4px; box-sizing: border-box; }
-.sign-tile { position: relative; flex: 0 0 auto; min-width: 48px; min-height: 44px; padding: 2px 8px; font-size: var(--text-field); }
+/* Four equal columns retain arrow order; long words wrap inside their own tile.
+   Two 64px rows + 4px gap + 8px padding = 140px, at either text size. */
+.sign-tiles { flex: 0 0 auto; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-auto-rows: 64px; justify-content: center; gap: 4px 8px; width: 100%; padding: 4px; box-sizing: border-box; }
+.sign-tile { position: relative; flex: 0 0 auto; min-width: 0; min-height: 0; padding: 2px 6px; font-size: var(--text-field); line-height: 1.05; overflow-wrap: anywhere; }
 /* Keep the kit button's exact border box, but draw a one-pixel ink edge and solid stepped bevels. */
 .sign-tile::before {
   border: 1px solid var(--ink); background: var(--fill);
@@ -54,13 +56,29 @@
 .calm .sign-board { transition: none; }
 @media (prefers-reduced-motion: reduce) { .sign-board { transition: none; } }
 
-/* Grades 3–5: the board and a 2×3 describing grid face four phrase tiles.
-   The left column uses 122px for tiles and a 6px gap, leaving 128px for the board.
-   At Bigger words the phrases wrap onto two 22px lines inside each 59px row. */
+/* Grades 3–5 retain the left board and 2×3 grid facing four phrase tiles.
+   Of 256px, describing uses 122px; hints use 60px plus two 6px gaps.
+   The board retains 62px with hints, or 128px without them. */
 .sign-field--phrases { flex-direction: row; align-items: stretch; gap: 10px; padding: 6px 8px; overflow: visible; }
 .sign-work { flex: 0 0 244px; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
 .sign-field--phrases .sign-board { flex: 1 1 0; min-height: 0; padding: 6px; display: flex; }
-.sign-field--phrases .sign-input { height: 100%; min-height: 0; flex: 1 1 auto; font-size: var(--text-small); }
+.sign-field--phrases .sign-input { height: 100%; min-height: 0; flex: 1 1 auto; font-size: var(--text-small); line-height: 1.3; }
 .sign-field--phrases .sign-tiles--phrases { flex: 1 1 0; min-width: 0; grid-template-columns: minmax(0, 1fr); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 0; }
 .sign-field--phrases .sign-tiles--describing { flex: 0 0 122px; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 4px; padding: 0; }
 .sign-field--phrases .sign-tile { min-height: 0; padding: 2px 8px; font-size: var(--text-small); line-height: 1.1; white-space: normal; overflow-wrap: normal; }
+
+/* One row below the sign; many errors can scroll horizontally without pushing tiles out. */
+.sign-checks {
+  box-sizing: border-box; flex: 0 0 60px; min-width: 0; width: 100%; height: 60px;
+  display: flex; align-items: center; gap: 8px; padding: 4px;
+  overflow-x: auto; overflow-y: hidden; scrollbar-width: thin;
+}
+.sign-check-item { display: flex; align-items: center; flex: 0 0 auto; gap: 4px; max-width: 100%; }
+.sign-check {
+  flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 2px 6px;
+  gap: 4px; font-size: var(--text-small); line-height: 1.1; white-space: nowrap;
+}
+.sign-check--hint { flex: 0 1 auto; min-width: 0; --fill: var(--lantern); }
+.sign-check__icon, .sign-check__icon svg { display: block; flex: none; width: 16px; height: 16px; }
+.sign-check__word { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.sign-check:focus-visible { outline: 2px solid var(--ink); outline-offset: 1px; box-shadow: none; }

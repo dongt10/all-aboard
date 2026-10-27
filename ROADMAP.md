@@ -24,14 +24,14 @@ All Aboard · Summer Festival is a playable prototype with seven creative encoun
 
 - All seven neighbors plus Pip and Nori now come from the team's reference drawings in `docs/art/source/neighbors/`.
 - Four grade-2 activities: **Taro’s crate rows**, **Momo’s bean test**, **Hana’s compass errands**, and **Sora’s story ribbon**, with their own saves, village creations and Guide stamps. Kindergarten and grade 1 keep their earlier activities.
-- Banner goals now grow from free stamps to shape/color patterns and mirror designs. Sign goals grow from two words to complete sentences and describing words.
+- Banner goals now grow from free stamps to shape/color patterns and mirror designs. Sign scenarios grow from two-word messages to sentences, reasons and writing for readers.
 - Grade 4 has a pond food chain and Help Day set B. Food-chain numbers start at the plant, and feeding arrows show ÷10. Grade 5 must cut pizza halves; finished tales can be reread with their proof highlighted.
 - Send band waits for the grade’s lesson. Older grade-4 Form A saves open as A B. The walking hint closes itself and stays clear of the player; Taro’s starting crates stay tied down.
 
 Still thin:
 
 - Grade 2 now has distinct math, science, reading and community tasks. Grades 4–5 still share the grade-3 activity types, with a pond chain and new jobs at grade 4, required pizza halves and hidden strengths at grade 5, and different tale decks. These remain a small set of tasks rather than full grade coverage.
-- Art and Writing now have grade-based completion goals. More pattern types, writing for different readers, revision and coordinate designs remain planned; grades 3–5 share the two-sentence writing goal.
+- Art and Writing now have grade-based completion goals. More pattern types and coordinate designs remain planned; writing scenarios now include correction, reasons and different readers.
 - The finale is one line on the board and in the parade, not a lantern night.
 - Several supports from the brief are missing or partial. See [v1 scope](#v1-scope).
 - Every on-screen word is written into the code, so content can’t change by grade or language without code changes.
@@ -117,18 +117,18 @@ The Sun supplies sunlight without a number. The plant holds the largest number, 
 | 4 | Infer a character’s identity from text details. | **Shipped:** the tale-and-proof task starts with Hana, Pip and Yuki. Start over cycles decks; named tales and filled book slots reopen all three lines with the proof highlighted. | CCSS RL.4.1 |
 | 5 | Select the exact line that supports an inference. | The same tale-and-proof task starts with Fumi, Nori and Sora. Choose the evidence line for each before Share tales. | CCSS RL.5.1 |
 
-### Writing · Fumi’s welcome sign
+### Writing · Fumi’s signs
 
-**Write for a reader.** Fumi gives a short next-step hint until the sign meets its grade’s goal. Kindergarten needs two words; grades 1–2 need complete sentences; grades 3–5 need two complete sentences and a describing word. Every sentence starts with a capital and ends with . or !. Every grade can use tiles; grades 1–5 can also type.
+**Write for a reader.** Scenario prompts and tiles change by grade. Kindergarten needs two words; grades 1–2 need a complete sentence; grades 3–5 generally need two sentences, a describing word and a reason. Grade 5 also has reader-specific prompts with a two-sentence describing-word goal. There are six scenarios in Kindergarten, eight each in grades 1–4, and ten in grade 5. Grades 1–5 can type, use shuffled phrase tiles and use marked-word hints to fix or keep a word. To choose Next sign, first Clear sign if the board has text; Put up sign finishes a ready sign.
 
 | Grade | Learning goal | In the writing booth | Anchor |
 | :--- | :--- | :--- | :--- |
-| K | Compose a message with word tiles and pictures, with spaces between words. | Word tiles plus picture stamps. Hear reads the sign back. | CCSS W.K.2, RF.K.1 |
-| 1 | Capitalize names, and end a sentence with punctuation. | Invite a neighbor by name: “Come play, Momo!” Fumi notices the capital and the end mark. | CCSS L.1.2 |
-| 2 | Start a sentence with a capital and finish it with punctuation. | **Shipped:** make a complete sentence with eight word tiles or typing, then Put up sign. Place names and greeting commas remain planned. | CCSS L.2.2 (foundation) |
-| 3 | State an opinion and give a reason. | “Come to the festival because…” Fumi asks for one reason. | CCSS W.3.1 |
-| 4 | Use complete sentences and describing words; develop writing for a reader. | **Shipped foundation:** two complete sentences with a describing word, using phrase/word tiles or typing. Reader cards and writing for different purposes remain planned. | CCSS W.4.4 (longer-term target) |
-| 5 | Revise the same message for a different audience. | Rewrite the sign for grown-ups, then for little kids, and compare the word choices. | CCSS W.5.4, W.5.5 |
+| K | Compose a message with words for a reader. | **Shipped:** use scenario word tiles to make a two-word message. | CCSS W.K.2, RF.K.1 |
+| 1 | Capitalize names and end a sentence with punctuation. | **Shipped:** write for a scenario with tiles or typing and use correction hints. | CCSS L.1.2 |
+| 2 | Start a sentence with a capital and finish it with punctuation. | **Shipped:** write for a scenario and check words and punctuation. | CCSS L.2.2 (foundation) |
+| 3 | State an idea and give a reason. | **Shipped:** write two sentences with a describing word and a reason using because or so. | CCSS W.3.1 |
+| 4 | Use complete sentences and details for a reader. | **Shipped:** write two sentences with a describing word and a reason for a scenario’s reader. | CCSS W.4.4 (foundation) |
+| 5 | Choose words for different readers. | **Shipped:** write for different readers, including little kids and grown-ups; prompts guide word choice. Comparing revisions remains a learning target. | CCSS W.5.4, W.5.5 |
 
 ### Art · Yuki’s banner
 

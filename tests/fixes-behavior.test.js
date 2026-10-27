@@ -98,17 +98,19 @@ test('music: A with focus outside the menu brings focus back to the menu', () =>
 });
 
 // ---- B2: Fumi's empty sign ----
-test('sign: an empty sign opens with focus in the field, not on the Village button', () => {
+test('sign: an empty sign opens with focus in the field, not on the Village button', t => {
   const ctx = fakeCtx(grade2());
   const scene = createEncounterScene(ctx, { id: 'writing' });
+  t.after(() => scene.destroy());
   scene.mount();
   assert.ok(ctx.stage.querySelector('.enc__field').contains(doc.activeElement), 'focus starts in the field');
   scene.destroy();
 });
 
-test('sign: B in the empty textarea moves to Village, and a second B leaves', async () => {
+test('sign: B in the empty textarea moves to Village, and a second B leaves', async t => {
   const ctx = fakeCtx(grade2());
   const scene = createEncounterScene(ctx, { id: 'writing' });
+  t.after(() => scene.destroy());
   scene.mount();
   ctx.stage.querySelector('textarea').focus();
   assert.equal(scene.handleIntent('b'), true);
@@ -121,9 +123,10 @@ test('sign: B in the empty textarea moves to Village, and a second B leaves', as
 });
 
 // ---- Frame: a readiness flip with no line from the activity still gets a line ----
-test('encounter: typing the sign empty says the activity\'s not-ready line, and a sentence says the sign\'s own line', () => {
+test('encounter: typing the sign empty says the activity\'s not-ready line, and a sentence says the sign\'s own line', t => {
   const ctx = fakeCtx(grade2());
   const scene = createEncounterScene(ctx, { id: 'writing' });
+  t.after(() => scene.destroy());
   scene.mount();
   const face = ctx.stage.querySelector('textarea');
   const text = () => ctx.stage.querySelector('.enc__dialogue').querySelector('.dlg__text').textContent;
@@ -139,9 +142,10 @@ test('encounter: typing the sign empty says the activity\'s not-ready line, and 
 });
 
 // ---- B10: arrows out of the field ----
-test('encounter: down from the field moves focus to the menu', () => {
+test('encounter: down from the field moves focus to the menu', t => {
   const ctx = fakeCtx();
   const scene = createEncounterScene(ctx, { id: 'writing' });
+  t.after(() => scene.destroy());
   scene.mount();
   const tile = ctx.stage.querySelector('.sign-tile');
   tile.click();   // a word on the sign, so the menu has commands
@@ -489,6 +493,7 @@ test('app: Escape then A cannot activate Finish or its target handlers during ei
   let animation;
   try {
     await app.go('encounter', { id: 'writing' });
+    app.stage.querySelector('.sign-tile').focus();
     press('Enter'); // Hello
     press('ArrowRight'); press('Enter'); // friend!
     const finish = slot(app.stage, 'finish');
@@ -524,6 +529,9 @@ test('app: stale tabs refuse saves even after a storage event, preserving the ne
   let reloaded;
   try {
     await appA.go('encounter', { id: 'writing' });
+    const tiles = appA.stage.querySelectorAll('.sign-tile');
+    const expected = `${tiles[0].textContent} ${tiles[1].textContent}`;
+    tiles[0].focus();
     press('Enter');
     press('ArrowRight'); press('Enter');
     slot(appA.stage, 'finish').click();
@@ -531,7 +539,7 @@ test('app: stale tabs refuse saves even after a storage event, preserving the ne
     await tick();
     assert.equal(appA.saveOk, true);
     const saved = storage.getItem(STORAGE_KEY);
-    assert.equal(getCreations(loadState(storage)).writing.text, 'Hello friend!');
+    assert.equal(getCreations(loadState(storage)).writing.text, expected);
     window.fire(new Event('storage', { key: STORAGE_KEY, newValue: saved, storageArea: storage }));
     appB.commit({ ...appB.getState(), settings: { ...appB.getState().settings, largeText: true } });
     assert.equal(appB.saveOk, false, 'the stale snapshot is not reported as saved');
@@ -629,8 +637,8 @@ test('sign: removing the last word returns focus to a usable field control', asy
     try {
       await app.go('encounter', { id: 'writing' });
       const tile = app.stage.querySelector('.sign-tile');
-      tile.focus(); press('Enter'); press('ArrowDown');
-      if (state.chapter === 1) press('ArrowDown'); // leave the second row of word tiles
+      tile.focus(); press('Enter');
+      slot(app.stage, 'remove').focus();
       assert.ok(doc.activeElement === slot(app.stage, 'remove'));
       press('Enter');
       const field = app.stage.querySelector('.enc__field');

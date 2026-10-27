@@ -45,8 +45,9 @@ export function createEncounterScene(ctx, { id } = {}) {
   const saveNow = () => ctx.commit(saveDraft(ctx.getState(), id, scoped()));
   const say = line => dialogue.say(character.name, line);
   const inField = () => root.querySelector('.enc__field').contains(document.activeElement);
-  // The menu can't take focus while every command is disabled (an empty sign), so say where it went.
+  // If every command is disabled, keep focus on an editable field control.
   const focusMenu = () => { menu.focus(); return root.querySelector('.enc__menu').contains(document.activeElement); };
+  const focusField = () => root.querySelector('.enc__field').querySelector(FOCUSABLE)?.focus();
 
   const commands = () => arrangeCommands(activity.commands(state, ui, grade));   // the finish always ends up in slot 4
   // Help can depend on the grade (K has no typing box, no crate sizes): helpFor(grade), help(grade) or a plain array.
@@ -55,6 +56,8 @@ export function createEncounterScene(ctx, { id } = {}) {
 
   function dispatch(action) {
     if (finishing) return;
+    const returnToField = id === 'writing' && action?.type === 'command' && ['remove', 'clear'].includes(action.id)
+      && root.querySelector('.enc__menu').contains(document.activeElement);
     const wasReady = encounterReady(state);
     const result = activity.act(state, ui, action, grade);
     const changed = result.state !== state;
@@ -64,6 +67,7 @@ export function createEncounterScene(ctx, { id } = {}) {
     field.update(state, ui);
     const next = commands();
     menu.set(next);
+    if (returnToField && !state.text.trim()) focusField();
     const line = result.line || readinessLine(activity, next, wasReady, encounterReady(state));
     if (line) say(line);
   }
@@ -134,13 +138,14 @@ export function createEncounterScene(ctx, { id } = {}) {
       field.update(state, ui);
       menu.set(commands());
       say(activity.opening(state, ui, grade));
-      if (!focusMenu()) root.querySelector('.enc__field').querySelector(FOCUSABLE)?.focus();
+      if (id === 'writing' && !state.text.trim()) focusField();
+      else if (!focusMenu()) focusField();
     },
     handleIntent(intent) {
       if (finishing) return false;   // the item-get card handles its own A
       if (intent === 'b') {
         if (inField() && TYPING.has(document.activeElement.tagName)) {
-          if (!focusMenu()) root.querySelector('.enc__back').focus();   // a second B leaves
+          if ((id === 'writing' && !state.text.trim()) || !focusMenu()) root.querySelector('.enc__back').focus();   // a second B leaves
           return true;
         }
         leave();

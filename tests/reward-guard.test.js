@@ -269,10 +269,9 @@ const flows = [
     name: 'encounter', subjectId: 'writing', commandId: 'finish', rootSelector: '.enc',
     create: ctx => createEncounterScene(ctx, { id: 'writing' }),
     edit: stage => {
-      const tiles = [...stage.querySelectorAll('.sign-tile')];
-      tiles[0].click();
-      const ending = tiles.find(tile => tile.textContent === 'festival!') ?? tiles.find(tile => tile.textContent === 'friend!');
-      ending.click();
+      const face = stage.querySelector('textarea');
+      if (face) { face.value = 'Hello friend!'; face.dispatchEvent(new Event('input')); }
+      else [...stage.querySelectorAll('.sign-tile')].slice(0, 2).forEach(tile => tile.click());
     },
   },
   {
