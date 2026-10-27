@@ -94,3 +94,138 @@ test('the live style guide Help action closes with Got it and restores focus', a
     assert.equal(help.closest('.kit-demo__dlg').inert, false);
   }
 });
+
+function setGlobal(t, name, value) {
+  const old = Object.getOwnPropertyDescriptor(globalThis, name);
+  Object.defineProperty(globalThis, name, { configurable: true, writable: true, value });
+  t.after(() => { if (old) Object.defineProperty(globalThis, name, old); else delete globalThis[name]; });
+}
+function titleContext(doc, spoken = []) {
+  let state = createState();
+  return { stage: doc.body, getState: () => state, commit: next => { state = next; }, go() {}, announce() {}, speak: text => spoken.push(text) };
+}
+const flush = () => new Promise(resolve => setTimeout(resolve, 0));
+
+test('fullscreen control tracks entry, exit, external changes and removes listeners', async t => {
+  const doc = installDocument(t);
+  doc.documentElement = doc.body;
+  doc.fullscreenEnabled = true;
+  let locked = '';
+  setGlobal(t, 'screen', { orientation: { lock: async value => { locked = value; } } });
+  doc.body.requestFullscreen = async () => { doc.fullscreenElement = doc.body; doc.dispatchEvent(new Event('fullscreenchange')); };
+  doc.exitFullscreen = async () => { doc.fullscreenElement = null; doc.dispatchEvent(new Event('fullscreenchange')); };
+  const scene = createTitleScene(titleContext(doc)); scene.mount();
+  const button = doc.body.querySelector('.title-fullscreen');
+  assert.ok(button);
+  button.click(); await flush();
+  assert.equal(button.textContent, 'Exit full screen');
+  assert.equal(button.getAttribute('aria-pressed'), 'true');
+  assert.equal(locked, 'landscape');
+  button.click(); await flush();
+  assert.equal(button.textContent, 'Full screen');
+  doc.fullscreenElement = doc.body; doc.dispatchEvent(new Event('webkitfullscreenchange'));
+  assert.equal(button.textContent, 'Exit full screen');
+  scene.destroy();
+  assert.equal(doc.listeners.fullscreenchange.length, 0);
+  assert.equal(doc.listeners.webkitfullscreenchange.length, 0);
+});
+
+test('fullscreen availability and refusal use a readable dialog', async t => {
+  const doc = installDocument(t); doc.documentElement = doc.body;
+  let scene = createTitleScene(titleContext(doc)); scene.mount();
+  assert.equal(doc.body.querySelector('.title-fullscreen'), null); scene.destroy();
+  doc.webkitFullscreenEnabled = false;
+  doc.body.webkitRequestFullscreen = async () => {};
+  doc.webkitExitFullscreen = async () => {};
+  scene = createTitleScene(titleContext(doc)); scene.mount();
+  assert.equal(doc.body.querySelector('.title-fullscreen'), null); scene.destroy();
+  doc.webkitFullscreenEnabled = true;
+  doc.body.webkitRequestFullscreen = async () => { throw new Error('denied'); };
+  const spoken = [];
+  scene = createTitleScene(titleContext(doc, spoken)); scene.mount();
+  const button = doc.body.querySelector('.title-fullscreen'); button.focus(); button.click(); await flush();
+  assert.match(doc.body.querySelector('.fullscreen-message p').textContent, /could not/);
+  doc.body.querySelector('[data-action="hear"]').click();
+  assert.match(spoken[0], /could not/);
+  doc.body.querySelector('[data-action="done"]').click();
+  assert.equal(doc.activeElement, button);
+  scene.destroy();
+});
+
+test('iPhone Safari tip is dismissible, readable and remembered when storage throws', t => {
+  const doc = installDocument(t);
+  setGlobal(t, 'navigator', { userAgent: 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Version/17.0 Mobile Safari/604.1' });
+  setGlobal(t, 'localStorage', { getItem() { throw Error('blocked'); }, setItem() { throw Error('blocked'); } });
+  const spoken = [];
+  let scene = createTitleScene(titleContext(doc, spoken)); scene.mount();
+  assert.equal(doc.body.querySelector('.fullscreen-message p').textContent, 'For full screen: Share, then Add to Home Screen.');
+  doc.body.querySelector('[data-action="hear"]').click();
+  assert.deepEqual(spoken, ['For full screen: Share, then Add to Home Screen.']);
+  doc.body.querySelector('.win__close').click();
+  assert.equal(doc.activeElement, doc.body.querySelector('.title-start'));
+  scene.destroy();
+  scene = createTitleScene(titleContext(doc)); scene.mount();
+  assert.equal(doc.body.querySelector('.fullscreen-message'), null);
+  scene.destroy();
+});
+
+test('legacy WebKit events report failures and lock once on asynchronous entry', async t => {
+  const doc = installDocument(t); doc.documentElement = doc.body;
+  let locks = 0, calls = 0;
+  setGlobal(t, 'screen', { orientation: { lock: () => { locks++; return Promise.reject(Error('unsupported')); } } });
+  doc.body.webkitRequestFullscreen = () => { calls++; };
+  doc.webkitExitFullscreen = () => {};
+  const scene = createTitleScene(titleContext(doc)); scene.mount();
+  const button = doc.body.querySelector('.title-fullscreen');
+  button.click(); button.click(); assert.equal(calls, 1);
+  doc.dispatchEvent(new Event('webkitfullscreenerror'));
+  assert.match(doc.body.querySelector('.fullscreen-message p').textContent, /could not/);
+  doc.body.querySelector('[data-action="done"]').click();
+  button.click(); assert.equal(calls, 2);
+  doc.webkitFullscreenElement = doc.body;
+  doc.dispatchEvent(new Event('webkitfullscreenchange'));
+  doc.dispatchEvent(new Event('fullscreenchange'));
+  await flush();
+  assert.equal(locks, 1);
+  assert.equal(button.textContent, 'Exit full screen');
+  assert.equal(doc.body.querySelector('.fullscreen-message'), null);
+  scene.destroy();
+  assert.equal(doc.listeners.fullscreenerror.length, 0);
+  assert.equal(doc.listeners.webkitfullscreenerror.length, 0);
+});
+
+test('iPhone browser exclusions and installed display modes skip the tip and full-screen control', async t => {
+  const doc = installDocument(t); doc.documentElement = doc.body;
+  doc.body.webkitRequestFullscreen = () => {}; doc.webkitExitFullscreen = () => {};
+  const { createTitleScene: freshScene } = await import('../src/ui/screens/title.js?tip-exclusions');
+  setGlobal(t, 'localStorage', { getItem: () => null, setItem() {} });
+  const safari = 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Version/17.0 Mobile Safari/604.1';
+  for (const [ua, standalone, mode] of [
+    [safari, true, ''], [safari, false, 'standalone'], [safari, false, 'fullscreen'],
+    ...['CriOS', 'FxiOS', 'EdgiOS', 'OPiOS', 'DuckDuckGo'].map(name => [safari + ' ' + name, false, '']),
+  ]) {
+    setGlobal(t, 'navigator', { userAgent: ua, standalone });
+    setGlobal(t, 'matchMedia', query => ({ matches: query === `(display-mode: ${mode})` }));
+    const scene = freshScene(titleContext(doc)); scene.mount();
+    assert.equal(doc.body.querySelector('.fullscreen-message'), null, `${ua} ${mode}`);
+    assert.equal(doc.body.querySelector('.title-fullscreen'), null);
+    scene.destroy();
+  }
+});
+
+test('iPhone Safari tip dismissal survives a fresh module and remount through localStorage', async t => {
+  const doc = installDocument(t);
+  setGlobal(t, 'navigator', { userAgent: 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 Version/17.0 Mobile Safari/604.1' });
+  setGlobal(t, 'matchMedia', () => ({ matches: false }));
+  const stored = new Map();
+  setGlobal(t, 'localStorage', { getItem: key => stored.get(key) ?? null, setItem: (key, value) => stored.set(key, value) });
+  const first = await import('../src/ui/screens/title.js?tip-storage-first');
+  let scene = first.createTitleScene(titleContext(doc)); scene.mount();
+  assert.ok(doc.body.querySelector('.fullscreen-message'));
+  doc.body.querySelector('[data-action="done"]').click(); scene.destroy();
+  assert.equal(stored.get('all-aboard-fullscreen-tip-dismissed'), '1');
+  const second = await import('../src/ui/screens/title.js?tip-storage-second');
+  scene = second.createTitleScene(titleContext(doc)); scene.mount();
+  assert.equal(doc.body.querySelector('.fullscreen-message'), null);
+  scene.destroy();
+});

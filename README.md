@@ -40,6 +40,8 @@ There are no packages to install, API keys to add, or accounts to create.
 
 Open **[http://127.0.0.1:4173](http://127.0.0.1:4173)** in your browser. Keep Terminal running while you play; press **Control + C** in Terminal to stop the server. This address works on the computer running the game.
 
+**On a phone:** Open [playallaboard.com](https://playallaboard.com) and turn the phone sideways. The game fits the visible screen, keeping controls clear of the camera cutout and home indicator. For full screen on iPhone Safari, choose **Share → Add to Home Screen**, then open All Aboard from its icon. The title screen shows this tip once until dismissed, with **Hear** to read it. Browsers that support it also have a **Full screen** button on the title screen. **Bigger words** and browser pinch zoom are available; portrait still offers **Play anyway**.
+
 <details>
 <summary><strong>Having trouble starting?</strong></summary>
 

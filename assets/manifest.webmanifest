@@ -1,0 +1,14 @@
+{
+  "name": "All Aboard",
+  "short_name": "All Aboard",
+  "start_url": "../index.html",
+  "scope": "../",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#9fdcff",
+  "theme_color": "#9fdcff",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
