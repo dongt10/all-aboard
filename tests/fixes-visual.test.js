@@ -116,3 +116,29 @@ test('dialogue measurement shares the visible text inset without joining its liv
   assert.match(body, /height:\s*auto/);
   assert.match(body, /visibility:\s*hidden/);
 });
+
+test('the picture strip stays left of the field and above dialogue, with readable overflow at Bigger words', () => {
+  const all = css(['src/ui/screens/encounter.css']);
+  const guidance = rulesFor(all, '.enc__guidance');
+  const pixels = property => Number(guidance.match(new RegExp(`(?:^|;)\\s*${property}:\\s*([\\d.]+)px`))?.[1]);
+  assert.ok(pixels('left') + pixels('width') <= 220, 'column does not cover the field');
+  assert.ok(pixels('top') + pixels('max-height') < 368, 'column stays above the raised dialogue tabs');
+  assert.match(guidance, /overflow:\s*auto/, 'enlarged content and chips remain reachable');
+  assert.match(guidance, /font-size:\s*var\(--text-small\)/);
+  assert.match(rulesFor(all, '.enc__schedule'), /repeat\(3,\s*minmax\(0,\s*1fr\)\)/);
+  assert.match(rulesFor(all, '.enc__step-text'), /overflow-wrap:\s*anywhere/);
+  assert.match(rulesFor(all, '.enc__nav'), /white-space:\s*normal/);
+  assert.match(rulesFor(all, '.enc__another'), /white-space:\s*normal/);
+  assert.match(rulesFor(all, '.enc__demo-controls'), /flex-wrap:\s*wrap/);
+  assert.ok(rulesFor(all, '.large-text .enc__guidance'));
+  assert.doesNotMatch(rulesFor(all, '.enc__step-text'), /ellipsis|white-space:\s*nowrap/);
+});
+
+test('one-step Help uses large pixel counting and wrapping controls', () => {
+  const all = css(['src/ui/screens/windows.css']);
+  const count = rulesFor(all, '.help-steps__count');
+  assert.match(count, /font-family:\s*var\(--font-pixel\)/);
+  assert.match(count, /font-size:\s*var\(--text-body\)/);
+  assert.match(rulesFor(all, '.help-steps__buttons'), /flex-wrap:\s*wrap/);
+  assert.match(rulesFor(all, '.help-steps__text'), /font-size:\s*var\(--text-command\)/);
+});

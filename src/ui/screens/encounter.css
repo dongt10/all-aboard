@@ -64,11 +64,24 @@
 .calm .item-get__spark { display: none; }
 @media (prefers-reduced-motion: reduce) { .item-get__spark { display: none; } }
 
-/* Keep instructions beside the field, clear of the player and dialogue tabs. */
-.enc__guidance { position: absolute; z-index: 3; left: 16px; top: 96px; width: 190px; max-height: 144px; overflow: auto; display: grid; gap: 8px; font-family: var(--font-read); font-size: var(--text-small); }
-.enc__nav { white-space: normal; font: inherit; }
-.enc__next { border: 0; padding: 4px; background: var(--paper, #fff8e7); color: var(--ink); text-align: left; font: inherit; }
-.enc__choose, .enc__next p { margin: 0; }
+/* One instruction beside the field. The column ends above the dialogue's raised tabs. */
+.enc__guidance { position: absolute; z-index: 3; left: 16px; top: 96px; width: 190px; max-height: 264px; overflow: auto; display: grid; align-content: start; gap: 6px; padding: 2px; font-family: var(--font-read); font-size: var(--text-small); line-height: 1.15; }
+.enc__nav, .enc__another { white-space: normal; font: inherit; }
+.enc__schedule { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); }
+.enc__schedule > div { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 3px 1px; text-align: center; overflow-wrap: anywhere; }
+.enc__schedule strong { font: inherit; font-weight: 700; }
+.enc__schedule .icon { display: block; width: 24px; height: 24px; }
+.enc__now { background: var(--lantern); }
+.enc__finish-label { line-height: 1; }
+.enc__schedule.is-ready .enc__finish { background: var(--finish); color: var(--white); }
+.enc__step { display: flex; align-items: flex-start; gap: 4px; border: 0; padding: 4px; background: var(--paper); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.enc__step > .icon { flex: none; margin-top: 1px; }
+.enc__step-text { min-width: 0; overflow-wrap: anywhere; }
+.enc__choose { margin: 0; background: var(--paper); padding: 4px; }
+.enc__demo-controls { display: flex; gap: 6px; flex-wrap: wrap; }
+.enc__demo-controls .px-chip { font: inherit; }
+.large-text .enc__guidance { gap: 4px; }
+.large-text .enc__schedule > div { padding-inline: 0; }
 .cmd-menu:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
 /* Replay and Skip share a second row so Hear/Help cannot overlap the speaker. */
 .enc .dlg__tabs [data-act="replay"], .enc .dlg__tabs [data-act="skip"] { position: absolute; top: 142px; }

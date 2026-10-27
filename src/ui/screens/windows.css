@@ -55,11 +55,13 @@ body:has(.large-text) .voice-status { font-size: 20px; }
 .guide-record__status { flex: 1 1 200px; min-width: 0; font-size: var(--text-small); color: var(--ink-soft); }
 .guide-page__actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: auto; }
 
-/* Help: numbered steps, each with Hear. */
-.help-steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
-.help-steps li { display: flex; align-items: center; gap: 12px; }
-.help-steps p { flex: 1; }
-.help-steps__num { display: grid; place-items: center; flex: none; width: 40px; height: 40px; background: var(--ink); color: var(--paper); font-family: var(--font-pixel); font-size: var(--text-name); }
+/* Help: one large, readable instruction at a time. */
+.help-steps { display: grid; justify-items: center; gap: 16px; text-align: center; }
+.help-steps__picture { display: grid; place-items: center; width: 96px; height: 96px; background: var(--ink); color: var(--paper); font-family: var(--font-pixel); font-size: 48px; }
+.help-steps__page { display: grid; gap: 8px; }
+.help-steps__count { font-family: var(--font-pixel); font-size: var(--text-body); }
+.help-steps__text { font-size: var(--text-command); }
+.help-steps__buttons { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
 
 /* The built-in card for scenes that aren't built yet. */
 .missing-scene { display: grid; place-items: center; background: var(--sky); }

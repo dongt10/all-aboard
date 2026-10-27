@@ -12,6 +12,11 @@ import { createDialogue } from '../dialogue.js';
 import { keyIntent } from '../input.js';
 import { onceAtATime } from '../scenes.js';
 import { showItemGet } from './item-get.js';
+import { openHelpWindow } from './windows.js';
+import { helpSteps, stepIndex, stepPicture } from '../help-steps.js';
+import { demoFor } from '../demos.js';
+import { createDemoRunner } from '../demo.js';
+import { stopSpeaking } from '../voice.js';
 
 // Stand a figure with its feet at stage point (fx, fy): the feet sit at x 32, y 57 of the 64×64 frame.
 const feetAt = (fx, fy, scale) => `left:${fx - 32 * scale}px;top:${fy - 57 * scale}px`;
@@ -34,13 +39,14 @@ export function readinessLine(activity, commands, wasReady, isReady) {
 }
 
 // The Pokémon-battle frame: plate, neighbor on its platform, the player's back, the field, dialogue and menu.
-export function createEncounterScene(ctx, { id } = {}) {
+export function createEncounterScene(ctx, { id } = {}, { getDemo = demoFor } = {}) {
   const character = CHARACTERS.find(item => item.id === id);
   let activity = ACTIVITIES[id];
   if (!character || !activity) throw new RangeError(`No encounter for ${id}`);
   const theme = SUBJECT_THEME[id];
   let root, field, menu, dialogue, state, ui, grade, finishing = false, dirty = false;
   let destroyed = false, reward = null;
+  let demo, runner, demoFocus, leaving = false, pausing = false;
 
   const scoped = () => withScope(state, ctx.getState());
   const saveNow = () => ctx.commit(saveDraft(ctx.getState(), id, scoped()));
@@ -55,6 +61,7 @@ export function createEncounterScene(ctx, { id } = {}) {
     return area.contains(document.activeElement);
   };
   const focusAction = () => {
+    if (runner?.active) { root.querySelector('.enc__demo-next').focus(); return; }
     if (id === 'writing' && !state.text.trim()) focusField();
     else if (!focusMenu()) focusField();
   };
@@ -68,9 +75,25 @@ export function createEncounterScene(ctx, { id } = {}) {
     }
     return arrangeCommands(list);
   };   // the finish always ends up in slot 4
-  // Help can depend on the grade (K has no typing box, no crate sizes): helpFor(grade), help(grade) or a plain array.
-  const helpSteps = () => (typeof activity.helpFor === 'function' ? activity.helpFor(grade)
-    : typeof activity.help === 'function' ? activity.help(grade) : activity.help);
+  const steps = () => helpSteps(activity, grade);
+
+  function updateSchedule(next) {
+    const list = steps(), index = stepIndex(activity, state, ui, grade);
+    const ready = encounterReady(state), watching = runner?.active;
+    const finish = next.find(command => command?.finish);
+    const strip = root.querySelector('.enc__schedule');
+    strip.dataset.step = String(index);
+    strip.setAttribute('aria-label', watching ? `${character.name}'s example` : 'Your steps');
+    strip.classList.toggle('is-ready', ready);
+    root.querySelector('.enc__now-label').textContent = watching ? `Watch ${character.name}` : ready ? 'Ready!' : 'Now';
+    for (const [cell, at] of [['now', index], ['next', Math.min(index + 1, list.length - 1)]]) {
+      const picture = stepPicture(activity, state, at, grade);
+      root.querySelector(`.enc__${cell}-picture`).innerHTML = picture ? icon(picture) : String(at + 1);
+      root.querySelector(cell === 'now' ? '.enc__now' : '.enc__upcoming').setAttribute('aria-label', `${cell === 'now' ? 'Now' : 'Next'}: ${list[at] ?? 'Open Help.'}`);
+    }
+    root.querySelector('.enc__finish-label').textContent = finish?.label ?? (activity.kind === 'reading' ? 'Share story' : 'Finish');
+    root.querySelector('.enc__step-text').textContent = list[index] ?? 'Open Help for the steps.';
+  }
 
   // A second request from the same neighbor. The activity's optional another(state, ui, grade) returns a fresh
   // request's { state, ui, line } (or null). It is offered once this subject is finished in this grade and the
@@ -80,16 +103,13 @@ export function createEncounterScene(ctx, { id } = {}) {
   function updateMenu(next) {
     const choosing = activity.kind === 'reading' && next.some(command => command?.id.startsWith('pick-'));
     menu.set(next, { requireSelection: choosing });
-    const status = root.querySelector('.enc__next');
-    const pending = next.some(command => command?.finish && command.disabled);
-    status.hidden = !pending;
-    status.querySelector('p').textContent = pending ? `Next: ${helpSteps()?.slice(0, -1).join(' ') || 'Open Help for the steps.'}` : '';
-    root.querySelector('.enc__choose').hidden = !choosing;
-    root.querySelector('.enc__another').hidden = !canTryAnother();
+    updateSchedule(next);
+    root.querySelector('.enc__choose').hidden = !choosing || Boolean(runner?.active);
+    root.querySelector('.enc__another').hidden = Boolean(runner?.active) || !canTryAnother();
   }
 
   function tryAnother() {
-    if (finishing || destroyed || !canTryAnother()) return;
+    if (finishing || destroyed || runner?.active || !canTryAnother()) return;
     if (dialogue.hasMore()) { dialogue.focusMore(); return; }
     const result = activity.another(state, ui, grade);
     if (!result) return;
@@ -104,7 +124,7 @@ export function createEncounterScene(ctx, { id } = {}) {
   }
 
   function dispatch(action) {
-    if (finishing || destroyed) return;
+    if (finishing || destroyed || runner?.active) return;
     if (dialogue.hasMore()) { field.update(state, ui); dialogue.focusMore(); return; }
     const returnToField = id === 'writing' && action?.type === 'command' && ['remove', 'clear'].includes(action.id)
       && root.querySelector('.enc__menu').contains(document.activeElement);
@@ -123,7 +143,7 @@ export function createEncounterScene(ctx, { id } = {}) {
   }
 
   const finish = onceAtATime(async () => {
-    if (destroyed || finishing || !encounterReady(state)) return;
+    if (destroyed || finishing || runner?.active || !encounterReady(state)) return;
     finishing = true;
     saveNow();
     const app = ctx.getState();
@@ -147,15 +167,30 @@ export function createEncounterScene(ctx, { id } = {}) {
   });
   const leave = onceAtATime(async () => {
     if (finishing) return;
+    leaving = true;
+    runner?.stop();
     if (dirty) saveNow();   // an untouched stall must not look "Started" in the village
     await ctx.go('village', { focus: id });
   });
+
+  function advanceDemo() {
+    if (dialogue.hasMore()) dialogue.next();
+    else runner?.next();
+  }
+
+  function startDemo() {
+    if (!demo || destroyed || finishing || runner?.active) return;
+    demoFocus = document.activeElement;
+    stopSpeaking();
+    runner.start();
+  }
 
   return {
     mount() {
       const app = ctx.getState();
       grade = app.chapter === 0 ? 0 : app.grade;
       activity = activityFor(id, grade);
+      demo = getDemo(activity, grade);
       ({ state, ui } = activity.start(getDraft(app, id), { chapter: app.chapter, grade }));
 
       root = document.createElement('div');
@@ -171,8 +206,14 @@ export function createEncounterScene(ctx, { id } = {}) {
         </header>
         <aside class="enc__guidance">
           <button type="button" class="px-chip enc__nav" aria-label="Up from choices goes to the field. Down at the field edge goes to choices.">↑Field ↓Menu</button>
-          <p class="enc__choose" hidden>Use arrows to pick a picture. Then press Enter.</p>
-          <div class="enc__next" hidden><p></p><button type="button" class="px-chip">Hear steps</button></div>
+          <div class="enc__schedule" role="group" aria-label="Your steps">
+            <div class="enc__now"><strong class="enc__now-label">Now</strong><span class="enc__now-picture" aria-hidden="true"></span></div>
+            <div class="enc__upcoming"><strong>Next</strong><span class="enc__next-picture" aria-hidden="true"></span></div>
+            <div class="enc__finish"><strong>Finish</strong><span aria-hidden="true">${icon('check')}</span><span class="enc__finish-label"></span></div>
+          </div>
+          <button type="button" class="enc__step" aria-label="Hear this step">${icon('hear', { size: 18 })}<span class="enc__step-text"></span></button>
+          <p class="enc__choose" hidden>Arrows pick. Enter chooses.</p>
+          <div class="enc__demo-controls" hidden><button type="button" class="px-chip enc__demo-next">${icon('next', { size: 18 })}<span>Next</span></button><button type="button" class="px-chip enc__demo-stop">${icon('stop', { size: 18 })}<span>Stop</span></button></div>
           <button type="button" class="px-chip enc__another" hidden>${icon('undo', { size: 18 })}<span>Try another</span></button>
         </aside>
         <section class="enc__field" aria-label=""></section>
@@ -185,19 +226,33 @@ export function createEncounterScene(ctx, { id } = {}) {
       root.querySelector('.enc__back').addEventListener('click', () => leave());
       ctx.stage.append(root);
       root.querySelector('.enc__nav').addEventListener('click', () => ctx.speak('Up from choices goes to the field. Down at the field edge goes to choices.'));
-      root.querySelector('.enc__next button').addEventListener('click', () => ctx.speak(root.querySelector('.enc__next p').textContent));
+      root.querySelector('.enc__step').addEventListener('click', () => ctx.speak(root.querySelector('.enc__step-text').textContent));
       root.querySelector('.enc__another').addEventListener('click', tryAnother);
+      root.querySelector('.enc__demo-next').addEventListener('click', advanceDemo);
+      root.querySelector('.enc__demo-stop').addEventListener('click', () => runner?.stop());
       // Capture before native Enter/Space, Z routing, or field handlers can replace unread pages.
       const isWork = target => root.querySelector('.enc__field').contains(target) || root.querySelector('.enc__menu').contains(target);
       root.addEventListener('click', event => {
+        if (runner?.active && isWork(event.target)) { event.preventDefault(); event.stopPropagation(); return; }
         if (!dialogue?.hasMore() || !isWork(event.target)) return;
         event.preventDefault(); event.stopPropagation(); dialogue.focusMore();
       }, true);
       root.addEventListener('beforeinput', event => {
+        if (runner?.active && isWork(event.target)) { event.preventDefault(); event.stopPropagation(); return; }
         if (!dialogue?.hasMore() || !isWork(event.target)) return;
         event.preventDefault(); event.stopPropagation(); dialogue.focusMore();
       }, true);
       root.addEventListener('keydown', event => {
+        if (runner?.active) {
+          const intent = keyIntent(event);
+          // Keep native activation of Hear, Stop and Village; A elsewhere advances the example.
+          const native = event.target.closest('.enc__demo-stop, .enc__back, [data-act="hear"], .enc__step, .enc__nav');
+          if (intent === 'b' || (intent === 'a' && !native)) {
+            event.preventDefault(); event.stopPropagation();
+            if (!event.repeat) { if (intent === 'b') runner.stop(); else advanceDemo(); }
+          }
+          return;
+        }
         if (!dialogue?.hasMore() || !isWork(event.target) || !keyIntent(event) || keyIntent(event) === 'b') return;
         event.preventDefault(); event.stopPropagation();
         if (keyIntent(event) === 'a' && !event.repeat) dialogue.next();
@@ -207,15 +262,43 @@ export function createEncounterScene(ctx, { id } = {}) {
       field = activity.mountField(root.querySelector('.enc__field'), { grade, dispatch });
       dialogue = createDialogue(root.querySelector('.enc__dialogue'), {
         speak: text => ctx.speak(text),
-        onHelp: () => ctx.open.help(activity.title, helpSteps()),
+        onHelp: () => {
+          if (runner?.active) return;
+          openHelpWindow(ctx, activity.title, steps(), {
+            pictures: steps().map((_, index) => stepPicture(activity, state, index, grade)),
+            onShowMe: demo ? startDemo : undefined,
+          });
+        },
         isLarge: () => ctx.stage.classList.contains('large-text'),
-        autoRead: () => Boolean(ctx.getState().settings?.autoRead),
-        onComplete: focusAction,
+        autoRead: () => !pausing && Boolean(ctx.getState().settings?.autoRead),
+        onComplete: () => { focusAction(); runner?.resume(); },
         extendedControls: true,
       });
       menu = createCommandMenu(root.querySelector('.enc__menu'), {
         onChoose: commandId => (commands().find(command => command?.id === commandId)?.finish ? finish() : dispatch({ type: 'command', id: commandId })),
         onExitUp: focusField,
+      });
+      runner = createDemoRunner({
+        activity, demo, chapter: app.chapter, grade,
+        getWork: () => ({ state, ui }),
+        setWork: work => { ({ state, ui } = work); },
+        update: () => { field.update(state, ui); updateMenu(commands()); },
+        say,
+        calm: () => Boolean(ctx.getState().settings?.reducedMotion)
+          || Boolean(globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) || dialogue.hasMore(),
+        onRunning: active => {
+          root.querySelector('.enc__field').inert = active;
+          root.querySelector('.enc__menu').inert = active;
+          root.querySelector('.enc__demo-controls').hidden = !active;
+          for (const action of ['help', 'replay', 'skip']) root.querySelector(`[data-act="${action}"]`).disabled = active;
+          if (active) root.querySelector('.enc__demo-next').focus();
+        },
+        onRestore: reason => {
+          if (destroyed || leaving) { stopSpeaking(); return; }
+          if (reason !== 'complete') { stopSpeaking(); say('Your turn. ' + (steps()[stepIndex(activity, state, ui, grade)] ?? '')); }
+          if (demoFocus?.isConnected && !demoFocus.disabled) demoFocus.focus();
+          else focusAction();
+        },
       });
       field.update(state, ui);
       updateMenu(commands());
@@ -224,6 +307,11 @@ export function createEncounterScene(ctx, { id } = {}) {
     },
     handleIntent(intent) {
       if (finishing) return false;   // the item-get card handles its own A
+      if (runner?.active) {
+        if (intent === 'b') runner.stop();
+        else if (intent === 'a') advanceDemo();
+        return true;
+      }
       if (intent === 'b') {
         if (inField() && TYPING.has(document.activeElement.tagName)) {
           if ((id === 'writing' && !state.text.trim()) || !focusMenu()) root.querySelector('.enc__back').focus();   // a second B leaves
@@ -240,10 +328,14 @@ export function createEncounterScene(ctx, { id } = {}) {
       if (inField()) return intent === 'down' && focusMenu();   // grids that use the arrows already took them
       return menu.handleIntent(intent);
     },
-    pause() {},
+    pause() {
+      pausing = true;
+      try { runner?.stop(); } finally { pausing = false; }
+    },
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      runner?.dispose();
       reward?.cancel();
       reward = null;
       field?.destroy();

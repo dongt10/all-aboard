@@ -251,6 +251,54 @@ test('extra dialogue controls are opt-in', async t => {
   assert.equal(doc.activeElement, host.querySelector('[data-act="hear"]'), 'replacing a paged message also keeps named focus');
 });
 
+test('Help presents one step at a time, reads the current step and closes with Got it', async t => {
+  const { Doc, pressKey } = await import('./helpers/dom.js');
+  const { openHelpWindow } = await import('../src/ui/screens/windows.js');
+  const previous = globalThis.document, doc = new Doc(); globalThis.document = doc;
+  t.after(() => { globalThis.document = previous; });
+  const stage = doc.createElement('div'), opener = doc.createElement('button');
+  doc.body.append(stage); stage.append(opener); opener.focus();
+  const spoken = [];
+  const ctx = { stage, getState: () => ({ settings: { autoRead: true } }), speak: text => spoken.push(text) };
+  openHelpWindow(ctx, 'Help', ['First', 'Second', 'Third'], { pictures: ['star'] });
+  const next = stage.querySelector('[data-help="next"]'), back = stage.querySelector('[data-help="back"]');
+  assert.equal(doc.activeElement, next);
+  assert.equal(stage.querySelector('.help-steps__count').textContent, 'Step 1 of 3');
+  assert.equal(stage.querySelector('.help-steps__text').textContent, 'First');
+  assert.ok(stage.querySelector('.help-steps__picture svg'));
+  assert.equal(back.disabled, true);
+  assert.equal(stage.querySelector('[data-help="show"]'), null);
+  pressKey(next, 'keydown', 'Enter');
+  assert.equal(stage.querySelector('.help-steps__count').textContent, 'Step 2 of 3');
+  assert.equal(stage.querySelector('.help-steps__picture').textContent, '2');
+  stage.querySelector('[data-help="hear"]').click();
+  back.focus(); pressKey(back, 'keydown', 'Enter');
+  assert.equal(doc.activeElement, next, 'focus moves off Back when it becomes disabled');
+  assert.equal(stage.querySelector('.help-steps__text').textContent, 'First');
+  next.click(); next.click();
+  assert.equal(next.textContent, 'Got it');
+  assert.deepEqual(spoken, ['First', 'Second', 'Second', 'First', 'Second', 'Third']);
+  pressKey(next, 'keydown', 'Enter');
+  assert.equal(stage.querySelector('.win-backdrop'), null);
+  assert.equal(doc.activeElement, opener);
+});
+
+test('Help Show me closes before its callback and Escape closes Help', async t => {
+  const { Doc, Event } = await import('./helpers/dom.js');
+  const { openHelpWindow } = await import('../src/ui/screens/windows.js');
+  const previous = globalThis.document, doc = new Doc(); globalThis.document = doc;
+  t.after(() => { globalThis.document = previous; });
+  const stage = doc.createElement('div'); doc.body.append(stage);
+  let called = 0;
+  const ctx = { stage, getState: () => ({ settings: { autoRead: false } }), speak: () => { throw Error('unexpected speech'); } };
+  openHelpWindow(ctx, 'Help', ['First'], { onShowMe: () => { called++; assert.equal(stage.querySelector('.win-backdrop'), null); } });
+  stage.querySelector('[data-help="show"]').click();
+  assert.equal(called, 1);
+  openHelpWindow(ctx, 'Help', ['First']);
+  stage.querySelector('[data-help="next"]').dispatchEvent(new Event('keydown', { key: 'Escape' }));
+  assert.equal(stage.querySelector('.win-backdrop'), null);
+});
+
 test('dialogue announcement combines the current speaker and page, including repagination', async t => {
   const { Doc } = await import('./helpers/dom.js');
   const { createDialogue } = await import('../src/ui/dialogue.js');
