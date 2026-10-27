@@ -88,7 +88,7 @@ export function creationMarkup(id, s = {}) {
   if (id === 'reading' && s.activity === 'tales' && solvedCount(s) > 0) return talesCreationMarkup(s);
   if (id === 'art') {
     // Yuki's starting row belongs to the grade, never to the saved stamps.
-    const stamps = [...yukiStamps(s.grade), ...(Array.isArray(s.stamps) ? s.stamps : [])];
+    const stamps = [...yukiStamps(s.grade, s.request), ...(Array.isArray(s.stamps) ? s.stamps : [])];
     const fill = color(s.background, PAPER_SHADE), [light, shade] = paintSteps(fill);
     // A stepped, sewn hem: each 12px pennant ends at the same height as the original cloth.
     const hem = Array.from({ length: 100 }, (_, x) => 58 + Math.floor((6 - Math.abs(((x - 10 + 108) % 12) - 6)) / 2) * 2);

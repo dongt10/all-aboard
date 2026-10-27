@@ -17,7 +17,7 @@ import { stampPosition } from '../banner-rules.js';
 
 const field = (props, line) => ({ action: { type: 'field', ...props }, line });
 const command = (id, line) => ({ action: { type: 'command', id }, line });
-const example = (kind, grade, fields) => ({ kind, grade, chapter: grade === 0 ? 0 : 1, ...fields });
+const example = (kind, grade, fields) => ({ kind, grade, chapter: grade === 0 ? 0 : 1, request: 1, ...fields });
 const done = label => `Choose ${label} when yours is ready. Your turn!`;
 
 function cartDemo(grade) {
