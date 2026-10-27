@@ -20,6 +20,7 @@ Changes to All Aboard, grouped by release.
 
 ### Changed
 
+- Fresh bands start with the editable Minecraft preset based on C418’s “Minecraft”; Meadow Band remains available as an alternative. Undo preset restores the previous score, and existing saved tunes retain their notes and sounds.
 - The team’s hand-drawn village background replaces the old drawn map with a cobblestone crossroads.
 - All characters—the player, Pip, Nori and the seven neighbors—walk only on the road, using the road mask and path finding for taps.
 - Send band waits for each grade’s music lesson: a changed sound/rest rhythm at grade 1, a matched Echo at grade 2, and a changed melody at grades 3–5. Kindergarten keeps its play-or-edit rule, and published bands stay ready.

@@ -37,8 +37,11 @@ test('band status lines point back to Kiko instead of to controls the parade doe
   assert.equal(paradeStatus('stopped', 'stopped', band), 'Music stopped.');
   assert.equal(paradeStatus('stopped', 'unavailable', band), 'Sound could not start. The parade is still yours.');
   const resting = { ...band, tracks: band.tracks.map(track => ({ ...track, enabled: false })) };
-  assert.equal(paradeStatus('playing', 'playing', resting), 'Everyone is resting. Visit Kiko to invite a friend or add a note.');
-  assert.equal(paradeStatus('playing', 'playing', { ...band, masterVolume: 0 }), 'Band is playing with sound off. Visit Kiko to raise the band volume.');
+  const muted = { ...band, tracks: band.tracks.map(track => ({ ...track, volume: 0 })) };
+  assert.equal(paradeStatus('playing', 'playing', resting), 'Everyone is resting. Visit Kiko to add a note.');
+  assert.equal(paradeStatus('playing', 'playing', muted), 'Friends are muted. Visit Kiko to turn them up.');
+  assert.equal(paradeStatus('playing', 'playing', { ...band, masterVolume: 0 }), 'Sound is off. Visit Kiko to turn it up.');
+  for (const item of [band, resting, muted, { ...band, masterVolume: 0 }]) assert.ok(paradeStatus('playing', 'playing', item).length <= PAGE_CHARS.large);
 });
 
 test('without a band, the status line and the opening say to visit Kiko first', () => {
@@ -130,7 +133,70 @@ test('parade Help: every step is a sentence a dialogue page can hold, and it nam
   for (const step of HELP_STEPS) for (const sentence of sentences(step)) assert.ok(sentence.length <= PAGE_CHARS.large, sentence);
   const all = HELP_STEPS.join(' ');
   for (const word of ['March again', 'Play band', 'Kiko', 'Village']) assert.ok(all.includes(word), word);
+  assert.ok(all.includes('cross the street. Then they line up.'));
   assert.ok(!/\blaps?\b/i.test(all), 'no "laps" for the kindergarteners');
+});
+
+test('parade scene: band status does not replace the completion message', async () => {
+  let state = withBand();
+  for (const id of PARADE_ORDER.filter(id => id !== 'music')) state = publishCreation(state, id, { kind: id });
+  const ctx = fakeCtx({ ...state, settings: { reducedMotion: true } });
+  const scene = createParadeScene(ctx);
+  scene.mount();
+  assert.equal(dialogueText(ctx.stage), PARADE_LINES.complete);
+  const status = ctx.stage.querySelector('.parade [role="status"]');
+  assert.equal(status.hidden, true);
+  slot(ctx.stage, 'play').click();
+  assert.equal(status.textContent, 'Starting your band…');
+  await tick();
+  assert.equal(dialogueText(ctx.stage), PARADE_LINES.complete);
+  assert.equal(status.hidden, false);
+  assert.equal(status.textContent, 'Sound could not start. The parade is still yours.');
+  ctx.stage.querySelector('.parade-dialogue').querySelectorAll('.dlg__tab').find(b => b.dataset.act === 'hear').click();
+  assert.equal(ctx.spoken.at(-1), `${PARADE_LINES.complete} ${status.textContent}`);
+  scene.destroy();
+  assert.equal(ctx.stage.querySelector('.parade'), null);
+});
+
+test('parade scene: successful playback keeps completion and reads each status', async () => {
+  const oldAudio = globalThis.AudioContext;
+  const param = () => ({ value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {}, setTargetAtTime() {} });
+  const node = () => ({ connect() {}, disconnect() {} });
+  globalThis.AudioContext = class {
+    constructor() { this.currentTime = 0; this.state = 'running'; this.destination = {}; }
+    resume() { return Promise.resolve(); }
+    close() { return Promise.resolve(); }
+    createGain() { return { ...node(), gain: param() }; }
+    createDynamicsCompressor() { return { ...node(), threshold: {}, knee: {}, ratio: {}, attack: {}, release: {} }; }
+    createOscillator() { return { ...node(), frequency: param(), start() {}, stop() {}, addEventListener() {} }; }
+  };
+  let state = createState();
+  const band = createDefaultBand();
+  band.tracks.forEach(track => { track.enabled = track.id === 'bass'; });
+  state = publishCreation(state, 'music', band);
+  for (const id of PARADE_ORDER.filter(id => id !== 'music')) state = publishCreation(state, id, { kind: id });
+  const ctx = fakeCtx({ ...state, settings: { reducedMotion: true, largeText: true, autoRead: true } });
+  const scene = createParadeScene(ctx);
+  try {
+    scene.mount();
+    const status = ctx.stage.querySelector('.parade [role="status"]');
+    const verify = expected => {
+      assert.equal(dialogueText(ctx.stage), PARADE_LINES.complete);
+      assert.equal(status.textContent, expected);
+      assert.equal(ctx.spoken.at(-1), expected, 'auto-read announces the status');
+      ctx.stage.querySelector('.parade-dialogue').querySelectorAll('.dlg__tab').find(b => b.dataset.act === 'hear').click();
+      assert.equal(ctx.spoken.at(-1), `${PARADE_LINES.complete} ${expected}`);
+    };
+    slot(ctx.stage, 'play').click();
+    verify('Starting your band…');
+    await tick();
+    verify('Your band is playing.');
+    slot(ctx.stage, 'stop').click();
+    verify('Music stopped.');
+  } finally {
+    scene.destroy();
+    if (oldAudio === undefined) delete globalThis.AudioContext; else globalThis.AudioContext = oldAudio;
+  }
 });
 
 test('parade scene: two laps, then the marchers halt in the line-up and the ending line shows', async () => {

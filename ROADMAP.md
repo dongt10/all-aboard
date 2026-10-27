@@ -10,7 +10,7 @@ This roadmap turns the Project Brief and the [Character and Art Plan](docs/All_A
 
 ## Starting point
 
-All Aboard · Summer Festival is a playable prototype with seven creative encounters, saves for each grade, and a parade. The UI remake for Cal Hacks replaced the screens and the cast and kept the saves. See [the Cal Hacks milestone](#now--ui-remake-for-cal-hacks).
+All Aboard · Summer Festival is a playable prototype with seven creative encounters, saves for each grade, and a parade. The UI remake for Cal Hacks replaced the screens and the cast and kept the saves. See [the Cal Hacks history](#cal-hacks-history--october-2026).
 
 **Shipped 2026-10-24** (the evening before judging), on top of the remake:
 
@@ -68,11 +68,11 @@ The UI remake adds interaction rules on top: one dialogue page at a time, at mos
 
 ## Learning goals by grade
 
-The four grade 3–5 activities shipped on 2026-10-24. The four grade-2 activities, banner/sign goals and grade-4 content were added on 2026-10-25. Rows marked **Shipped** describe the current task; other rows remain learning targets. Full-depth grade 4–5 work is still planned after v1.
+The four grade 3–5 activities shipped on 2026-10-24. The four grade-2 activities, banner/sign goals and grade-4 content were added on 2026-10-25. Each row has an explicit implementation status: **Available** means the stated task is available, **Partial** means some of the stated goal or task remains planned, and **Planned** means the described task is not yet available. Status does not mean the definition of done is met. Full-depth grade 4–5 work is still planned after v1. Educator review is pending or not recorded for all rows; implementation status is separate from educator review.
 
 Every task has to fit the remake’s encounter frame: at most four commands of 12 characters or fewer, and dialogue pages of 96 characters or fewer (56 with Bigger words).
 
-Anchors are starting points from US frameworks: Common Core (CCSS), the Next Generation Science Standards (NGSS), the National Core Arts Standards, and the C3 Framework for social studies. An educator should confirm each row before it ships.
+Anchors are starting points from US frameworks: Common Core (CCSS), the Next Generation Science Standards (NGSS), the National Core Arts Standards, and the C3 Framework for social studies. An educator should review each goal and task.
 
 ### Math · Taro’s cart, crate rows and pizza party
 
@@ -80,12 +80,12 @@ Anchors are starting points from US frameworks: Common Core (CCSS), the Next Gen
 
 | Grade | Learning goal | In Taro’s workshop | Anchor |
 | :--- | :--- | :--- | :--- |
-| K | Tell when two groups are equal by matching and counting to 10. | Load single crates until both sides match. Taro counts aloud with you. | CCSS K.CC.C.6 |
-| 1 | Understand the equal sign: different sums can be equal. | Crates of 1 and 2. Taro writes the cart as 3 + 2 = 4 + 1 and asks, “True?” | CCSS 1.OA.D.7 |
-| 2 | Use equal rows for repeated addition and pair objects to see odd or even. | **Shipped: Taro’s crate rows.** Make equal, gap-free rows for 12, 10, 8 or 6 crates. Read the sum, use Pair up, then Send cart when the rows match the order. | CCSS 2.OA.C.3 / 2.OA.C.4 |
-| 3 | Interpret division as equal sharing; connect equal parts to fractions. | **Taro’s pizza party:** share 8 slices among 4 friends. Choose Dig in! to check, then Serve pizza. New pizza also offers 12 or 4 slices. | CCSS 3.OA.A.2 / 3.NF.A.1 |
-| 4 | Practice the same equal-sharing goal with more slices. | **Shipped:** pizza starts with 12 slices for 4 friends; New pizza also offers 8 or 4. Hand out every slice, check, then Serve pizza. The stamp reads 12 ÷ 4 = 3 each. | CCSS 3.OA.A.2 / 3.NF.A.1 (shared foundation) |
-| 5 | Interpret division with a fractional share. | **Shipped:** use 6 or 10 slices for 4 friends. Cut into halves, share every piece equally, check, then Serve pizza. A cut is required. | CCSS 5.NF.B.3 |
+| K | **Partial** · Tell when two groups are equal by matching and counting to 10. | Today: match single crates on the cart. Counting to 10 remains planned. | CCSS K.CC.C.6 |
+| 1 | **Partial** · Understand the equal sign: different sums can be equal. | Today: use crates of 1 and 2 to match a weight of 3. Comparing written equations remains planned. | CCSS 1.OA.D.7 |
+| 2 | **Available** · Use equal rows for repeated addition and pair objects to see odd or even. | **Taro’s crate rows.** Make equal, gap-free rows for 12, 10, 8 or 6 crates. Read the sum, use Pair up, then Send cart when the rows match the order. | CCSS 2.OA.C.3 / 2.OA.C.4 |
+| 3 | **Available** · Interpret division as equal sharing; connect equal parts to fractions. | **Taro’s pizza party:** share 8 slices among 4 friends. Choose Dig in! to check, then Serve pizza. New pizza also offers 12 or 4 slices. | CCSS 3.OA.A.2 / 3.NF.A.1 |
+| 4 | **Available** · Practice the same equal-sharing goal with more slices. | Pizza starts with 12 slices for 4 friends; New pizza also offers 8 or 4. Hand out every slice, check, then Serve pizza. The stamp reads 12 ÷ 4 = 3 each. | CCSS 3.OA.A.2 / 3.NF.A.1 (shared foundation) |
+| 5 | **Available** · Interpret division with a fractional share. | Use 6 or 10 slices for 4 friends. Cut into halves, share every piece equally, check, then Serve pizza. A cut is required. | CCSS 5.NF.B.3 |
 
 Grade 2’s larger sums, adding tens and skip-counting by 5s remain planned.
 
@@ -95,12 +95,12 @@ Grade 2’s larger sums, adding tens and skip-counting by 5s remain planned.
 
 | Grade | Learning goal | In the festival kitchen | Anchor |
 | :--- | :--- | :--- | :--- |
-| K | Sunlight warms things, and shade keeps them cooler. | Predict which tray keeps more ice, shade one, wait, then check the prediction. | NGSS K-PS3-1, K-PS3-2 |
-| 1 | Different materials block different amounts of light. | Choose a canopy of cloth, paper, or clear plastic, and compare the ice. | NGSS 1-PS4-3 |
-| 2 | Test how sunlight and water help plants grow; notice a bee’s role. | **Shipped: Momo’s bean test.** Change only water or sunlight for cup B, compare two weeks of growth, then build a bed card with Seed, Sun, Water and Bee. Plant bed finishes both tasks. | NGSS 2-LS2-1 / 2-LS2-2 (introductory model) |
-| 3 | Model food energy as originating in sunlight. | **Shipped: Momo’s sunbeam chart.** Place Sea plant, Little fish, then Otter or Gull, with 1000 → 100 → 10. Choose Shine!, then Pin chart. | NGSS 5-PS3-1 / 5-LS2-1 (introductory model) |
-| 4 | Apply the food-chain energy model in a pond. | **Shipped:** Pondweed → Snail → Koi or Frog, with 2000 → 200 → 20. Place all three numbers, choose Shine!, then Pin chart. | NGSS 5-PS3-1 / 5-LS2-1 (introductory model) |
-| 5 | Model energy moving from the sun through a food chain. | **Shipped:** the bay chart uses 5000 → 500 → 50 and says “10%.” Place all three numbers, choose Shine!, then Pin chart. | NGSS 5-PS3-1 / 5-LS2-1 |
+| K | **Partial** · Sunlight warms things, and shade keeps them cooler. | Today: shade one tray, wait and compare the ice. A prediction step remains planned. | NGSS K-PS3-1, K-PS3-2 |
+| 1 | **Planned** · Different materials block different amounts of light. | Today: shade one tray, wait and compare the ice. Choosing and comparing canopy materials remains planned. | NGSS 1-PS4-3 |
+| 2 | **Available** · Test how sunlight and water help plants grow; notice a bee’s role. | **Momo’s bean test.** Change only water or sunlight for cup B, compare two weeks of growth, then build a bed card with Seed, Sun, Water and Bee. Plant bed finishes both tasks. | NGSS 2-LS2-1 / 2-LS2-2 (introductory model) |
+| 3 | **Available** · Model food energy as originating in sunlight. | **Momo’s sunbeam chart.** Place Sea plant, Little fish, then Otter or Gull, with 1000 → 100 → 10. Choose Shine!, then Pin chart. | NGSS 5-PS3-1 / 5-LS2-1 (introductory model) |
+| 4 | **Available** · Apply the food-chain energy model in a pond. | Pondweed → Snail → Koi or Frog, with 2000 → 200 → 20. Place all three numbers, choose Shine!, then Pin chart. | NGSS 5-PS3-1 / 5-LS2-1 (introductory model) |
+| 5 | **Available** · Model energy moving from the sun through a food chain. | The bay chart uses 5000 → 500 → 50 and says “10%.” Place all three numbers, choose Shine!, then Pin chart. | NGSS 5-PS3-1 / 5-LS2-1 |
 
 The Sun supplies sunlight without a number. The plant holds the largest number, and each feeding arrow shows ÷10. Reversible kitchen changes and habitat comparisons remain planned.
 
@@ -110,12 +110,12 @@ The Sun supplies sunlight without a number. The plant holds the largest number, 
 
 | Grade | Learning goal | In the reading nook | Anchor |
 | :--- | :--- | :--- | :--- |
-| K | Decode short words and match them to pictures. | Short-vowel words such as HAT, CUP, FAN, and MAP replace KEY, UMBRELLA, and BOOK. | CCSS RF.K.3 |
-| 1 | Read short sentences and answer questions about key details. | Today’s short passages, with a “what” question for each item. | CCSS RL.1.1 |
-| 2 | Answer why, retell the beginning/middle/end, and find a lesson. | **Shipped: Sora’s story ribbon.** Two five-line stories about Taro’s sandal and Kiko’s drum stay available throughout. Answer why, order three events and choose the lesson, then Share ribbon. One finished story is enough. | CCSS RL.2.1 / RL.2.2 / RL.2.5 |
-| 3 | Use a detail in the text to support an answer. | **Whose tale is this?** Read three lines, name the neighbor, then choose the line that proves it. Name three tales to Share tales. Starts with Momo, Taro and Kiko. | CCSS RL.3.1 |
-| 4 | Infer a character’s identity from text details. | **Shipped:** the tale-and-proof task starts with Hana, Pip and Yuki. Start over cycles decks; named tales and filled book slots reopen all three lines with the proof highlighted. | CCSS RL.4.1 |
-| 5 | Select the exact line that supports an inference. | The same tale-and-proof task starts with Fumi, Nori and Sora. Choose the evidence line for each before Share tales. | CCSS RL.5.1 |
+| K | **Planned** · Decode short words and match them to pictures. | Short-vowel words such as HAT, CUP, FAN, and MAP replace KEY, UMBRELLA, and BOOK. | CCSS RF.K.3 |
+| 1 | **Partial** · Read short sentences and answer questions about key details. | Today: read short lines and pack the named items. A “what” question for each item remains planned. | CCSS RL.1.1 |
+| 2 | **Available** · Answer why, retell the beginning/middle/end, and find a lesson. | **Sora’s story ribbon.** Two five-line stories about Taro’s sandal and Kiko’s drum stay available throughout. Answer why, order three events and choose the lesson, then Share ribbon. One finished story is enough. | CCSS RL.2.1 / RL.2.2 / RL.2.5 |
+| 3 | **Available** · Use a detail in the text to support an answer. | **Whose tale is this?** Read three lines, name the neighbor, then choose the line that proves it. Name three tales to Share tales. Starts with Momo, Taro and Kiko. | CCSS RL.3.1 |
+| 4 | **Available** · Infer a character’s identity from text details. | The tale-and-proof task starts with Hana, Pip and Yuki. Start over cycles decks; named tales and filled book slots reopen all three lines with the proof highlighted. | CCSS RL.4.1 |
+| 5 | **Available** · Select the exact line that supports an inference. | The same tale-and-proof task starts with Fumi, Nori and Sora. Choose the evidence line for each before Share tales. | CCSS RL.5.1 |
 
 ### Writing · Fumi’s signs
 
@@ -123,12 +123,12 @@ The Sun supplies sunlight without a number. The plant holds the largest number, 
 
 | Grade | Learning goal | In the writing booth | Anchor |
 | :--- | :--- | :--- | :--- |
-| K | Compose a message with words for a reader. | **Shipped:** use scenario word tiles to make a two-word message. | CCSS W.K.2, RF.K.1 |
-| 1 | Capitalize names and end a sentence with punctuation. | **Shipped:** write for a scenario with tiles or typing and use correction hints. | CCSS L.1.2 |
-| 2 | Start a sentence with a capital and finish it with punctuation. | **Shipped:** write for a scenario and check words and punctuation. | CCSS L.2.2 (foundation) |
-| 3 | State an idea and give a reason. | **Shipped:** write two sentences with a describing word and a reason using because or so. | CCSS W.3.1 |
-| 4 | Use complete sentences and details for a reader. | **Shipped:** write two sentences with a describing word and a reason for a scenario’s reader. | CCSS W.4.4 (foundation) |
-| 5 | Choose words for different readers. | **Shipped:** write for different readers, including little kids and grown-ups; prompts guide word choice. Comparing revisions remains a learning target. | CCSS W.5.4, W.5.5 |
+| K | **Available** · Compose a message with words for a reader. | Use scenario word tiles to make a two-word message. | CCSS W.K.2, RF.K.1 |
+| 1 | **Available** · Capitalize names and end a sentence with punctuation. | Write for a scenario with tiles or typing and use correction hints. | CCSS L.1.2 |
+| 2 | **Available** · Start a sentence with a capital and finish it with punctuation. | Write for a scenario and check words and punctuation. | CCSS L.2.2 (foundation) |
+| 3 | **Available** · State an idea and give a reason. | Write two sentences with a describing word and a reason using because or so. | CCSS W.3.1 |
+| 4 | **Available** · Use complete sentences and details for a reader. | Write two sentences with a describing word and a reason for a scenario’s reader. | CCSS W.4.4 (foundation) |
+| 5 | **Partial** · Choose words for different readers. | Write for different readers, including little kids and grown-ups; prompts guide word choice. Comparing revisions remains a learning target. | CCSS W.5.4, W.5.5 |
 
 ### Art · Yuki’s banner
 
@@ -136,12 +136,12 @@ The Sun supplies sunlight without a number. The plant holds the largest number, 
 
 | Grade | Learning goal | In the design studio | Anchor |
 | :--- | :--- | :--- | :--- |
-| K | Explore color and shape, and continue an AB pattern. | Stamp freely, then continue the red-blue pattern Yuki starts. | Arts: Creating |
-| 1 | Make and name repeating patterns such as AB, ABB, and ABC. | Stamp a pattern row along the banner’s edge. Yuki names your pattern. | Arts: Creating |
-| 2 | Continue a repeating color pattern. | **Shipped:** Yuki starts coral, blue, coral flowers. Complete blue, coral, blue across the top row, then Hang banner. Choosing colors for a feeling remains planned. | Arts: Creating |
-| 3 | Plan a design, then revise it. | Sketch on a small cloth, then make the final banner. Yuki asks about one change. | Arts: Creating |
-| 4 | Recognize and make line symmetry. | **Shipped:** stamp both sides of the fold yourself. Make at least six matching stamps in two colors; unmatched stamps show a mirror cue. Hang banner finishes. | CCSS 4.G.A.3 |
-| 5 | Place shapes by coordinates, and follow two pattern rules. | Stamp at points such as (2, 3). Rules like “x + 1, y + 2” make a stamp trail. | CCSS 5.G.A.1, 5.OA.B.3 |
+| K | **Partial** · Explore color and shape, and continue an AB pattern. | Today: stamp freely. Continuing an AB pattern remains planned. | Arts: Creating |
+| 1 | **Partial** · Make and name repeating patterns such as AB, ABB, and ABC. | Today: continue the star/circle pattern across the top row. Naming patterns and ABB and ABC patterns remain planned. | Arts: Creating |
+| 2 | **Available** · Continue a repeating color pattern. | Yuki starts coral, blue, coral flowers. Complete blue, coral, blue across the top row, then Hang banner. Choosing colors for a feeling remains planned. | Arts: Creating |
+| 3 | **Planned** · Plan a design, then revise it. | Today: make matching left/right mirrors with at least four stamps. Sketching, revision and discussing a change remain planned. | Arts: Creating |
+| 4 | **Available** · Recognize and make line symmetry. | Stamp both sides of the fold yourself. Make at least six matching stamps in two colors; unmatched stamps show a mirror cue. Hang banner finishes. | CCSS 4.G.A.3 |
+| 5 | **Planned** · Place shapes by coordinates, and follow two pattern rules. | Today: make matching mirrors with at least six stamps in two colors. Coordinate placement and pattern rules remain planned. | CCSS 5.G.A.1, 5.OA.B.3 |
 
 ### Community · Hana’s square, compass errands and Help Day
 
@@ -149,12 +149,12 @@ The Sun supplies sunlight without a number. The plant holds the largest number, 
 
 | Grade | Learning goal | At the map kiosk | Anchor |
 | :--- | :--- | :--- | :--- |
-| K | Use position words such as next to, near, far, above, and below. | Follow Hana’s spoken directions: “Put a bench next to the path.” | C3 Geography |
-| 1 | Read a simple map with symbols. | Match items to a map key. Find the quiet trees and the stage. | C3 Geography |
-| 2 | Use north, south, east and west on a map, and notice how neighbors’ jobs connect. | **Shipped: Hana’s compass errands.** Tap three destinations from the kiosk: north 1, west 2, then east 2 and south 1 past the lantern shed to Taro’s workshop. Each delivery explains whose job it helps; Hang map finishes all three. | C3 D2.Geo.2.K-2 / D2.Geo.3.K-2 / D2.Eco.3.K-2 |
-| 3 | Connect individual strengths and responsibilities to a shared goal. | **Hana’s Help Day:** match Kiko to lanterns, Taro to the drum, Nori to the gate, and Pip to invitations. Ask and Next job give clues; Start day finishes when all four fit. | C3 D2.Civ.2.3-5 / D2.Civ.6.3-5 |
-| 4 | Match different strengths to a new set of group needs. | **Shipped: Help Day set B.** Momo cooks stew, Sora tells a tale, Yuki paints the banner and Fumi writes signs. Strength labels are shown; all four fits are needed for Start day. | C3 D2.Civ.2.3-5 / D2.Civ.6.3-5 |
-| 5 | Infer or ask about strengths before assigning responsibilities. | The same Help Day task hides the strength labels. Ask a helper or use the clues to fill every job, then Start day. | C3 D2.Civ.2.3-5 / D2.Civ.6.3-5 |
+| K | **Partial** · Use position words such as next to, near, far, above, and below. | Today: place a bench off the path and try the square. Directions using a wider range of position words remain planned. | C3 Geography |
+| 1 | **Planned** · Read a simple map with symbols. | Today: add a bench and garden by the quiet trees and keep the path clear. Matching items to a map key remains planned. | C3 Geography |
+| 2 | **Available** · Use north, south, east and west on a map, and notice how neighbors’ jobs connect. | **Hana’s compass errands.** Tap three destinations from the kiosk: north 1, west 2, then east 2 and south 1 past the lantern shed to Taro’s workshop. Each delivery explains whose job it helps; Hang map finishes all three. | C3 D2.Geo.2.K-2 / D2.Geo.3.K-2 / D2.Eco.3.K-2 |
+| 3 | **Available** · Connect individual strengths and responsibilities to a shared goal. | **Hana’s Help Day:** match Kiko to lanterns, Taro to the drum, Nori to the gate, and Pip to invitations. Ask and Next job give clues; Start day finishes when all four fit. | C3 D2.Civ.2.3-5 / D2.Civ.6.3-5 |
+| 4 | **Available** · Match different strengths to a new set of group needs. | **Help Day set B.** Momo cooks stew, Sora tells a tale, Yuki paints the banner and Fumi writes signs. Strength labels are shown; all four fits are needed for Start day. | C3 D2.Civ.2.3-5 / D2.Civ.6.3-5 |
+| 5 | **Available** · Infer or ask about strengths before assigning responsibilities. | The same Help Day task hides the strength labels. Ask a helper or use the clues to fill every job, then Start day. | C3 D2.Civ.2.3-5 / D2.Civ.6.3-5 |
 
 ### Music · Kiko’s band
 
@@ -162,12 +162,12 @@ The Sun supplies sunlight without a number. The plant holds the largest number, 
 
 | Grade | Learning goal | On the music stage | Anchor |
 | :--- | :--- | :--- | :--- |
-| K | Keep a steady beat, and hear loud and soft, fast and slow, high and low. | Tap along as the lanterns light up. Who plays low? Who plays high? | Arts: Performing |
-| 1 | Rests are part of rhythm. | Switch each beat between sound and rest. | Arts: Creating |
-| 2 | Echo and create 8-beat rhythms. | **Shipped:** Kiko plays a pattern to echo, then you make one for Kiko. Send band waits for a matched Echo rhythm. | Arts: Performing, Creating |
-| 3 | Melodies move up, move down, or stay the same, using Do, Re, Mi, Sol, and La. | Choose notes. Kiko asks whether your tune goes up or down. | Arts: Creating |
-| 4 | Layer a repeating part, an ostinato, under a melody. | **Shipped:** change Kiko’s melody above Cricket’s steady part before Send band. Form stays A B; older saves that load as A open as A B with their notes and mix intact. | Arts: Creating |
-| 5 | Compose in ABA form and explain your choices. | Write phrases A and B, arrange them A–B–A, then give the song a title and a reason. | Arts: Creating, Presenting |
+| K | **Partial** · Keep a steady beat, and hear loud and soft, fast and slow, high and low. | Today: explore speed, loud and soft, and high and low as lanterns light. A beat-tapping check remains planned. | Arts: Performing |
+| 1 | **Available** · Rests are part of rhythm. | Switch each beat between sound and rest. | Arts: Creating |
+| 2 | **Available** · Echo and create 8-beat rhythms. | Kiko plays a pattern to echo, then you make one for Kiko. Send band waits for a matched Echo rhythm. | Arts: Performing, Creating |
+| 3 | **Available** · Melodies move up, move down, or stay the same, using Do, Re, Mi, Sol, and La. | Choose notes. Kiko asks whether your tune goes up or down. | Arts: Creating |
+| 4 | **Available** · Layer a repeating part, an ostinato, under a melody. | Change Kiko’s melody above Cricket’s steady part before Send band. Form stays A B; older saves that load as A open as A B with their notes and mix intact. | Arts: Creating |
+| 5 | **Partial** · Compose in ABA form and explain your choices. | Today: change tune A and explore A B A form; phrase B uses the other preset. Writing phrase B and giving the song a title and reason remain planned. | Arts: Creating, Presenting |
 
 **Shipped 2026-10-24:** the K row (Speed sign with Slow, Steady and Fast at 60, 90 and 120 beats per minute; Loud and Soft per friend; lines that say who sings low, middle and high), the grade 1 row (Cricket’s rhythm on the lanterns, sound or rest, with Kiko counting them), the grade 2 row (Echo: Kiko plays and flashes an 8-beat rhythm, the child copies it, then makes one for Kiko), the grade 3 row (Kiko’s tune on the lanterns as a staircase of Do, Re, Mi, Sol, La, and Kiko says whether it goes up, down, stays the same, or both), the grade 4 row (Cricket’s steady part badge under the changing tune, Form fixed at A B), and the grade 5 Form sign (A, A B, A B A). Tempo and form are saved with the band.
 
@@ -232,15 +232,9 @@ v1 is a pilot build for testing with children, caregivers, and educators.
 
 The Cal Hacks remake comes first. M0–M5 make up v1, and M2 and M3 can run at the same time.
 
-### Now · UI remake for Cal Hacks
+### Cal Hacks history · October 2026
 
-Judging is October 25 at 10:30 AM. The remake’s design and its 16-task plan are local working docs in `docs/superpowers/`.
-
-- A handheld-game UI on one 960×540 stage, with a new cast, Pokémon-style encounters, a My Singing Monsters–style music stage, and a marching parade.
-- The demo path covers the stage, cast, title, village, Taro’s cart, music, and parade. The other five subjects follow if time allows, and then the new UI replaces the old one.
-- Learning logic, saves, and content don’t change.
-
-**Done when** the design’s acceptance list passes and GitHub matches the demo build.
+The UI remake was prepared for Cal Hacks judging on October 25, 2026. It introduced the handheld-style stage, cast, encounters, music stage and parade. The current prototype and later additions are summarized in [Starting point](#starting-point) and the [changelog](CHANGELOG.md).
 
 ### M0 · Finish the remake and carry fixes forward
 

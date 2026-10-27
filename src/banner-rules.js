@@ -28,8 +28,17 @@ export function expectedAt(grade, cell) {
   const pattern = patternFor(grade);
   return pattern && PATTERN_CELLS.includes(cell) ? pattern[cell % 2] : null;
 }
+// Grade 1 teaches shape; grade 2 teaches the flower's repeating paint colors.
+// Keep validation and the activity's retry hints on the same rule.
+export function patternMismatch(grade, cell, stamp) {
+  const expected = expectedAt(grade, cell);
+  if (!expected) return null;
+  if (stamp?.shape !== expected.shape) return 'shape';
+  return Number(grade) === 2 && stamp?.color !== expected.color ? 'color' : null;
+}
 export function patternReport(state) {
-  const missing = PATTERN_CELLS.filter(cell => !sameDesign(state?.stamps?.[stampAt(state, cell)], expectedAt(state?.grade, cell)));
+  const missing = PATTERN_CELLS.filter(cell => !expectedAt(state?.grade, cell)
+    || patternMismatch(state?.grade, cell, state?.stamps?.[stampAt(state, cell)]));
   return { matched: PATTERN_CELLS.length - missing.length, missing, complete: missing.length === 0 };
 }
 export function mirrorCell(cell) {
@@ -65,7 +74,8 @@ export const BANNER_RULE_LINES = Object.freeze({
   openingMirror: 'Make a mirror banner. The left side matches the right.',
   readyOpening: 'Your banner is ready. Hang it, or keep stamping.',
   yuki: 'Yuki stamped those. Continue the pattern to the right.',
-  wrong: 'Look at the pattern. What comes next?',
+  wrongShape: 'Try a different shape. Tap again for a clue.',
+  wrongColor: 'Try a different paint. Tap again for a clue.',
   fits: 'That fits the pattern! Keep going.',
   patternDone: 'Pattern done! Choose Hang banner, or keep stamping.',
   free: 'Stamped! The top row still needs the pattern.',
@@ -83,7 +93,7 @@ export function bannerOpening(state) {
     : state?.grade >= 3 ? BANNER_RULE_LINES.openingMirror : BANNER_RULE_LINES.openingK;
 }
 export function bannerHelp(grade) {
-  if (patternFor(grade)) return ['Look at Yuki’s three stamps on top.', 'Pick the stamp that comes next and tap the row.', 'Turn, Fill cloth or Undo any time.', 'Choose Hang banner.'];
+  if (patternFor(grade)) return ['Look at Yuki’s three stamps on top.', 'Pick the next stamp. Tap a spot again for a clue.', 'Turn, Fill cloth or Undo any time.', 'Choose Hang banner.'];
   if (grade >= 3) return ['Stamp one side, then its mirror on the other.', 'The fold is between columns 3 and 4.', grade >= 4 ? 'Use two colors and at least six stamps.' : 'Use at least four stamps.', 'Choose Hang banner.'];
   return ['Pick a paint and a stamp.', 'Tap the cloth to stamp it.', 'Turn, Fill cloth or Undo any time.', 'Choose Hang banner.'];
 }

@@ -30,10 +30,10 @@ test('the two patterns are exactly A B A then B A B, derived without saved stamp
     const draft = state(grade);
     assert.equal(bannerReady(draft), false); assert.deepEqual(draft.stamps, []);
   }
-  for (const grade of [0, 3, 4, 5, undefined]) { assert.equal(patternFor(grade), null); assert.deepEqual(yukiStamps(grade), []); }
+  for (const grade of [0, 3, 4, 5, undefined]) { assert.equal(patternFor(grade), null); assert.deepEqual(yukiStamps(grade), []); assert.equal(patternReport(state(grade)).complete, false); }
 });
 
-test('patterns compare the visible shape and color, allow every turn, and reject every missing cell', () => {
+test('patterns check shape in grade 1 and shape plus color in grade 2, allow every turn, and reject missing cells', () => {
   for (const grade of [1, 2]) {
     const ready = patternState(grade);
     assert.deepEqual(patternReport(ready), { matched: 3, missing: [], complete: true });
@@ -42,12 +42,24 @@ test('patterns compare the visible shape and color, allow every turn, and reject
       assert.equal(bannerReady(changed), false); assert.deepEqual(patternReport(changed).missing, [missing]);
     }
     for (const rotation of [0, 45, 90, 135, 180, 225, 270, 315]) assert.equal(bannerReady({ ...ready, stamps: ready.stamps.map(s => ({ ...s, rotation })) }), true);
-    for (const wrong of [{ shape: 'leaf' }, { color: '#6dbea0' }]) {
+    for (const wrong of grade === 1 ? [{ shape: 'leaf' }] : [{ shape: 'leaf' }, { color: '#6dbea0' }]) {
       const stamps = [...ready.stamps, { ...ready.stamps[0], ...wrong }];
       assert.equal(stampAt({ stamps }, 3), 3); assert.equal(bannerReady({ ...ready, stamps }), false);
       assert.equal(bannerReady({ ...ready, stamps: [stamps.at(-1), ...ready.stamps] }), true);
     }
     assert.equal(bannerReady({ ...ready, stamps: [...ready.stamps, stamp(28, 'leaf')] }), true, 'free cells do not change the completed row');
+  }
+});
+
+test('grade 1 accepts every paint for the shape pattern and preserves it through saving', () => {
+  const ready = patternState(1);
+  for (const color of ['#e96163', '#f4bf4f', '#6dbea0', '#559fc7', '#9d7fbd', '#fff1cf']) {
+    const painted = { ...ready, stamps: ready.stamps.map(s => ({ ...s, color })) };
+    assert.equal(patternReport(painted).complete, true);
+    assert.equal(bannerReady(painted), true);
+    const reopened = normalizeEncounterSnapshot('art', cleanCreation('art', painted), 1, 1);
+    assert.deepEqual(reopened, painted);
+    assert.equal(encounterReady(reopened), true);
   }
 });
 

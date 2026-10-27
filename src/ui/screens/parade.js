@@ -17,7 +17,7 @@ const STEP_MS = 160;
 const BUNTING = 18;
 export const HELP_STEPS = [
   'Watch your friends march with what you made.',
-  'Your friends march across the street two times. Then they stop. March again starts it over.',
+  'Your friends cross the street. Then they line up. March again starts it over.',
   'Play band plays the band you made with Kiko. No band yet? Visit Kiko first.',
   'Village takes you back to the village.',
 ];
@@ -27,7 +27,7 @@ const figureSlot = html => `<span class="parade-figure" style="left:${SPACING / 
 
 export function createParadeScene(ctx) {
   let root, menu, dialogue, engine, playback, previews, ticker = null, tick = 0, marchers = [], destroyed = false;
-  let laps = 0, over = false;   // finished crossings of the stage; the march has stopped in a line-up
+  let laps = 0, over = false;   // finished animation passes; the march has stopped in a line-up
   const creations = getCreations(ctx.getState());
   const lineup = paradeLineup(creations);
   const band = creations.music ?? null;
@@ -140,6 +140,7 @@ export function createParadeScene(ctx) {
       root.setAttribute('aria-labelledby', 'parade-title');
       root.innerHTML = `${streetMarkup()}
         <h2 class="px-chip px-name parade-title" id="parade-title" tabindex="-1">Festival parade</h2>
+        <p class="px-chip" role="status" style="display:none;position:absolute;right:16px;top:16px;max-width:400px;margin:0;z-index:2;font-family:var(--font-read);white-space:normal;overflow-wrap:anywhere" hidden></p>
         <div class="parade-dialogue"></div><div class="parade-menu"></div>`;
       ctx.stage.append(root);
       previews = fitSignPreviews(root, 88, 60);
@@ -147,7 +148,10 @@ export function createParadeScene(ctx) {
       marchers = lineup.map(({ id }, i) => ({ id, key: '', el: slots[i] }));
 
       dialogue = createDialogue(root.querySelector('.parade-dialogue'), {
-        speak: text => ctx.speak(text),
+        speak: text => {
+          const status = root.querySelector('[role="status"]');
+          return ctx.speak(status.hidden ? text : `${text} ${status.textContent}`);
+        },
         onHelp: () => ctx.open.help('Parade', HELP_STEPS),
         isLarge: () => Boolean(settings().largeText),
         autoRead: () => Boolean(settings().autoRead),
@@ -158,7 +162,11 @@ export function createParadeScene(ctx) {
       playback = createPlaybackController(engine, { onState: (phase, reason) => {
         if (destroyed) return;
         refreshCommands();
-        dialogue.say(null, paradeStatus(phase, reason, band));
+        const status = root.querySelector('[role="status"]');
+        status.textContent = paradeStatus(phase, reason, band);
+        status.hidden = false;
+        status.style.display = 'block';
+        if (settings().autoRead) ctx.speak(status.textContent);
       } });
 
       refreshCommands();
