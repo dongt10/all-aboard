@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { Doc, Event } from './helpers/dom.js';
+import { Doc, Event, El } from './helpers/dom.js';
 
 const doc = new Doc();
 const speech = { cancels: 0, cancel() { this.cancels++; }, speak() {} };
@@ -19,6 +19,8 @@ const { createState, getCreations, getDraft, saveDraft, publishCreation, saveSta
 const { figureMarkup } = await import('../src/ui/figures/index.js');
 const { createMusicScene, ECHO_LINES, lanternStep } = await import('../src/ui/screens/music.js');
 const { isEdited, lessonDone, lessonHint, defaultBandFor, pickEcho, setTrackNotes, toggleBeat, cycleNote } = await import('../src/ui/band.js');
+const { openGuideWindow, RECORDING_LINES } = await import('../src/ui/screens/windows.js');
+const { guideEntries } = await import('../src/ui/guide.js');
 const { withScope } = await import('../src/ui/save.js');
 
 function fakeCtx(state = createState()) {
@@ -31,7 +33,7 @@ function fakeCtx(state = createState()) {
     getState: () => state,
     commit(next) { state = next; return state; },
     go(name, params) { ctx.gone.push([name, params]); return Promise.resolve(true); },
-    speak() {}, announce() {},
+    speak(words) { ctx.said.push(words); }, announce() {},
     open: { help: (title, steps) => ctx.opened.push(steps) },
     scenes: { busy: false, pause() {} },
   };
@@ -734,4 +736,114 @@ test('Echo lights and copy finish while audio resume never settles; a late resum
     scene.destroy(); realTimers();
     if (original === undefined) delete globalThis.AudioContext; else globalThis.AudioContext = original;
   }
+});
+
+test('K and grade 2 retain earned lesson evidence across preset replacement and a storage round trip', async () => {
+  for (const grade of [0, 2]) {
+    const state = at(grade); state.settings.musicAutoplay = false;
+    const ctx = fakeCtx(state), scene = createMusicScene(ctx); scene.mount();
+    await completeLesson(ctx, grade);
+    ctx.stage.querySelector('.music-preset').click();
+    ctx.stage.querySelector('[data-preset="meadow"]').click();
+    assert.equal(slot(ctx.stage, 'save').disabled, false);
+    ctx.stage.querySelector('.music-preset').click();
+    ctx.stage.querySelector('[data-undo-preset]').click();
+    assert.equal(slot(ctx.stage, 'save').disabled, false, 'Undo preserves earned evidence');
+    ctx.stage.querySelector('.music-back').click(); await tick();
+    const storage = { value: null, setItem(_key, value) { this.value = value; }, getItem() { return this.value; } };
+    assert.equal(saveState(ctx.getState(), storage), true);
+    const restored = loadState(storage);
+    scene.destroy();
+    const next = fakeCtx(restored), reopened = createMusicScene(next); reopened.mount();
+    assert.equal(slot(next.stage, 'save').disabled, false);
+    assert.equal(getDraft(restored, 'music').lesson[grade === 0 ? 'played' : 'echoed'], true);
+    reopened.destroy();
+  }
+});
+
+test('lesson evidence accepts only true and only in its matching scope', () => {
+  for (const grade of [0, 1, 2, 3]) for (const value of [false, 'true', undefined, true]) {
+    const state = at(grade);
+    const band = { ...defaultBandFor(grade), lesson: { played: value, echoed: value } };
+    const draft = getDraft(saveDraft(state, 'music', withScope(band, state)), 'music');
+    assert.deepEqual(draft.lesson, { played: grade === 0 && value === true, echoed: grade === 2 && value === true });
+  }
+});
+
+test('publishing offers Kiko’s page and Village within four commands', async () => {
+  const state = at(0); state.settings.musicAutoplay = false;
+  const ctx = fakeCtx(state); ctx.open.guide = id => ctx.opened.push(id);
+  const scene = createMusicScene(ctx); scene.mount();
+  await completeLesson(ctx, 0);
+  slot(ctx.stage, 'save').click();
+  ctx.stage.querySelector('.item-get__go').click(); await tick();
+  assert.ok(getCreations(ctx.getState()).music);
+  assert.match(text(ctx), /Save song is on Kiko’s Guide page/);
+  assert.ok(ctx.stage.querySelectorAll('.cmd-slot').length <= 4);
+  slot(ctx.stage, 'guide').click(); assert.equal(ctx.opened.at(-1), 'music');
+  slot(ctx.stage, 'village').click(); await tick(); assert.equal(ctx.gone.at(-1)[0], 'village');
+  scene.destroy();
+});
+
+
+test('published music opens the real Guide, exports WAV, restores focus, and permits republishing edits', async () => {
+  const state = at(0); state.settings.musicAutoplay = false;
+  const ctx = fakeCtx(state); let pauses = 0; ctx.scenes.pause = () => { pauses++; };
+  ctx.open.guide = id => openGuideWindow(ctx, { id });
+  const scene = createMusicScene(ctx); scene.mount();
+  await completeLesson(ctx, 0); slot(ctx.stage, 'save').click();
+  ctx.stage.querySelector('.item-get__go').click(); await tick();
+  assert.equal(getCreations(ctx.getState()).music.lesson.played, true);
+  ctx.stage.querySelector('.dlg__tab[data-act="hear"]').click();
+  assert.match(ctx.said.at(-1), /Save song is on Kiko’s Guide page/);
+  const guideButton = slot(ctx.stage, 'guide'); guideButton.focus(); guideButton.click();
+  assert.equal(pauses, 1);
+  const index = guideEntries(ctx.getState()).findIndex(entry => entry.id === 'music');
+  assert.equal(Number(ctx.stage.querySelector('.guide-tile[aria-pressed="true"]').dataset.index), index);
+  const record = ctx.stage.querySelector('[data-action="record"]'); assert.ok(record);
+  record.click(); await tick();
+  assert.equal(ctx.stage.querySelector('.guide-record__status').textContent, RECORDING_LINES.failed);
+  const original = { offline: globalThis.OfflineAudioContext, create: URL.createObjectURL, revoke: URL.revokeObjectURL, click: El.prototype.click };
+  const blobs = []; let downloads = 0;
+  const node = () => ({ connect() {}, disconnect() {} });
+  const param = () => ({ value: 0, setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} });
+  globalThis.OfflineAudioContext = class {
+    constructor(_channels, _length, sampleRate) { this.sampleRate = sampleRate; }
+    destination = {};
+    createGain() { return { ...node(), gain: param() }; }
+    createOscillator() { return { ...node(), frequency: param(), start() {}, stop() {} }; }
+    createBiquadFilter() { return { ...node(), frequency: param(), Q: param() }; }
+    createBuffer(_channels, length) { return { getChannelData: () => new Float32Array(length) }; }
+    createBufferSource() { return { ...node(), start() {}, stop() {} }; }
+    createDynamicsCompressor() { return { ...node(), threshold: {}, knee: {}, ratio: {}, attack: {}, release: {} }; }
+    startRendering() { return Promise.resolve({ numberOfChannels: 2, length: 0, sampleRate: 44100, getChannelData: () => new Float32Array(0) }); }
+  };
+  URL.createObjectURL = blob => { blobs.push(blob); return 'blob:test'; }; URL.revokeObjectURL = () => {};
+  El.prototype.click = function () { if (this.tagName === 'A') downloads++; return original.click.call(this); };
+  try {
+    record.click(); await tick();
+    assert.equal(ctx.stage.querySelector('.guide-record__status').textContent, RECORDING_LINES.ready);
+    assert.equal(downloads, 1); assert.equal(blobs[0].type, 'audio/wav');
+    assert.equal(String.fromCharCode(...new Uint8Array(await blobs[0].arrayBuffer()).slice(0, 4)), 'RIFF');
+    ctx.stage.querySelector('.win__close').click();
+    assert.equal(doc.activeElement, guideButton);
+    ctx.stage.querySelector('.music-musician[data-id="bass"]').click();
+    assert.ok(slot(ctx.stage, 'save'));
+    slot(ctx.stage, 'save').click(); ctx.stage.querySelector('.item-get__go').click(); await tick();
+    assert.equal(getCreations(ctx.getState()).music.tracks[0].enabled, false);
+  } finally {
+    scene.destroy(); globalThis.OfflineAudioContext = original.offline; URL.createObjectURL = original.create; URL.revokeObjectURL = original.revoke; El.prototype.click = original.click;
+  }
+});
+
+
+test('lesson evidence stays isolated between kindergarten and grade 2 drafts', () => {
+  let state = at(0);
+  state = saveDraft(state, 'music', withScope({ ...defaultBandFor(0), lesson: { played: true, echoed: true } }, state));
+  state = { ...state, chapter: 1, grade: 2 };
+  assert.equal(getDraft(state, 'music'), null);
+  state = saveDraft(state, 'music', withScope({ ...defaultBandFor(2), lesson: { played: true, echoed: true } }, state));
+  assert.deepEqual(getDraft(state, 'music').lesson, { played: false, echoed: true });
+  state = { ...state, chapter: 0 };
+  assert.deepEqual(getDraft(state, 'music').lesson, { played: true, echoed: false });
 });

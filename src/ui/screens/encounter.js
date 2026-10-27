@@ -111,6 +111,8 @@ export function createEncounterScene(ctx, { id } = {}) {
     reward = showItemGet(ctx.stage, {
       name: activity.rewardLabel ?? character.reward.label,
       allowEdit: true,
+      speak: ctx.speak,
+      autoRead: Boolean(app.settings?.autoRead),
       artHTML: creationMarkup(scope.subjectId, creation),
       figureHTML: figureMarkup(id, { pose: 'joy', scale: 2 }),
     });

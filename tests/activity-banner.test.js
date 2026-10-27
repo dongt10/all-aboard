@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import banner, { stampPosition, stampAt, BANNER_SHAPES, BANNER_LINES } from '../src/ui/activities/banner.js';
 import { cleanCreation } from '../src/progress.js';
+import { creationMarkup } from '../src/ui/creations.js';
 import { Doc, Event } from './helpers/dom.js';
 import { controlStyle, declarations } from './helpers/css.js';
 import { ICON_NAMES } from '../src/ui/icons.js';
@@ -52,7 +53,7 @@ test('the banner names itself and opens with Yuki', () => {
   assert.deepEqual(banner.help, bannerHelp(1));
   assert.equal(banner.helpFor, bannerHelp);
   assert.equal(banner.notReadyLine, 'Nothing on the cloth yet.');
-  assert.deepEqual(s.ui, { color: '#e96163', shape: 'star', rotation: 0, history: [] });
+  assert.deepEqual(s.ui, { color: '#e96163', shape: 'star', rotation: 0, flipped: false, history: [] });
   assert.deepEqual([s.state.kind, s.state.grade, s.state.chapter, s.state.background, s.state.stamps], ['art', 2, 1, '#fff1cf', []]);
   assert.equal(banner.opening(s.state, s.ui, 2), BANNER_RULE_LINES.openingPattern);
 });
@@ -67,7 +68,9 @@ test('commands: Turn carries no number, and the finish waits for four mirror sta
   assert.equal(banner.commands(s.state, s.ui, 3)[1].label, 'Turn');
   s = field(s, { cell: 3 }, 3);
   assert.equal(banner.commands(s.state, s.ui)[3].disabled, true);
-  for (const cell of [2, 6, 11]) s = field(s, { cell }, 3);
+  s = field(s, { flipped: true }); s = field(s, { cell: 2 }, 3);
+  s = field(s, { flipped: false }); s = field(s, { cell: 6 }, 3);
+  s = field(s, { flipped: true }); s = field(s, { cell: 11 }, 3);
   const ready = banner.commands(s.state, s.ui, 3);
   assert.deepEqual([ready[0].disabled, ready[3].disabled], [false, false]);
 });
@@ -91,7 +94,7 @@ test('stamping, undo and fill speak the brief lines and stay pure', () => {
   const s1 = field(s0, { cell: 7 }, 1);
   assert.equal(s1.line, 'Keep stamping, or hang your banner.');
   assert.equal(s0.state.stamps.length, 0);
-  assert.deepEqual(s1.state.stamps[0], { shape: 'star', color: '#e96163', rotation: 0, ...stampPosition(7) });
+  assert.deepEqual(s1.state.stamps[0], { shape: 'star', color: '#e96163', rotation: 0, flipped: false, ...stampPosition(7) });
   const s2 = cmd(s1, 'undo');
   assert.equal(s2.state.stamps.length, 0); assert.equal(s1.state.stamps.length, 1);
   const painted = cmd(field(s0, { color: '#9d7fbd' }, 1), 'fill');
@@ -190,7 +193,7 @@ test('a stacked save from earlier today: a tap swaps the stamp on top, the one t
   assert.equal(stampAt(s.state, 0), 1, 'the last stamp drawn on the cell is the one found');
   const next = field(s, { cell: 0 }, 2);
   assert.equal(next.line, BANNER_LINES.stamped);
-  assert.deepEqual(next.state.stamps[0], under, 'the hidden stamp stays where it was');
+  assert.deepEqual(next.state.stamps[0], { ...under, flipped: false }, 'the hidden stamp stays where it was');
   assert.equal(stampAt(next.state, 0), 2);
   assert.deepEqual([next.state.stamps[2].shape, next.state.stamps[2].color, next.state.stamps[2].rotation], ['star', '#e96163', 0]);
   assert.equal(next.ui.history.length, 1);
@@ -246,8 +249,8 @@ test('cloth cells describe empty spaces and the top stamp after replacing, undoi
     s = cmd(s, 'turn');
     s = field(s, { cell: 1 });
     view.update(s.state, s.ui);
-    assert.equal(cells[0].getAttribute('aria-label'), 'Row 1, column 1. Coral star, rotated 0 degrees. Tap to replace.');
-    assert.equal(cells[1].getAttribute('aria-label'), 'Row 1, column 2. Mint leaf, rotated 45 degrees. Tap to replace.');
+    assert.equal(cells[0].getAttribute('aria-label'), 'Row 1, column 1. Coral star, rotated 0 degrees, plain. Tap to replace.');
+    assert.equal(cells[1].getAttribute('aria-label'), 'Row 1, column 2. Mint leaf, rotated 45 degrees, plain. Tap to replace.');
     const before = s;
     s = field(s, { cell: 0 });
     view.update(s.state, s.ui);
@@ -286,8 +289,8 @@ test('the field draws outlined stamps, marks the turned preview without a number
     const options = root.querySelector('.banner-shapes').children;
     const star = options.find(b => b.dataset.value === 'star'), flower = options.find(b => b.dataset.value === 'flower');
     assert.equal(star.getAttribute('aria-checked'), 'true');
-    assert.equal(star.getAttribute('aria-label'), 'Star, turned');
-    assert.equal(flower.getAttribute('aria-label'), 'Flower');
+    assert.equal(star.getAttribute('aria-label'), 'Star, turned, plain');
+    assert.equal(flower.getAttribute('aria-label'), 'Flower, plain');
     const chip = star.querySelector('.banner-option__turn');
     assert.match(chip.innerHTML, /class="icon"/, 'the chip is the turn arrow');
     assert.doesNotMatch(chip.innerHTML.replace(/<[^>]*>/g, ''), /\d|°/, 'no number on the chip');
@@ -301,7 +304,7 @@ test('the field draws outlined stamps, marks the turned preview without a number
     // Back at 0° the chip empties again.
     let back = s; for (let i = 0; i < 7; i++) back = cmd(back, 'turn');
     mounted.update(back.state, back.ui);
-    assert.equal(chip.innerHTML, ''); assert.equal(chip.style.transform, ''); assert.equal(star.getAttribute('aria-label'), 'Star');
+    assert.equal(chip.innerHTML, ''); assert.equal(chip.style.transform, ''); assert.equal(star.getAttribute('aria-label'), 'Star, plain');
     assert.equal(star.querySelector('.banner-shape-pic').innerHTML, unturned, 'eight turns restore the original pixels');
 
     // Tapping a cell dispatches it and moves the roving focus there.
@@ -496,4 +499,44 @@ test('selected paint and stamp have a persistent non-color outline separate from
     }
     view.destroy();
   } finally { globalThis.document = previous; }
+});
+
+test('flipping replaces a stamp, survives saving and reopening, and undo restores it', () => {
+  let s = banner.start(null, { grade: 3, chapter: 1 });
+  s = field(s, { shape: 'leaf' }); s = field(s, { cell: 6 });
+  s = field(s, { flipped: true }); s = field(s, { cell: 6 });
+  assert.equal(s.state.stamps[0].flipped, true);
+  const reopened = banner.start(cleanCreation('art', s.state), { grade: 3, chapter: 1 });
+  assert.equal(reopened.state.stamps[0].flipped, true);
+  s = cmd(s, 'undo'); assert.equal(s.state.stamps[0].flipped, false);
+});
+
+test('turned, flipped editor pixels match finished banner pixels and descriptions', () => {
+  globalThis.document = new Doc();
+  try {
+    const host = document.createElement('div'); document.body.append(host);
+    let s = banner.start(null, { chapter: 1, grade: 3 });
+    const view = banner.mountField(host, { dispatch: action => { s = banner.act(s.state, s.ui, action); view.update(s.state, s.ui); } });
+    view.update(s.state, s.ui);
+    const flip = host.querySelector('.banner-flip');
+    assert.ok(flip.classList.contains('banner-option'));
+    flip.click(); assert.equal(flip.getAttribute('aria-pressed'), 'true');
+    s = field(s, { shape: 'leaf' }); s = cmd(s, 'turn'); s = field(s, { cell: 6 }); view.update(s.state, s.ui);
+    assert.match(host.querySelectorAll('.banner-cell')[6].getAttribute('aria-label'), /rotated 45 degrees, flipped/);
+    const editor = host.querySelectorAll('.banner-stamp-spot').find(spot => !spot.hidden).innerHTML;
+    const finished = creationMarkup('art', s.state);
+    assert.match(finished, /1 flipped stamp/);
+    const pixels = (markup, runs) => {
+      const found = new Set();
+      for (const match of markup.matchAll(/<rect x="(\d+)" y="(\d+)" width="(\d+)" height="1" fill="[^"]+"\/>/g)) {
+        const [x, y, width] = match.slice(1).map(Number);
+        if (runs || width === 1) for (let i = 0; i < width; i++) found.add(`${x + i},${y}`);
+      }
+      return [...found].sort();
+    };
+    const stampMarkup = finished.match(/<svg x="-7" y="-7" width="14" height="14" viewBox="0 0 32 32">([\s\S]*?)<\/svg>/)[1];
+    assert.deepEqual(pixels(editor, true), pixels(stampMarkup, false));
+    assert.doesNotMatch(stampMarkup, /(?:x|y|width|height)="-?\d+\.\d/);
+    view.destroy();
+  } finally { delete globalThis.document; }
 });

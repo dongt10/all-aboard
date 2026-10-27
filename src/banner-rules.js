@@ -1,3 +1,40 @@
+export const STAMP_FORMS = {
+  star: [
+    '................', '.......xx.......', '.......xx.......', '......xxxx......',
+    '......xxxx......', '.....xxxxxx.....', '.xxxxxxxxxxxxxx.', '..xxxxxxxxxxxx..',
+    '...xxxxxxxxxx...', '....xxxxxxxx....', '....xxxxxxxx....', '...xxxxxxxxxx...',
+    '...xxxx..xxxx...', '...xx......xx...', '................', '................',
+  ],
+  flower: [
+    '................', '......xxxx......', '.....xxxxxx.....', '.....xxxxxx.....',
+    '..xxxxxxxxxxxx..', '.xxxxxxxxxxxxxx.', '.xxxxxxxxxxxxxx.', '..xxxxxxxxxxxx..',
+    '..xxxxxxxxxxxx..', '.xxxxxxxxxxxxxx.', '.xxxxxxxxxxxxxx.', '..xxxxxxxxxxxx..',
+    '.....xxxxxx.....', '.....xxxxxx.....', '......xxxx......', '................',
+  ],
+  leaf: [
+    '................', '................', '........xxxxxx..', '......xxxxxxxx..',
+    '.....xxxxxxxxx..', '....xxxxxxxxxx..', '...xxxxxxxxxxx..', '..xxxxxxxxxxxx..',
+    '..xxxxxxxxxxx...', '..xxxxxxxxxx....', '..xxxxxxxxx.....', '..xxxxxxxx......',
+    '..xxxxxx........', '..xxxx..........', '................', '................',
+  ],
+  circle: [
+    '................', '................', '.....xxxxxx.....', '...xxxxxxxxxx...',
+    '...xxxxxxxxxx...', '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..',
+    '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..', '...xxxxxxxxxx...',
+    '...xxxxxxxxxx...', '.....xxxxxx.....', '................', '................',
+  ],
+};
+
+// Sample rotation first, then reflect horizontally in the displayed coordinate system.
+export function stampSource(x, y, rotation = 0, flipped = false) {
+  if (flipped === true) x = 31 - x;
+  const angle = (Number(rotation) || 0) * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
+  return [Math.floor((cos * (x - 15.5) + sin * (y - 15.5) + 16) / 2), Math.floor((-sin * (x - 15.5) + cos * (y - 15.5) + 16) / 2)];
+}
+export function stampFilled(shape, x, y, rotation = 0, flipped = false) {
+  const [sx, sy] = stampSource(x, y, rotation, flipped);
+  return (STAMP_FORMS[shape] || STAMP_FORMS.circle)[sy]?.[sx] === 'x';
+}
 // Grade goals use the visible stamps; the saved cloth stays unchanged.
 export const COLUMNS = 6;
 export const ROWS = 5;
@@ -16,7 +53,7 @@ export function stampPosition(cell) {
 }
 const validCell = cell => Number.isInteger(cell) && cell >= 0 && cell < COLUMNS * ROWS;
 const sameSpot = (stamp, at) => stamp && Math.abs(stamp.x - at.x) < 1e-6 && Math.abs(stamp.y - at.y) < 1e-6;
-const sameDesign = (a, b) => Boolean(a && b && a.shape === b.shape && a.color === b.color);
+const sameDesign = (a, b) => Boolean(a && b && a.color === b.color && Array.from({ length: 32 * 32 }, (_, i) => stampFilled(a.shape, i % 32, Math.floor(i / 32), a.rotation, a.flipped) === stampFilled(b.shape, 31 - i % 32, Math.floor(i / 32), b.rotation, b.flipped)).every(Boolean));
 export function stampAt(state, cell) {
   return validCell(cell) && Array.isArray(state?.stamps) ? state.stamps.findLastIndex(s => sameSpot(s, stampPosition(cell))) : -1;
 }
@@ -94,6 +131,6 @@ export function bannerOpening(state) {
 }
 export function bannerHelp(grade) {
   if (patternFor(grade)) return ['Look at Yuki’s three stamps on top.', 'Pick the next stamp. Tap a spot again for a clue.', 'Turn, Fill cloth or Undo any time.', 'Choose Hang banner.'];
-  if (grade >= 3) return ['Stamp one side, then its mirror on the other.', 'The fold is between columns 3 and 4.', grade >= 4 ? 'Use two colors and at least six stamps.' : 'Use at least four stamps.', 'Choose Hang banner.'];
+  if (grade >= 3) return ['Stamp one side, then its mirror on the other.', 'Use Plain or Flipped to mirror a stamp.', grade >= 4 ? 'Use two colors and at least six stamps.' : 'Use at least four stamps.', 'Choose Hang banner.'];
   return ['Pick a paint and a stamp.', 'Tap the cloth to stamp it.', 'Turn, Fill cloth or Undo any time.', 'Choose Hang banner.'];
 }

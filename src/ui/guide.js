@@ -14,7 +14,7 @@ import { SUBJECT_THEME } from './palette.js';
 // Topics explored, not an assessment of mastery. The last row at or below the grade wins.
 const STAMPS = {
   math: [[0, 'Same number on both sides is equal.'], [1, 'Different crates can weigh the same.'], [2, STAMP_ROWS], [3, STAMP_PIZZA], [4, 'Sharing equally is dividing: 12 ÷ 4 = 3 each.'], [5, STAMP_PIZZA_HALVES]],
-  science: [[0, 'Shade keeps the sun off the ice.'], [2, STAMP_BEANS], [3, STAMP_CHAIN], [4, 'A pond chain keeps one tenth at each step too.'], [5, 'Only 10% of energy moves up each step of a chain.']],
+  science: [[0, 'Shade keeps the sun off the ice.'], [2, STAMP_BEANS], [3, STAMP_CHAIN], [4, 'This pond chart uses one tenth. Real transfer varies.'], [5, 'This chart uses 10% at each step. Real transfer varies.']],
   reading: [[0, 'Letters make a word you can read.'], [1, 'The story tells you what to pack.'], [2, STAMP_RIBBON], [3, STAMP_TALES]],
   writing: [[0, 'Words make a message for a reader.'], [1, 'Check capitals and marks in a message.'], [2, 'Check words and marks for your reader.'], [3, 'A reason tells your reader why.'], [4, 'Details and reasons help your reader.'], [5, 'Choose words for different readers.']],
   art: [[0, 'Shapes and colors make a design.'], [1, 'A pattern repeats: star, circle, star, circle.'], [2, 'A color pattern repeats: coral, blue, coral, blue.'], [3, 'A mirror design is the same on both sides.']],

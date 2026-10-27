@@ -3,7 +3,7 @@
 import { ENCOUNTER_COLORS, ENCOUNTER_COLOR_NAMES, normalizeEncounterSnapshot } from '../../encounters.js';
 import {
   COLUMNS, ROWS, YUKI_CELLS, PATTERN_CELLS, patternFor, yukiStamps, expectedAt, patternReport, patternMismatch,
-  stampPosition, stampAt, symmetryReport, bannerReady, bannerOpening, bannerHelp, BANNER_RULE_LINES,
+  stampPosition, stampAt, stampSource, stampFilled, symmetryReport, bannerReady, bannerOpening, bannerHelp, BANNER_RULE_LINES,
 } from '../../banner-rules.js';
 export { stampPosition, stampAt } from '../../banner-rules.js';
 import { keyIntent, gridMove } from '../input.js';
@@ -24,7 +24,7 @@ export const BANNER_LINES = {
   filled: color => `The cloth is ${ENCOUNTER_COLOR_NAMES[color]} now.`,
 };
 
-const sameStamp = (a, b) => a.shape === b.shape && a.color === b.color && a.rotation === b.rotation;
+const sameStamp = (a, b) => a.shape === b.shape && a.color === b.color && a.rotation === b.rotation && (a.flipped === true) === (b.flipped === true);
 
 // Hand-picked light/shadow steps of the festival's coral, lantern, mint, sea, lavender and paper paints.
 const PAINT_STEPS = {
@@ -33,40 +33,13 @@ const PAINT_STEPS = {
   '#9d7fbd': ['#d6c4ff', '#70578f'], '#fff1cf': [PAPER, '#d5bc88'],
 };
 // Two-pixel steps at the actual 32px stamp size. The filled masks include their closed ink edge.
-const FORMS = {
-  star: [
-    '................', '.......xx.......', '.......xx.......', '......xxxx......',
-    '......xxxx......', '.....xxxxxx.....', '.xxxxxxxxxxxxxx.', '..xxxxxxxxxxxx..',
-    '...xxxxxxxxxx...', '....xxxxxxxx....', '....xxxxxxxx....', '...xxxxxxxxxx...',
-    '...xxxx..xxxx...', '...xx......xx...', '................', '................',
-  ],
-  flower: [
-    '................', '......xxxx......', '.....xxxxxx.....', '.....xxxxxx.....',
-    '..xxxxxxxxxxxx..', '.xxxxxxxxxxxxxx.', '.xxxxxxxxxxxxxx.', '..xxxxxxxxxxxx..',
-    '..xxxxxxxxxxxx..', '.xxxxxxxxxxxxxx.', '.xxxxxxxxxxxxxx.', '..xxxxxxxxxxxx..',
-    '.....xxxxxx.....', '.....xxxxxx.....', '......xxxx......', '................',
-  ],
-  leaf: [
-    '................', '................', '........xxxxxx..', '......xxxxxxxx..',
-    '.....xxxxxxxxx..', '....xxxxxxxxxx..', '...xxxxxxxxxxx..', '..xxxxxxxxxxxx..',
-    '..xxxxxxxxxxx...', '..xxxxxxxxxx....', '..xxxxxxxxx.....', '..xxxxxxxx......',
-    '..xxxxxx........', '..xxxx..........', '................', '................',
-  ],
-  circle: [
-    '................', '................', '.....xxxxxx.....', '...xxxxxxxxxx...',
-    '...xxxxxxxxxx...', '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..',
-    '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..', '..xxxxxxxxxxxx..', '...xxxxxxxxxx...',
-    '...xxxxxxxxxx...', '.....xxxxxx.....', '................', '................',
-  ],
-};
 const stampCache = new Map();
-function stampSVG(shape, color, rotation = 0) {
-  const key = `${shape}:${color}:${rotation}`;
+function stampSVG(shape, color, rotation = 0, flipped = false) {
+  const key = `${shape}:${color}:${rotation}:${flipped}`;
   if (stampCache.has(key)) return stampCache.get(key);
-  const form = FORMS[shape] || FORMS.circle, [light, shade] = PAINT_STEPS[color] || PAINT_STEPS['#fff1cf'];
-  const angle = rotation * Math.PI / 180, cos = Math.cos(angle), sin = Math.sin(angle);
-  const source = (x, y) => [Math.floor((cos * (x - 15.5) + sin * (y - 15.5) + 16) / 2), Math.floor((-sin * (x - 15.5) + cos * (y - 15.5) + 16) / 2)];
-  const filled = (x, y) => { const [sx, sy] = source(x, y); return form[sy]?.[sx] === 'x'; };
+  const [light, shade] = PAINT_STEPS[color] || PAINT_STEPS['#fff1cf'];
+  const source = (x, y) => stampSource(x, y, rotation, flipped);
+  const filled = (x, y) => stampFilled(shape, x, y, rotation, flipped);
   let pixels = '';
   for (let y = 0; y < 32; y++) {
     let run = '', from = 0;
@@ -96,7 +69,7 @@ function shapeName(shape) { return shape[0].toUpperCase() + shape.slice(1); }
 
 function start(snapshot, { chapter = 0, grade = 1 } = {}) {
   // history holds the cloth before each stamp or fill, so Undo reverses both. It is not saved.
-  return { state: normalizeEncounterSnapshot('art', snapshot, grade, chapter), ui: { color: ENCOUNTER_COLORS[0], shape: 'star', rotation: 0, history: [] } };
+  return { state: normalizeEncounterSnapshot('art', snapshot, grade, chapter), ui: { color: ENCOUNTER_COLORS[0], shape: 'star', rotation: 0, flipped: false, history: [] } };
 }
 
 const opening = bannerOpening;
@@ -149,6 +122,7 @@ function act(state, ui, action) {
     return { state, ui };
   }
   if (action?.type !== 'field') return { state, ui };
+  if (typeof action.flipped === 'boolean') return { state, ui: { ...ui, flipped: action.flipped }, line: action.flipped ? 'Flipped stamp.' : 'Plain stamp.' };
   if (ENCOUNTER_COLORS.includes(action.color)) return { state, ui: { ...ui, color: action.color, patternHint: null }, line: BANNER_LINES.paint(action.color) };
   if (BANNER_SHAPES.includes(action.shape)) return { state, ui: { ...ui, shape: action.shape, patternHint: null }, line: BANNER_LINES.stamp(action.shape) };
   if (Number.isInteger(action.cell) && action.cell >= 0 && action.cell < CELLS) {
@@ -167,7 +141,7 @@ function act(state, ui, action) {
       // A successful stamp ends this retry, even if it leaves the cloth unchanged.
       if (ui.patternHint) ui = { ...ui, patternHint: null };
     }
-    const stamp = { shape: ui.shape, color: ui.color, rotation: ui.rotation, ...stampPosition(action.cell) };
+    const stamp = { shape: ui.shape, color: ui.color, rotation: ui.rotation, flipped: ui.flipped === true, ...stampPosition(action.cell) };
     const index = stampAt(state, action.cell);
     // Tapping a cell that already holds a stamp swaps it for the new one instead of piling up.
     if (index >= 0) {
@@ -244,7 +218,9 @@ function mountField(host, { dispatch }) {
   pole.className = 'banner-pole';
   const middle = document.createElement('div');
   middle.className = 'banner-middle';
-  middle.append(pole, cloth);
+  const flip = document.createElement('button');
+  flip.type = 'button'; flip.className = 'banner-option banner-flip';
+  middle.append(pole, cloth, flip);
   root.append(paints.rail, middle, stamps.rail);
   host.append(root);
 
@@ -255,7 +231,8 @@ function mountField(host, { dispatch }) {
   const onClick = event => {
     const b = event.target.closest('button');
     if (!b || !root.contains(b)) return;
-    if (b.dataset.cell !== undefined) { focusCell(Number(b.dataset.cell)); dispatch({ type: 'field', cell: Number(b.dataset.cell) }); }
+    if (b === flip) dispatch({ type: 'field', flipped: !current.ui.flipped });
+    else if (b.dataset.cell !== undefined) { focusCell(Number(b.dataset.cell)); dispatch({ type: 'field', cell: Number(b.dataset.cell) }); }
     else if (paints.buttons.includes(b)) dispatch({ type: 'field', color: b.dataset.value });
     else if (stamps.buttons.includes(b)) dispatch({ type: 'field', shape: b.dataset.value });
   };
@@ -266,7 +243,7 @@ function mountField(host, { dispatch }) {
     const intent = keyIntent(event);
     if (!['up', 'down', 'left', 'right'].includes(intent)) return;
     const b = event.target.closest?.('button');
-    if (!b) return;
+    if (!b || b === flip) return;
     let handled = true;
     if (b.dataset.cell !== undefined) {
       const next = gridMove(cursor, intent, COLUMNS, CELLS);
@@ -301,7 +278,7 @@ function mountField(host, { dispatch }) {
     spot.hidden = !stamp;
     if (!stamp) return;
     spot.style.left = `${stamp.x}%`; spot.style.top = `${stamp.y}%`;
-    const html = stampSVG(stamp.shape, stamp.color, stamp.rotation);
+    const html = stampSVG(stamp.shape, stamp.color, stamp.rotation, stamp.flipped);
     if (spot.innerHTML !== html) spot.innerHTML = html;
   });
 
@@ -318,9 +295,9 @@ function mountField(host, { dispatch }) {
       cells.forEach((cell, i) => {
         const stamp = state.stamps[stampAt(state, i)];
         const contents = yuki[i]
-          ? `Yuki’s ${ENCOUNTER_COLOR_NAMES[yuki[i].color]} ${yuki[i].shape}. Part of the pattern.${stamp ? ` Your ${ENCOUNTER_COLOR_NAMES[stamp.color]} ${stamp.shape} is on top.` : ''}`
+          ? `Yuki’s ${ENCOUNTER_COLOR_NAMES[yuki[i].color]} ${yuki[i].shape}. Part of the pattern.${stamp ? ` Your ${ENCOUNTER_COLOR_NAMES[stamp.color]} ${stamp.shape}, rotated ${stamp.rotation} degrees, ${stamp.flipped ? 'flipped' : 'plain'}, is on top.` : ''}`
           : stamp
-          ? `${ENCOUNTER_COLOR_NAMES[stamp.color]} ${stamp.shape}, rotated ${stamp.rotation} degrees. Tap to replace.`
+          ? `${ENCOUNTER_COLOR_NAMES[stamp.color]} ${stamp.shape}, rotated ${stamp.rotation} degrees, ${stamp.flipped ? 'flipped' : 'plain'}. Tap to replace.`
           : 'Empty. Tap to stamp.';
         cell.classList.toggle('banner-cell--yuki', Boolean(yuki[i]));
         cell.classList.toggle('banner-cell--lonely', lonely.has(i));
@@ -328,17 +305,20 @@ function mountField(host, { dispatch }) {
       });
     }
     if (ui !== current.ui) {
+      flip.textContent = ui.flipped ? 'Flipped' : 'Plain';
+      flip.setAttribute('aria-label', `Stamp: ${ui.flipped ? 'Flipped' : 'Plain'}. Change to ${ui.flipped ? 'Plain' : 'Flipped'}`);
+      flip.setAttribute('aria-pressed', String(ui.flipped === true));
       setRadio(paints.buttons, ui.color);
       setRadio(stamps.buttons, ui.shape);
       // The previews turn with the stamp. The chosen one wears a small turn arrow, itself turned the same way,
       // so no number or degree ever reaches the screen (the rotated preview already shows the angle).
       stamps.buttons.forEach(b => {
-        b.querySelector('.banner-shape-pic').innerHTML = stampSVG(b.dataset.value, ui.color, ui.rotation);
+        b.querySelector('.banner-shape-pic').innerHTML = stampSVG(b.dataset.value, ui.color, ui.rotation, ui.flipped);
         const turned = b.dataset.value === ui.shape && ui.rotation !== 0;
         const chip = b.querySelector('.banner-option__turn');
         chip.innerHTML = turned ? icon('turn', { size: 12 }) : '';
         chip.style.transform = turned ? `rotate(${ui.rotation}deg)` : '';
-        b.setAttribute('aria-label', `${shapeName(b.dataset.value)}${turned ? ', turned' : ''}`);
+        b.setAttribute('aria-label', `${shapeName(b.dataset.value)}${turned ? ', turned' : ''}${ui.flipped ? ', flipped' : ', plain'}`);
       });
     }
     current = { state, ui };
