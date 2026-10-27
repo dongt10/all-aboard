@@ -183,8 +183,11 @@ function distance(a, b) {
   return rows[a.length][b.length];
 }
 
-function suggestionFor(word, dictionary, preferred) {
+// Ties between equally close words go to the scenario's own words, then the shared start of the word
+// ("sqare" is square, not share, on a sign about the square), then to other festival words.
+function suggestionFor(word, dictionary, preferred, scenarioWords = new Set()) {
   const key = lower(word), size = [...key].length, limit = size <= 4 ? 1 : 2;
+  const sharedStart = candidate => { let n = 0; while (n < key.length && key[n] === candidate[n]) n++; return n; };
   let best, bestRank;
   for (const candidate of dictionary) {
     if (Math.abs([...candidate].length - size) > limit) continue;
@@ -193,7 +196,7 @@ function suggestionFor(word, dictionary, preferred) {
     const doubled = key.replace(/(.)\1+/g, '$1') === candidate.replace(/(.)\1+/g, '$1');
     const swapped = key.length === candidate.length && [...key].sort().join('') === [...candidate].sort().join('');
     const apostrophe = key.replace(/'/g, '') === candidate.replace(/'/g, '');
-    const rank = [edits, doubled || swapped || apostrophe ? 0 : 1, preferred.has(candidate) ? 0 : 1, candidate[0] === key[0] ? 0 : 1, Math.abs(candidate.length - key.length)];
+    const rank = [edits, doubled || swapped || apostrophe ? 0 : 1, scenarioWords.has(candidate) ? 0 : 1, -sharedStart(candidate), preferred.has(candidate) ? 0 : 1, Math.abs(candidate.length - key.length)];
     if (!bestRank || rank.some((part, i) => part < bestRank[i] && rank.slice(0, i).every((value, j) => value === bestRank[j]))) {
       best = candidate; bestRank = rank;
     }
@@ -243,7 +246,8 @@ export function checkSign(input, { grade, vocabulary = [], kept = [], goal, desc
   const customNames = supplied.filter(word => /^[\p{Lu}\p{Lt}][\p{L}\p{M}]*$/u.test(word)
     && !baseWords.has(lower(word)) && !lowercaseWords.has(lower(word)));
   const names = new Map([...customNames, ...CAST_NAMES].map(name => [lower(name), name]));
-  const preferred = new Set([...strings(vocabulary).flatMap(wordList), ...CAST_NAMES.map(lower), ...FESTIVAL_WORDS.map(lower)]);
+  const scenarioWords = new Set(strings(vocabulary).flatMap(wordList).map(lower));
+  const preferred = new Set([...scenarioWords, ...CAST_NAMES.map(lower), ...FESTIVAL_WORDS.map(lower)]);
   const issues = [];
   for (const token of tokens) {
     const { word, start, end } = token, key = lower(word), base = key.endsWith("'s") ? key.slice(0, -2) : key;
@@ -256,7 +260,7 @@ export function checkSign(input, { grade, vocabulary = [], kept = [], goal, desc
         shown(name, 'Start ', ` with ${[...name][0]}.`), ...spellingHints(suggestion).slice(1),
       ], { word, start, end, suggestion, fix: { start, end, text: suggestion } }));
     } else if (!inDictionary(word, dictionary, preserved)) {
-      const match = suggestionFor(word, dictionary, preferred);
+      const match = suggestionFor(word, dictionary, preferred, scenarioWords);
       token.ok = false;
       if (match) {
         const first = [...match][0];

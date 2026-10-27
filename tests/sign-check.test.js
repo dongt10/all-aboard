@@ -360,3 +360,10 @@ test('every generated issue line and hint fits 56 characters, including long use
     allLinesFit(report(scenario.example, { grade, vocabulary: scenario.vocabulary, goal: scenario.goal }));
   }
 });
+
+test('an equally close scenario word beats a shorter festival word, and so does a longer shared start', () => {
+  // "sqare" is one edit from both "share" (a festival word) and "square"; the sign is about the square.
+  assert.equal(wordIssue(report('Meet at the sqare', { vocabulary: ['square'] }), 'sqare').suggestion, 'square');
+  assert.equal(wordIssue(report('Meet at the sqare'), 'sqare').suggestion, 'square');
+  assert.equal(wordIssue(report('Come shre the fun'), 'shre').suggestion, 'share');
+});
