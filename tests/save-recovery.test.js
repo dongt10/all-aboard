@@ -9,8 +9,8 @@ function setup(raw, key = STORAGE_KEY) {
   Object.assign(globalThis, {
     document: doc, window: Object.assign(new Target(), { innerWidth: 1920, innerHeight: 1080 }),
     requestAnimationFrame: () => 0, cancelAnimationFrame() {},
-    speechSynthesis: { cancels: 0, spoken: [], cancel() { this.cancels++; }, speak(utterance) { this.spoken.push(utterance.text); } },
-    SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } },
+    speechSynthesis: { cancels: 0, spoken: [], cancel() { this.cancels++; }, speak(utterance) { this.spoken.push(utterance.text); }, getVoices() { return [{ name: 'Samantha', lang: 'en-US', localService: true }]; } },
+    SpeechSynthesisUtterance: class { constructor(text) { this.text = text; } addEventListener() {} },
   });
   const host = doc.createElement('div');
   doc.body.append(host);
