@@ -69,7 +69,8 @@
 .enc__nav, .enc__another { white-space: normal; font: inherit; }
 .enc__schedule { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; background: var(--paper); color: var(--ink); border: 2px solid var(--ink); }
 .enc__schedule > div { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 3px 1px; text-align: center; overflow-wrap: anywhere; }
-.enc__schedule strong { font: inherit; font-weight: 700; }
+/* Three cells share 190px: at 20px (Bigger words, phones) "Finish" breaks mid-word, so the labels cap at 18px. */
+.enc__schedule strong { font: inherit; font-weight: 700; font-size: min(var(--text-small), 18px); }
 .enc__schedule .icon { display: block; width: 24px; height: 24px; }
 .enc__now { background: var(--lantern); }
 .enc__finish-label { line-height: 1; }
