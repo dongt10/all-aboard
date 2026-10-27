@@ -2,7 +2,7 @@ import { createBandEngine, sanitizeBandSnapshot, applyBeatChanges, notesForBeat,
 import { createPlaybackController, bandPlaybackMessage, CAST } from '../../music.js';
 import { getDraft, getCreations, saveDraft, publishCreation } from '../../progress.js';
 import {
-  MUSICIAN_COLORS, toggleMusician, toggleBeat, cycleNote, noteLabel, setTrackNotes, musicCommands,
+  MUSICIAN_COLORS, toggleMusician, toggleBeat, cycleNote, noteLabel, musicCommands,
   leadTrack, TEMPO_NAMES, cycleTempo, setTempo, formLabel, cycleForm, setForm, defaultBandFor, lessonDone,
   melodyShape, shapeLine, restsLine, pickEcho, echoMatches, openingLine, helpLines, lessonHint,
 } from '../band.js';
@@ -47,8 +47,8 @@ export const ECHO_LINES = {
   listen: 'Listen and watch the lanterns…',
   copy: 'Your turn! Tap the lanterns to copy it.',
   matched: 'You echoed it! Now make one for me.',
-  notYet: 'Not yet. Press Echo to hear it again.',
-  stopped: 'Echo stopped. Press Echo to hear it again.',
+  notYet: 'Not yet. Press Echo to watch it again.',
+  stopped: 'Echo stopped. Press Echo to watch it again.',
 };
 const gradeOf = state => (state.chapter === 0 ? 0 : Number(state.grade) || 0);
 const castOf = id => CAST.find(c => c.id === id);
@@ -64,7 +64,7 @@ export function createMusicScene(ctx) {
   let echo = null, echoCount = 0, echoToken = 0;   // echo: { mask, phase: 'demo' | 'copy', beat, timer }
   let destroyed = false, finishing = false;
   let presetUndo = null, audition = false, muteDialogue = false, suppressPlaybackLine = 0;
-  let reward = null;
+  let reward = null, meaningful = false, endNarration = null;
   const $ = selector => root.querySelector(selector);
   const settings = () => ctx.getState().settings ?? {};
   const say = (speaker, words) => { if (!destroyed) dialogue.say(speaker, words); };
@@ -183,8 +183,7 @@ export function createMusicScene(ctx) {
   function showBeat({ beat, notes, phraseIndex }) {
     if (destroyed) return;
     if (echo?.phase === 'demo') {
-      // The engine wraps to beat 0 after the eight-beat demonstration.
-      showEchoBeat(beat === 0 && echo.beat > 0 ? 8 : beat);
+      showEchoBeat(beat);
       return;
     }
     clearBeats();
@@ -223,6 +222,7 @@ export function createMusicScene(ctx) {
   }
   // Stops every listening mode. None resumes automatically after a pause, window or hidden tab.
   function stopAll({ silent = false } = {}) {
+    endNarration?.();
     if (silent) suppressPlaybackLine++;
     try {
       stopQuiet();
@@ -240,6 +240,7 @@ export function createMusicScene(ctx) {
     stopSpeaking();
     rememberAutoplay(true);
     playedOnce = true;
+    saveNow();
     void playback.toggle(band);
   }
   // See beat: one ticker lights the lanterns at the band's speed, with no sound.
@@ -261,18 +262,44 @@ export function createMusicScene(ctx) {
     stopAll();
     quiet = true; quietBeat = 0; quietBand = sanitizeBandSnapshot(band); playedOnce = true;
     startQuietTicker();
+    saveNow();
     refreshMenu();
     sayPlayback(bandPlaybackMessage(band, { quiet: true }));
   }
 
+  // Narration lowers sound without canceling either the song or the silent lights.
+  function narrate(text) {
+    endNarration?.();
+    engine?.setDucked(true);
+    let utterance;
+    const ended = () => {
+      if (endNarration !== ended) return;
+      utterance?.removeEventListener?.('end', ended);
+      utterance?.removeEventListener?.('error', ended);
+      endNarration = null;
+      engine?.setDucked(false);
+    };
+    endNarration = ended;
+    try { utterance = ctx.speak(text); } catch { ended(); return false; }
+    if (utterance?.addEventListener) {
+      utterance.addEventListener('end', ended);
+      utterance.addEventListener('error', ended);
+    } else ended();
+    return utterance;
+  }
+
   // ---- Saving and editing ----
-  const saveNow = () => ctx.commit(saveDraft(ctx.getState(), 'music', withScope(band, ctx.getState())));
+  const saveNow = () => {
+    meaningful = true;
+    ctx.commit(saveDraft(ctx.getState(), 'music', withScope(band, ctx.getState())));
+  };
   // Every edit (stage taps and the Sounds window alike) ends a running echo demo first, so the demo band
-  // never picks up the change on its next beat. finishDemo edits after the phase turns to 'copy', so it is spared.
+  // never picks up the change on its next beat.
   const interruptDemo = () => { if (echo?.phase === 'demo') stopAll(); };
   function edit(next, { line, save = true } = {}) {
     interruptDemo();
     band = next;
+    meaningful = true;
     engine.update(band);
     paintPreset();
     if (save) saveNow();
@@ -310,30 +337,40 @@ export function createMusicScene(ctx) {
     edit(setForm(band, form), { line: ['Kiko', FORM_LINES[form]] });
   }
 
-  // ---- Echo (grade 2): Kiko plays a rhythm, the lanterns flash it, then Cricket's rail clears for the copy ----
+  // ---- Echo (grade 2): the demonstration never replaces the child's editable score ----
   async function startEcho() {
     stopAll();
     stopSpeaking();
     const mask = echo?.mask ?? pickEcho(echoCount), token = echoToken;
     echo = { mask, phase: 'demo', beat: 0, timer: null };
     $('[data-sign="echo"]')?.classList.add('is-busy');
-    sayPlayback(ECHO_LINES.listen);
+    sayPlayback(settings().musicAutoplay === false ? 'Watch the lanterns…' : ECHO_LINES.listen);
+    saveNow();
     // One-off band: only Cricket sounds, and only on the picked beats.
     const demo = {
       ...sanitizeBandSnapshot(band), form: 'A',
       tracks: band.tracks.map(t => (t.id === 'percussion'
-        ? { ...t, enabled: true, volume: Math.max(t.volume, .6), notes: mask.map(on => (on ? 0 : null)) }
+        ? { ...t, enabled: true, volume: t.volume, notes: mask.map(on => (on ? 0 : null)) }
         : { ...t, enabled: false, notes: [...t.notes] })),
     };
-    let audible = false;
-    try { audible = await engine.start(demo); } catch { /* lights still run without sound */ }
-    if (destroyed || token !== echoToken || echo?.phase !== 'demo') return;
-    if (audible) return;   // onBeat drives the lights and completion from the audio clock
+    // Start lights before awaiting browser audio permission, which may never settle.
     const started = performance.now(), beatMs = 60000 / demo.tempo;
-    // A delayed callback catches up to the elapsed beat instead of stretching the rhythm.
     const tick = () => showEchoBeat(Math.floor((performance.now() - started) / beatMs + 1e-9));
     tick();
     echo.timer = setInterval(tick, beatMs);
+    if (settings().musicAutoplay === false) return;
+    let audible = false;
+    try {
+      audible = await engine.start(demo, { beats: 8, onComplete: () => {
+        if (!destroyed && token === echoToken && echo?.phase === 'demo') finishDemo();
+      } });
+    } catch { /* the independent visual demonstration continues */ }
+    if (destroyed || token !== echoToken || echo?.phase !== 'demo') return;
+    if (!audible) return;
+    if (performance.now() - started >= beatMs) { engine.stop(); return; }
+    // Prompt audio startup can take over the clock. A late startup keeps the silent demo.
+    clearInterval(echo.timer); echo.timer = null;
+    clearBeats();
   }
   function showEchoBeat(beat) {
     if (echo?.phase !== 'demo') return;
@@ -351,7 +388,8 @@ export function createMusicScene(ctx) {
     clearBeats();
     echo.phase = 'copy';
     $('[data-sign="echo"]')?.classList.remove('is-busy');
-    edit(setTrackNotes(band, 'percussion', []), { line: ['Kiko', ECHO_LINES.copy] });
+    paintRail();
+    say('Kiko', ECHO_LINES.copy);
   }
 
   // Presets are editable band scores. Switching keeps the child's volume and chosen form; one Undo
@@ -375,7 +413,7 @@ export function createMusicScene(ctx) {
     sayPlayback('Your previous band is back. Your edits are safe.');
   }
   function auditionBand() {
-    if (band.masterVolume === 0 || document.hidden || destroyed) return;
+    if (settings().musicAutoplay === false || settings().autoRead || band.masterVolume === 0 || document.hidden || destroyed) return;
     audition = true;
     stopSpeaking();
     void playback.toggle(band);
@@ -410,6 +448,7 @@ export function createMusicScene(ctx) {
   // ---- Sounds window (another module owns it; it talks back through these callbacks) ----
   function openSounds() {
     if (ctx.scenes?.busy || sounds) return;   // never over a scene change or a second window
+    endNarration?.();
     stopSpeaking();
     const handle = openSoundsWindow(ctx, {
       getBand: () => band,
@@ -426,7 +465,7 @@ export function createMusicScene(ctx) {
   async function leave() {
     if (finishing) return;
     stopAll();
-    saveNow();
+    if (meaningful) saveNow();
     await ctx.go('village', { focus: 'music' });
   }
   const finish = onceAtATime(async () => {
@@ -485,7 +524,9 @@ export function createMusicScene(ctx) {
       const state = ctx.getState();
       grade = gradeOf(state);
       lead = leadTrack(grade);
-      band = sanitizeBandSnapshot(getDraft(state, 'music') ?? defaultBandFor(grade));
+      const draft = getDraft(state, 'music');
+      meaningful = Boolean(draft);
+      band = sanitizeBandSnapshot(draft ?? defaultBandFor(grade));
       // Older saves acquire A when loaded; grade 4's locked form needs both phrases.
       if (grade === 4 && band.form === 'A') band.form = 'AB';
       // A published band already passed the finish gate, even when its score is still the default.
@@ -497,7 +538,7 @@ export function createMusicScene(ctx) {
       root.addEventListener('click', event => markControl(event.target.closest?.('button')));
       root.addEventListener('keydown', onControlKey);
       dialogue = createDialogue($('.music-dialogue'), {
-        speak: text => { stopAll({ silent: true }); return ctx.speak(text); },
+        speak: narrate,
         onHelp: () => { stopAll({ silent: true }); ctx.open.help('Kiko’s Sound Garden', helpLines(grade)); },
         isLarge: () => settings().largeText,
         autoRead: () => settings().autoRead && !muteDialogue,
@@ -507,7 +548,7 @@ export function createMusicScene(ctx) {
         onBeat: showBeat,
         onStatus: status => {
           if (destroyed) return;
-          if (status === 'stopped') { playback?.engineStopped(); if (!quiet) { clearBeats(); paintPhrase(null); } }
+          if (status === 'stopped') { playback?.engineStopped(); if (!quiet && echo?.phase !== 'demo') { clearBeats(); paintPhrase(null); } }
           if (status === 'interrupted') { stopEchoTimers(); say('Kiko', 'Sound was interrupted. Press Play band to start again.'); }
         },
       });

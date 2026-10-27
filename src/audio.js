@@ -186,6 +186,8 @@ export function createBandEngine({onBeat=()=>{},onStatus=()=>{}}={}) {
   let context=null,master=null,timer=null,frame=null,running=false,destroyed=false,epoch=0;
   let mix=null;
   let pending=createDefaultBand(),active=pending,nextTime=0,nextBeat=0,visuals=[];
+  let beatLimit=Infinity,scheduledBeats=0,completionTime=Infinity,onComplete=null,ducked=false,volume=pending.masterVolume;
+  const outputVolume=()=>volume*(ducked ? .25 : 1);
   const sources=new Set();
   const status=value=>onStatus(value);
   function stop() {
@@ -201,7 +203,7 @@ export function createBandEngine({onBeat=()=>{},onStatus=()=>{}}={}) {
   }
   function schedule() {
     if(!running)return;
-    while(nextTime<context.currentTime+.11) {
+    while(scheduledBeats<beatLimit&&nextTime<context.currentTime+.11) {
       active=applyBeatChanges(active,pending,nextBeat);
       // A shorter form adopted at a phrase start restarts at its A, so the beat never
       // points past the new form (ABA -> AB at beat 16 becomes beat 0, not phrase 2).
@@ -212,18 +214,23 @@ export function createBandEngine({onBeat=()=>{},onStatus=()=>{}}={}) {
       });
       visuals.push({time:nextTime,beat:nextBeat,notes,phrase:phraseAt(active,nextBeat),phraseIndex:Math.floor(nextBeat/8)});
       nextTime+=60/active.tempo;nextBeat=(nextBeat+1)%phraseLength(active);
+      scheduledBeats++;
+      if(scheduledBeats===beatLimit)completionTime=nextTime;
     }
   }
   function paint() {
     if(!running)return;
     while(visuals.length&&visuals[0].time<=context.currentTime)onBeat(visuals.shift());
-    if(running)frame=requestAnimationFrame(paint);   // onBeat may stop a finished demonstration
+    if(running&&context.currentTime>=completionTime){
+      const complete=onComplete;stop();complete?.();return;
+    }
+    if(running)frame=requestAnimationFrame(paint);
   }
   const hidden=()=>{if(document.hidden)stop();};
   if(typeof document!=='undefined')document.addEventListener('visibilitychange',hidden);
   if(typeof window!=='undefined')window.addEventListener('pagehide',stop);
   return {
-    async start(snapshot) {
+    async start(snapshot,{beats,onComplete:complete}={}) {
       if(destroyed)return false;
       stop();const token=epoch;
       try {
@@ -239,13 +246,15 @@ export function createBandEngine({onBeat=()=>{},onStatus=()=>{}}={}) {
         if(token!==epoch||destroyed)return false;
         if(context.state!=='running'){status('unavailable');return false;}
         active=pending;
-        master.gain.setValueAtTime(pending.masterVolume,context.currentTime);
+        volume=pending.masterVolume;master.gain.setValueAtTime(outputVolume(),context.currentTime);
+        beatLimit=Number.isInteger(beats)&&beats>0?beats:Infinity;scheduledBeats=0;completionTime=Infinity;onComplete=typeof complete==='function'?complete:null;
         nextTime=context.currentTime+.055;nextBeat=0;running=true;
         schedule();timer=setInterval(schedule,25);paint();status('playing');return true;
       }catch{if(token!==epoch||destroyed)return false;stop();status('unavailable');return false;}
     },
     update(snapshot){pending=sanitizeBandSnapshot(snapshot);this.setVolume(pending.masterVolume);},
-    setVolume(value){if(master)master.gain.setTargetAtTime(clamp(value,.65),context.currentTime,.025);},
+    setVolume(value){volume=clamp(value,.65);if(master)master.gain.setTargetAtTime(outputVolume(),context.currentTime,.025);},
+    setDucked(value){ducked=Boolean(value);if(master)master.gain.setTargetAtTime(outputVolume(),context.currentTime,.025);},
     stop,
     destroy(){stop();destroyed=true;if(typeof document!=='undefined')document.removeEventListener('visibilitychange',hidden);if(typeof window!=='undefined')window.removeEventListener('pagehide',stop);mix?.destroy();if(context){context.onstatechange=null;context.close().catch(()=>{});}},
   };

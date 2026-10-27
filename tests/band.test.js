@@ -111,7 +111,7 @@ test('lessonDone follows each grade\'s lesson', () => {
     assert.equal(lessonDone(echo, { echoed: 'true' }, 2), false, 'only a completed scene echo counts');
     for (const mask of ECHO_PATTERNS) {
       const matched = setTrackNotes(echo, 'percussion', mask.map(on => on ? 4 : null));
-      assert.equal(lessonDone(matched, {}, 2), true, 'a restored matching rhythm counts without scene flags');
+      assert.equal(lessonDone(matched, {}, 2), false, 'a matching rhythm alone does not complete Echo');
     }
 
     for (const grade of [3, 4, 5]) {
@@ -195,14 +195,15 @@ test('edit detection never throws on a thin or broken band', () => {
 });
 test('melody shape reads only the sounded notes, in order', () => {
   assert.equal(melodyShape([null, null, null, null, null, null, null, null]), 'empty');
-  assert.equal(melodyShape([2, null, null, null, null, null, null, null]), 'same');
+  assert.equal(melodyShape([2, null, null, null, null, null, null, null]), 'single');
   assert.equal(melodyShape([2, null, 2, 2, null, null, 2, null]), 'same');
   assert.equal(melodyShape([0, null, 1, 1, null, 3, null, 4]), 'up');
   assert.equal(melodyShape([4, 3, null, 3, null, 1, null, 0]), 'down');
   assert.equal(melodyShape([0, null, 3, null, 1, null, null, null]), 'mixed');
-  assert.deepEqual(['empty', 'same', 'up', 'down', 'mixed'].map(shapeLine), [
-    'Tap a lantern to add a note.', 'Your tune stays the same.', 'Your tune goes up!', 'Your tune goes down.', 'Up and down, like a hill!',
+  assert.deepEqual(['empty', 'single', 'same', 'up', 'down', 'mixed'].map(shapeLine), [
+    'Tap a lantern to add a note.', 'Add another note to hear your tune move.', 'Your tune stays the same.', 'Your tune goes up!', 'Your tune goes down.', 'Up and down, like a hill!',
   ]);
+  assert.ok(shapeLine('single').length <= 56);
   assert.equal(shapeLine('nope'), 'Tap a lantern to add a note.');
 });
 test('echo rhythms have 3 to 5 sounds, differ from the default beat, and match on sound versus rest', () => {

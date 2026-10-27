@@ -94,12 +94,11 @@ export function isEdited(band, grade) {
 export function lessonDone(band, ui = {}, grade, preset = band?.preset) {
   const g = gradeNumber(grade);
   if (g <= 0) return Boolean(ui.played || isEdited(band, 0));
-  if (g === 2 && ui.echoed === true) return true;
+  if (g === 2) return ui.echoed === true;
   const tracks = Array.isArray(band?.tracks) ? band.tracks : [];
   const notes = tracks.find(track => track?.id === leadTrack(g))?.notes;
   if (!Array.isArray(notes) || notes.length !== 8) return false;
   if (g === 1) return !echoMatches(notes, defaultBandFor(1).tracks[3].notes.map(note => note !== null));
-  if (g === 2) return ECHO_PATTERNS.some(mask => echoMatches(notes, mask));
   const base = defaultBandFor(g, normalizePreset(preset)).tracks[2].notes;
   return base.some((note, i) => note !== cleanNote(notes[i]));
 }
@@ -110,6 +109,7 @@ const sounds = notes => notes.filter(n => n !== null && n !== undefined);
 export function melodyShape(notes) {
   const played = sounds(notes);
   if (!played.length) return 'empty';
+  if (played.length === 1) return 'single';
   const steps = played.slice(1).map((n, i) => Math.sign(n - played[i]));
   const up = steps.some(s => s > 0), down = steps.some(s => s < 0);
   if (up && down) return 'mixed';
@@ -120,6 +120,7 @@ export function melodyShape(notes) {
 
 const SHAPE_LINES = {
   empty: 'Tap a lantern to add a note.',
+  single: 'Add another note to hear your tune move.',
   same: 'Your tune stays the same.',
   up: 'Your tune goes up!',
   down: 'Your tune goes down.',
