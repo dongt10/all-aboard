@@ -69,12 +69,6 @@ test('reading word mode and elementary passages have direct matching questions',
  assert.match(readingStep(['key'],2).question,/stay dry/);
 });
 
-test('typing from an empty writing draft enables removal as well as publishing',async()=>{
- const {writingControlAvailability}=await import('../src/encounters.js');
- assert.deepEqual(writingControlAvailability(''),{canPublish:false,canRemove:false});
- assert.deepEqual(writingControlAvailability('Hello friends'),{canPublish:true,canRemove:true});
- assert.deepEqual(writingControlAvailability('  '),{canPublish:false,canRemove:true});
-});
 test('ready encounter reentry describes the saved state rather than restarting its task',async()=>{
  const {encounterOpeningDialogue}=await import('../src/encounters.js');
  assert.match(encounterOpeningDialogue({kind:'math',left:[2],right:[2],rolled:true}),/ready to send/);

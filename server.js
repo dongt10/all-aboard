@@ -15,9 +15,9 @@ export async function serve(req, res) {
     }
     const info = await stat(path);
     if (!info.isFile()) throw new Error('Not a file');
-    const body = await readFile(path);
-    res.writeHead(200, { 'Content-Type': mime[extname(path)] || 'text/plain; charset=utf-8', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
-    res.end(req.method === 'HEAD' ? undefined : body);
+    const body = req.method === 'HEAD' ? undefined : await readFile(path);
+    res.writeHead(200, { 'Content-Type': mime[extname(path)] || 'text/plain; charset=utf-8', 'Content-Length': body?.length ?? info.size, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
+    res.end(body);
   } catch { res.writeHead(404); res.end('Not found'); }
 }
 
