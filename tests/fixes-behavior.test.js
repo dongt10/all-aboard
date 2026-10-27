@@ -23,7 +23,7 @@ Object.assign(globalThis, {
   cancelAnimationFrame: () => {},
 });
 
-const { createState, getCreations, loadState, STORAGE_KEY } = await import('../src/progress.js');
+const { createState, getCreations, getDraft, publishCreation, loadState, STORAGE_KEY } = await import('../src/progress.js');
 const { figureMarkup } = await import('../src/ui/figures/index.js');
 const { createMusicScene } = await import('../src/ui/screens/music.js');
 const { createEncounterScene } = await import('../src/ui/screens/encounter.js');
@@ -33,6 +33,9 @@ const { createApp } = await import('../src/ui/app.js');
 const { createDialogue } = await import('../src/ui/dialogue.js');
 const { showItemGet } = await import('../src/ui/screens/item-get.js');
 const { reactionLine } = await import('../src/ui/activities/sign.js');
+const { ACTIVITIES, activityFor } = await import('../src/ui/registry.js');
+const { helpSteps, stepPicture, stepIndex } = await import('../src/ui/help-steps.js');
+const { icon } = await import('../src/ui/icons.js');
 
 function fakeCtx(state = createState()) {
   doc.body.children = []; doc._active = null;
@@ -389,7 +392,7 @@ test('windows: closing Help by Escape or Close stops its spoken step', () => {
     ctx.speak = words => spoken.push(words);
     const steps = ['Tap words to add them, or type your own.'];
     const handle = openHelpWindow(ctx, 'A sign from you', steps);
-    const hear = ctx.stage.querySelector('[data-step="0"]');
+    const hear = ctx.stage.querySelector('[data-help="hear"]');
     hear.click();
     assert.deepEqual(spoken, steps);
     const before = speech.cancels;
@@ -920,23 +923,30 @@ test('encounter: menu Up reaches art cloth and grade 2 crate slots; field Down r
   }
 });
 
-test('encounter: an initially disabled finish has visible, hearable steps and readiness removes them', t => {
+test('encounter: the picture strip shows the current step and keeps the ready finish visible', t => {
   const ctx = fakeCtx(grade2());
   const spoken = []; ctx.speak = text => spoken.push(text);
   const scene = createEncounterScene(ctx, { id: 'writing' });
   t.after(() => scene.destroy()); scene.mount(); readPages(ctx.stage);
-  const status = ctx.stage.querySelector('.enc__next');
+  const status = ctx.stage.querySelector('.enc__schedule');
+  const instruction = ctx.stage.querySelector('.enc__step-text');
   assert.equal(slot(ctx.stage, 'finish').disabled, true);
   assert.equal(status.hidden, false);
-  assert.match(status.querySelector('p').textContent, /^Next: /);
-  status.querySelector('button').click();
-  assert.deepEqual(spoken, [status.querySelector('p').textContent]);
+  assert.equal(status.dataset.step, '0');
+  assert.equal(ctx.stage.querySelector('.enc__now-label').textContent, 'Now');
+  ctx.stage.querySelector('.enc__step').click();
+  assert.deepEqual(spoken, [instruction.textContent]);
   const face = ctx.stage.querySelector('textarea');
   face.value = 'Hello!'; face.dispatchEvent(new Event('input'));
   assert.equal(slot(ctx.stage, 'finish').disabled, false);
-  assert.equal(status.hidden, true);
+  assert.equal(status.hidden, false);
+  assert.equal(status.classList.contains('is-ready'), true);
+  assert.equal(ctx.stage.querySelector('.enc__now-label').textContent, 'Ready!');
+  assert.equal(ctx.stage.querySelector('.enc__finish-label').textContent, 'Put up sign');
   face.value = ''; face.dispatchEvent(new Event('input'));
   assert.equal(status.hidden, false);
+  assert.equal(status.dataset.step, '0');
+  assert.equal(status.classList.contains('is-ready'), false);
 });
 
 test('encounter: the finish flag routes a differently named command to reward acceptance', async () => {
@@ -978,4 +988,176 @@ test('beans: unread results survive command and field taps and remain replayable
     app.stage.querySelector('[data-act="replay"]').click();
     assert.equal(app.stage.querySelector('.dlg__text').textContent, line);
   } finally { app.destroy(); }
+});
+
+test('encounter: every grade starts with the right picture and one Help instruction', t => {
+  for (let grade = 0; grade <= 5; grade++) for (const id of Object.keys(ACTIVITIES)) {
+    const ctx = fakeCtx({ ...createState(), chapter: grade ? 1 : 0, grade: grade || 1 });
+    const scene = createEncounterScene(ctx, { id });
+    scene.mount();
+    try {
+      const activity = activityFor(id, grade);
+      const { state } = activity.start(null, { chapter: grade ? 1 : 0, grade });
+      assert.equal(ctx.stage.querySelector('.enc__schedule').dataset.step, '0', `${grade} ${id}`);
+      assert.equal(ctx.stage.querySelector('.enc__step-text').textContent, helpSteps(activity, grade)[0]);
+      assert.equal(ctx.stage.querySelector('.enc__now-picture').innerHTML, icon(stepPicture(activity, state, 0, grade)));
+      assert.equal(ctx.stage.querySelector('.enc__nav').hidden, false);
+      ctx.stage.querySelector('[data-act="help"]').click();
+      assert.equal(ctx.stage.querySelector('.help-steps__text').textContent, helpSteps(activity, grade)[0]);
+      assert.equal(ctx.stage.querySelector('[data-help="show"]'), null, 'no demo means no dead button');
+      ctx.stage.querySelector('.win__close').click();
+    } finally { scene.destroy(); }
+  }
+});
+
+const cartDemo = {
+  snapshot: { kind: 'math', left: [1], right: [], rolled: false },
+  intro: 'Watch my example.',
+  steps: [
+    { line: 'Put one crate on the right.', action: { type: 'command', id: 'load-right' } },
+    { line: 'The sides match. Roll the cart.', action: { type: 'command', id: 'roll' } },
+  ],
+  done: 'My example is done. Your turn!',
+};
+
+function demoScene(t, { calm = false, device = false } = {}) {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const app = createState(); app.settings = { ...app.settings, reducedMotion: calm, autoRead: true };
+  const ctx = fakeCtx(app), spoken = [], updates = [];
+  let commits = 0;
+  const commit = ctx.commit;
+  ctx.commit = next => { commits++; return commit(next); };
+  ctx.speak = text => spoken.push(text);
+  const mountField = ACTIVITIES.math.mountField;
+  ACTIVITIES.math.mountField = (...args) => {
+    const field = mountField(...args), update = field.update;
+    field.update = (state, ui) => { updates.push({ state, ui }); update(state, ui); };
+    return field;
+  };
+  const oldMedia = globalThis.matchMedia;
+  globalThis.matchMedia = () => ({ matches: device });
+  const scene = createEncounterScene(ctx, { id: 'math' }, { getDemo: () => cartDemo });
+  t.after(() => { scene.destroy(); ACTIVITIES.math.mountField = mountField; globalThis.matchMedia = oldMedia; });
+  scene.mount(); readPages(ctx.stage);
+  slot(ctx.stage, 'load-right').click(); readPages(ctx.stage);
+  const child = updates.at(-1), saved = JSON.stringify(ctx.getState());
+  const help = ctx.stage.querySelector('[data-act="help"]');
+  const start = () => {
+    help.focus(); help.click();
+    assert.ok(ctx.stage.querySelector('[data-help="show"]'));
+    ctx.stage.querySelector('[data-help="show"]').click();
+    assert.equal(ctx.stage.querySelector('.win-backdrop'), null);
+  };
+  return { ctx, scene, start, child, saved, spoken, updates, help, get commits() { return commits; } };
+}
+
+test('encounter demo: the example cannot save or finish and completion restores exact work, UI and focus', t => {
+  const h = demoScene(t); h.start();
+  const { stage } = h.ctx;
+  assert.equal(stage.querySelector('.enc__field').inert, true);
+  assert.equal(stage.querySelector('.enc__menu').inert, true);
+  assert.equal(stage.querySelector('.enc__now-label').textContent, 'Watch Taro');
+  assert.equal(stage.querySelector('.dlg__speaker').textContent, 'Taro');
+  assert.equal(stage.querySelector('.dlg__text').textContent, cartDemo.intro);
+  const before = h.updates.length;
+  slot(stage, 'load-right').click();
+  stage.querySelector('.cart__load[data-side="right"]').click();
+  assert.equal(h.updates.length, before, 'synthetic field/menu taps are also blocked');
+  t.mock.timers.tick(1400);
+  assert.deepEqual(h.updates.at(-1).state.right, [1]);
+  assert.equal(stage.querySelector('.dlg__text').textContent, cartDemo.steps[0].line);
+  t.mock.timers.tick(1400);
+  assert.equal(h.updates.at(-1).state.rolled, true);
+  slot(stage, 'finish').click();
+  assert.equal(stage.querySelector('.item-get'), null);
+  t.mock.timers.tick(1400);
+  assert.equal(h.updates.at(-1).state, h.child.state);
+  assert.equal(h.updates.at(-1).ui, h.child.ui);
+  assert.equal(h.commits, 1, 'only the child action saved');
+  assert.equal(JSON.stringify(h.ctx.getState()), h.saved);
+  assert.equal(stage.querySelector('.enc__field').inert, false);
+  assert.equal(stage.querySelector('.enc__menu').inert, false);
+  assert.equal(stage.querySelector('.enc__demo-controls').hidden, true);
+  assert.equal(stage.querySelector('.dlg__text').textContent, cartDemo.done);
+  assert.equal(doc.activeElement, h.help);
+  assert.ok([cartDemo.intro, ...cartDemo.steps.map(step => step.line), cartDemo.done].every(line => h.spoken.includes(line)));
+  const finished = h.updates.length; t.mock.timers.tick(20000);
+  assert.equal(h.updates.length, finished);
+  h.start(); stage.querySelector('.enc__demo-stop').click();
+  assert.equal(h.updates.at(-1).state, h.child.state, 'the demo is replayable');
+});
+
+test('encounter demo: an overflowing line waits to be read, then resumes the automatic example', t => {
+  const h = demoScene(t), measure = h.ctx.stage.querySelector('.dlg__measure');
+  measure.clientHeight = 20;
+  Object.defineProperty(measure, 'scrollHeight', { get: () => measure.textContent.length > 20 ? 40 : 20 });
+  h.start();
+  t.mock.timers.tick(1400);
+  assert.equal(h.ctx.stage.querySelector('.dlg__more').hidden, false);
+  const count = h.updates.length;
+  t.mock.timers.tick(20000); assert.equal(h.updates.length, count, 'unread pages are not replaced');
+  physicalKey('Enter');
+  assert.equal(h.ctx.stage.querySelector('.dlg__more').hidden, true);
+  t.mock.timers.tick(1400);
+  assert.equal(h.updates.at(-1).state.rolled, true, 'reading the last page rearms the runner');
+  h.ctx.stage.querySelector('.enc__demo-stop').click();
+});
+
+for (const mode of ['setting', 'device']) test(`encounter demo: ${mode} calm motion waits for Next and B stops`, t => {
+  const h = demoScene(t, { calm: mode === 'setting', device: mode === 'device' }); h.start();
+  const initial = h.updates.length;
+  t.mock.timers.tick(20000); assert.equal(h.updates.length, initial);
+  physicalKey('Enter');
+  assert.deepEqual(h.updates.at(-1).state.right, [1]);
+  assert.equal(h.updates.length, initial + 1, 'native A advances once');
+  t.mock.timers.tick(20000); assert.equal(h.updates.length, initial + 1);
+  h.ctx.stage.querySelector('.enc__demo-next').click();
+  assert.equal(h.updates.at(-1).state.rolled, true);
+  physicalKey('Escape');
+  assert.equal(h.updates.at(-1).state, h.child.state);
+  assert.equal(h.updates.at(-1).ui, h.child.ui);
+  assert.equal(doc.activeElement, h.help);
+  assert.deepEqual(h.ctx.gone, [], 'B stops before it leaves');
+  assert.equal(JSON.stringify(h.ctx.getState()), h.saved);
+});
+
+for (const exit of ['village', 'destroy', 'pause']) test(`encounter demo: ${exit} restores work and clears its pending timer`, t => {
+  const h = demoScene(t); h.start();
+  t.mock.timers.tick(1400);
+  const beforeSpeech = h.spoken.length;
+  if (exit === 'village') h.ctx.stage.querySelector('.enc__back').click();
+  else h.scene[exit]();
+  assert.equal(h.updates.at(-1).state, h.child.state);
+  assert.equal(h.updates.at(-1).ui, h.child.ui);
+  assert.equal(h.spoken.length, beforeSpeech, 'leaving or opening a modal does not start narration');
+  const count = h.updates.length; t.mock.timers.tick(20000);
+  assert.equal(h.updates.length, count);
+  if (exit === 'village') assert.deepEqual(h.ctx.gone, [['village', { focus: 'math' }]]);
+  if (exit === 'destroy') assert.equal(h.ctx.stage.querySelector('.enc'), null);
+  assert.equal(JSON.stringify(h.ctx.getState()), h.saved);
+});
+
+test('encounter: Try another keeps the earned creation and resets the picture strip to the fresh request', t => {
+  const ready = { kind: 'math', chapter: 0, grade: 0, left: [1, 1], right: [1, 1], rolled: true };
+  const ctx = fakeCtx(publishCreation(createState(), 'math', ready));
+  const earned = getCreations(ctx.getState()).math;
+  const another = ACTIVITIES.math.another;
+  ACTIVITIES.math.another = () => ({
+    state: { ...ready, left: [1], right: [], rolled: false, request: 1 },
+    ui: { weight: 1, lastRoll: null, rolls: 0 }, line: 'Load one crate on the right.',
+  });
+  const scene = createEncounterScene(ctx, { id: 'math' });
+  t.after(() => { scene.destroy(); if (another) ACTIVITIES.math.another = another; else delete ACTIVITIES.math.another; });
+  scene.mount(); readPages(ctx.stage);
+  const button = ctx.stage.querySelector('.enc__another');
+  assert.equal(button.hidden, false);
+  assert.equal(ctx.stage.querySelector('.enc__now-label').textContent, 'Ready!');
+  button.click();
+  assert.equal(button.hidden, true);
+  assert.equal(ctx.stage.querySelector('.enc__schedule').dataset.step, '0');
+  assert.equal(ctx.stage.querySelector('.enc__now-label').textContent, 'Now');
+  assert.equal(ctx.stage.querySelector('.enc__step-text').textContent, helpSteps(ACTIVITIES.math, 0)[0]);
+  assert.deepEqual(getDraft(ctx.getState(), 'math').right, []);
+  assert.deepEqual(getCreations(ctx.getState()).math, earned);
+  assert.equal(slot(ctx.stage, 'finish').disabled, true);
 });

@@ -1,5 +1,5 @@
 import { openWindow } from '../window.js';
-import { icon } from '../icons.js';
+import { icon, ICON_NAMES } from '../icons.js';
 import { keyIntent, gridMove } from '../input.js';
 import { figureMarkup } from '../figures/index.js';
 import { SUBJECT_THEME } from '../palette.js';
@@ -289,15 +289,35 @@ export function openGuideWindow(ctx, { id } = {}) {
   return handle;
 }
 
-// Help: numbered steps, each with its own Hear button.
-export function openHelpWindow(ctx, title, steps = []) {
-  const body = document.createElement('ol');
+// Help shows one instruction at a time, with the same controls throughout.
+export function openHelpWindow(ctx, title, steps = [], options = {}) {
+  const body = document.createElement('div');
   body.className = 'help-steps';
-  body.innerHTML = steps.map((step, i) => `<li><span class="help-steps__num">${i + 1}</span><p>${esc(step)}</p>
-    <button type="button" class="px-icon-button" data-step="${i}" aria-label="Hear step ${i + 1}">${icon('hear')}<span>Hear</span></button></li>`).join('');
+  body.innerHTML = `<div class="help-steps__picture" aria-hidden="true"></div><div class="help-steps__page" aria-live="polite" aria-atomic="true"><p class="help-steps__count"></p><p class="help-steps__text"></p></div>
+    <div class="help-steps__buttons"><button type="button" class="px-button" data-help="hear">Hear</button><button type="button" class="px-button" data-help="back">Back</button><button type="button" class="px-button" data-help="next">Next</button>${typeof options.onShowMe === 'function' ? '<button type="button" class="px-button" data-help="show">Show me</button>' : ''}</div>`;
+  let page = 0, handle = null;
+  const render = () => {
+    stopSpeaking();
+    const picture = options.pictures?.[page];
+    body.querySelector('.help-steps__picture').innerHTML = ICON_NAMES.includes(picture) ? icon(picture, { size: 64 }) : String(page + 1);
+    body.querySelector('.help-steps__count').textContent = steps.length ? `Step ${page + 1} of ${steps.length}` : 'No steps yet';
+    body.querySelector('.help-steps__text').textContent = steps[page] ?? '';
+    const back = body.querySelector('[data-help="back"]');
+    if (page === 0 && document.activeElement === back) body.querySelector('[data-help="next"]').focus();
+    back.disabled = page === 0;
+    body.querySelector('[data-help="hear"]').disabled = !steps.length;
+    body.querySelector('[data-help="next"]').textContent = page >= steps.length - 1 ? 'Got it' : 'Next';
+    if (handle && steps.length && ctx.getState().settings?.autoRead) ctx.speak?.(steps[page]);
+  };
   body.addEventListener('click', event => {
-    const button = event.target.closest('[data-step]');
-    if (button) ctx.speak(steps[Number(button.dataset.step)]);
+    const action = event.target.closest('[data-help]')?.dataset.help;
+    if (action === 'hear' && steps.length) ctx.speak?.(steps[page]);
+    if (action === 'show') { handle?.close(); options.onShowMe(); return; }
+    if (action === 'next' && page >= steps.length - 1) { handle?.close(); return; }
+    if (action === 'back' && page > 0) { page--; render(); }
+    if (action === 'next') { page++; render(); }
   });
-  return open(ctx, 'help', { title: title || 'Help', body, onClose: stopSpeaking });
+  handle = open(ctx, 'help', { title: title || 'Help', body, initialFocus: '[data-help="next"]', onClose: stopSpeaking });
+  if (handle) render();
+  return handle;
 }
