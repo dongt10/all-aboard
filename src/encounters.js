@@ -6,7 +6,7 @@ import { GRADES_ROWS, normalizeRows, rowsReady, rowsOpening } from './rows.js';
 import { GRADES_BEANS, normalizeBeans, beansReady, beansOpening } from './beans.js';
 import { GRADES_COMPASS, normalizeCompass, compassReady, compassOpening } from './compass.js';
 import { GRADES_RIBBON, normalizeRibbon, ribbonReady, ribbonOpening } from './ribbon.js';
-import { READING_ITEMS, normalizeReadingFound } from './reading.js';
+import { readingItems, normalizeReadingFound } from './reading.js';
 
 export const ACTIVITY_GRADES = {
   __proto__: null,
@@ -19,6 +19,11 @@ export const ENCOUNTER_COLOR_NAMES = { '#e96163':'Coral', '#f4bf4f':'Gold', '#6d
 const SHAPES = ['star', 'flower', 'leaf', 'circle'];
 const clamp = (n, a, b) => Math.min(b, Math.max(a, Number(n) || 0));
 const sum = a => a.reduce((x,y) => x+y,0);
+// Request 1 is the original activity, including every snapshot saved before requests existed.
+export const normalizeRequest = (value, count = 2) => Number.isInteger(value) ? Math.max(1, Math.min(count, value)) : 1;
+export function encounterRequest(kind, request) {
+  return normalizeRequest(request, kind === 'math' ? 3 : 2);
+}
 // Grades come in three bands tonight: 0 is Kindergarten, 1 covers grades 1–2, 3 covers grades 3–5.
 // A snapshot without a grade (old tests, old saves) is treated as Kindergarten, like cleanCreation's chapter-0
 // grade 0 and guide.js learnedText.
@@ -58,10 +63,12 @@ export function normalizeEncounterSnapshot(kind, input = {}, grade = 1, chapter 
   if (kind === 'community' && s.activity === 'compass') return normalizeCompass(s, base.grade, base.chapter);
   if (kind === 'reading' && s.activity === 'ribbon') return normalizeRibbon(s, base.grade, base.chapter);
 
+  base.request = encounterRequest(kind, s.request);
+
   if (kind === 'math') return {...base, left:Array.isArray(s.left)?s.left.filter(n=>[1,2,3,5].includes(n)).slice(0,8):[], right:Array.isArray(s.right)?s.right.filter(n=>[1,2,3,5].includes(n)).slice(0,8):[], rolled:s.rolled===true};
   if (kind === 'science') return {...base, canopy:['left','right'].includes(s.canopy)?s.canopy:'none',time:clamp(s.time,0,20)};
   if (kind === 'art') return {...base,background:ENCOUNTER_COLORS.includes(s.background)?s.background:'#fff1cf',stamps:(Array.isArray(s.stamps)?s.stamps:[]).filter(x=>x&&SHAPES.includes(x.shape)&&ENCOUNTER_COLORS.includes(x.color)).slice(0,30).map(x=>({shape:x.shape,color:x.color,x:clamp(x.x,5,95),y:clamp(x.y,5,95),rotation:clamp(x.rotation,0,359),flipped:x.flipped===true}))};
-  if (kind === 'reading') return {...base,found:normalizeReadingFound(s.found)};
+  if (kind === 'reading') return {...base,found:normalizeReadingFound(s.found, base.request)};
   if (kind === 'writing') return {...base,...normalizeSign(s, base.grade)};
   return {...base,...normalizeCommunityMap(s)};
 }
@@ -70,9 +77,11 @@ import { bannerReady, bannerOpening } from './banner-rules.js';
 import { normalizeSign, signReady, signOpening } from './sign-rules.js';
 export { signWords, reconcileTiles, normalizeSign } from './sign-rules.js';
 // Taro's cart starts with crates on the left so the child has something to match. The right side is always empty.
-export function startingCargo(grade) {
+export function startingCargo(grade, request = 1) {
   const band = gradeBand(grade);
-  return { left: band === 0 ? [1, 1] : band === 1 ? [2, 1] : [5, 3], right: [] };
+  const loads = band === 0 ? [[1, 1], [1, 1, 1], [1, 1, 1, 1]]
+    : band === 1 ? [[2, 1], [2, 2], [2, 2, 1]] : [[5, 3], [5, 5], [5, 3, 3]];
+  return { left: [...loads[normalizeRequest(request, 3) - 1]], right: [] };
 }
 export function cartBalance(s) { const left=sum(s.left),right=sum(s.right); return {left,right,balanced:left>0&&left===right}; }
 export function iceRemaining(time, shaded) { return Math.max(0,100-time*(shaded?2:5)); }
@@ -116,6 +125,11 @@ export function squareSteps(s) {
     : { id: 'rest', done: r.rest, text: 'Put a bench off the path.' }];
   if (band >= 1) steps.push({ id: 'quiet', done: r.quiet, text: 'Put a garden by the quiet trees.' });
   if (band >= 3) steps.push({ id: 'signed', done: r.signed, text: 'Put a sign next to the stage.' });
+  if (normalizeRequest(s?.request) === 2) {
+    // K makes a new useful place: a sign by the stage. Older children plan the garden first.
+    if (band === 0) steps.splice(0, steps.length, { id: 'signed', done: r.signed && !r.blocked, text: r.blocked ? communityBlockedLine(s) : 'Put a sign next to the stage.' });
+    else steps.unshift(...steps.splice(1, 1));
+  }
   steps.push({ id: 'tried', done: s?.tried === true, text: 'Choose Try it to walk the square.' });
   return steps;
 }
@@ -132,10 +146,9 @@ export function encounterReady(s) {
   if(s.kind==='math')return s.rolled&&cartBalance(s).balanced;
   if(s.kind==='science')return s.time>=10&&s.canopy!=='none';
   if (s.kind === 'art') return bannerReady(s);
-  if(s.kind==='reading')return normalizeReadingFound(s.found).length===READING_ITEMS.length;
+  if(s.kind==='reading')return normalizeReadingFound(s.found, s.request).length===readingItems(s.request).length;
   if (s.kind === 'writing') return signReady(s);
-  const r=routeReport(s), band=gradeBand(s.grade);
-  return s.tried===true&&!r.blocked&&r.rest&&(band<1||r.quiet)&&(band<3||r.signed);
+  return squareSteps(s).every(step => step.done);
 }
 export function shadeScienceTray(state, side) {
  return state.canopy===side ? state : {...state,canopy:side,time:0};
@@ -197,8 +210,15 @@ export function encounterOpeningDialogue(state) {
   if (state.kind === 'reading' && state.activity === 'ribbon') return ribbonOpening(state);
 
  const band=gradeBand(state.grade);
- if(encounterReady(state)&&state.kind==='math')return 'Your balanced cart is ready to send. You can still change the crates.';
- if(encounterReady(state)&&state.kind==='science')return 'Your ice test is ready. Serve ice, or try fresh ice.';
- if(encounterReady(state)&&state.kind==='reading')return 'Your story bag is ready. Share it, or start over.';
+ if(encounterReady(state)&&state.kind==='math')return 'Your balanced cart is ready. Send cart, or Try another.';
+ if(encounterReady(state)&&state.kind==='science')return 'Your ice test is ready. Serve ice, or Try another.';
+ if(encounterReady(state)&&state.kind==='reading')return 'Your story bag is packed. Share it, or Try another.';
+ if(encounterReady(state)&&state.kind==='community')return 'Your square plan is ready. Open square, or Try another.';
+ if(state.kind==='community'&&normalizeRequest(state.request)===2)return band===0
+   ? 'Help neighbors find the stage. Put a sign next to it.'
+   : band >= 3 ? 'Start with a garden by the trees. Add a bench, then a sign by the stage.'
+   : 'Plan a quiet spot first. Add a garden by the trees, then a bench off the path.';
+ if(state.kind==='science'&&normalizeRequest(state.request)===2)return state.canopy==='right'&&state.time===0
+   ? 'Tray B has shade now. Wait and see which tray keeps more ice.' : scienceNextStep(state);
  return {math:mathOpening(state,band),science:SCIENCE_OPENING[band],art:bannerOpening(state),reading:'Help me pack three things for the festival.',writing:signOpening(state),community:COMMUNITY_OPENING[band]}[state.kind];
 }

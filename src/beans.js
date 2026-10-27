@@ -20,7 +20,7 @@ export function normalizeBeans(input, grade = 2, chapter = 1) {
   const s = isObject(input) ? input : {};
   const change = CHANGES.includes(s.change) ? s.change : 'none';
   return {
-    kind: 'science', activity: 'beans', grade: Math.round(clamp(grade, 0, 5)), chapter: chapter === 1 ? 1 : 0,
+    kind: 'science', activity: 'beans', request: Number.isInteger(s.request) ? Math.max(1, Math.min(2, s.request)) : 1, grade: Math.round(clamp(grade, 0, 5)), chapter: chapter === 1 ? 1 : 0,
     change, weeks: change === 'none' ? 0 : Math.round(clamp(s.weeks, 0, 2)), bed: cleanBed(s.bed),
   };
 }
@@ -68,7 +68,7 @@ export const LINES = {
   opening: 'Two bean cups. Cup A gets sun and water. What will cup B get?',
   running: w => `Week ${w} of 2. Choose Wait a week.`,
   done: 'The test is done. Fill the bed card.',
-  ready: 'Your bed card is ready. Plant bed, or start over.',
+  ready: 'Your bed card is ready. Plant bed, or Try another.',
   notReady: 'The bed card changed. Add seed, sun, and water.',
   changeWater: 'Cup B gets sun but no water. Now wait a week.',
   changeDark: 'Cup B gets water but sits in a dark box. Wait a week.',
@@ -95,6 +95,7 @@ export const LINES = {
 export function beansOpening(s) {
   if (beansReady(s)) return LINES.ready;
   if (testDone(s)) return LINES.done;
+  if (s.request === 2 && s.change === 'dark' && s.weeks === 0) return 'Cup B is in a dark box. Wait and compare the cups.';
   return CHANGES.includes(s?.change) ? LINES.running(s.weeks) : LINES.opening;
 }
 

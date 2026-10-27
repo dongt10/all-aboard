@@ -1,14 +1,14 @@
 // Sora’s story bag (reading): read a part of the story, then pack the picture that fits it.
 // Every line is written in sentences of 56 characters or fewer, so a dialogue page never breaks mid-sentence.
-import { READING_ITEMS, READING_LABELS, readingStep, readingChoice, readingObjectSVG } from '../../reading.js';
-import { encounterReady, encounterOpeningDialogue, normalizeEncounterSnapshot } from '../../encounters.js';
+import { READING_ITEMS, readingItems, READING_LABELS, readingStep, readingChoice, readingObjectSVG } from '../../reading.js';
+import { encounterReady, normalizeEncounterSnapshot } from '../../encounters.js';
 
 const PICTURES = ['key', 'umbrella', 'book', 'cup'];
-const READY_LINE = ' All three are packed. Your story is ready to share.';
-const START_OVER_LINE = 'The bag is empty again. Let’s read!';
+const READY_LINE = ' Story ready!';
+const START_OVER_LINE = 'Bag empty.';
 
 const readingLine = (state, grade) => {
-  const step = readingStep(state.found, grade);
+  const step = readingStep(state.found, grade, null, state.request);
   if (!step) return '';
   const passage = /[.!?]$/.test(step.passage) ? step.passage : `${step.passage}.`;
   return `${passage} ${step.question}`;
@@ -19,8 +19,8 @@ function start(snapshot, { chapter = 0, grade = 1 } = {}) {
 }
 
 function opening(state, ui, grade) {
-  if (encounterReady(state)) return encounterOpeningDialogue(state);
-  return `Help me pack three things for the festival. ${readingLine(state, grade)}`;
+  if (encounterReady(state)) return 'Your story bag is ready! Share it or Try another.';
+  return `${grade === 0 ? 'Help me pack three things for the festival.' : 'Pack a bag.'} ${readingLine(state, grade)}`;
 }
 
 function commands(state, ui, grade) {
@@ -30,7 +30,7 @@ function commands(state, ui, grade) {
     { id: 'finish', label: 'Share story', icon: 'check', finish: true },
   ];
   if (ui.review) return [{ id: 'next', label: 'Next part', icon: 'next' }];
-  return PICTURES.map(id => ({ id: `pick-${id}`, label: READING_LABELS[id], art: readingObjectSVG(id), disabled: state.found.includes(id) }));
+  return (state.request === 2 ? ['cup', 'ball', 'flower', 'key'] : PICTURES).map(id => ({ id: `pick-${id}`, label: READING_LABELS[id], art: readingObjectSVG(id), disabled: state.found.includes(id) }));
 }
 
 function act(state, ui, action, grade) {
@@ -45,7 +45,7 @@ function act(state, ui, action, grade) {
     return { state: next, ui: { ...ui, review: null }, line: `${START_OVER_LINE} ${readingLine(next, grade)}` };
   }
   if (!id?.startsWith('pick-') || ui.review || encounterReady(state)) return { state, ui };
-  const result = readingChoice(state.found, id.slice(5), grade);
+  const result = readingChoice(state.found, id.slice(5), grade, state.request);
   const next = { ...state, found: result.found };
   return { state: next, ui: { ...ui, review: result.reviewId }, line: result.message + (result.accepted && encounterReady(next) ? READY_LINE : '') };
 }
@@ -65,14 +65,14 @@ function mountField(host, { grade = 1 } = {}) {
 
   function update(state, ui = {}) {
     const ready = encounterReady(state);
-    const step = ready ? null : readingStep(state.found, grade, ui.review);
+    const step = ready ? null : readingStep(state.found, grade, ui.review, state.request);
     page.classList.toggle('story-page--ready', ready);
     page.classList.toggle('story-page--packed', Boolean(ui.review) && !ready);
     passage.classList.toggle('story-passage--word', grade === 0 && !ready);
     setText(part, ready ? 'The whole story' : `Part ${step.index + 1} of 3${ui.review ? ' · ✓ Packed' : ''}`);
     setText(passage, ready ? 'Ready for the festival!' : step.passage);
     page.setAttribute('aria-label', ready ? 'Story page: ready for the festival' : `Story page, part ${step.index + 1} of 3`);
-    const packed = READING_ITEMS.filter(id => state.found.includes(id));
+    const packed = readingItems(state.request).filter(id => state.found.includes(id));
     setText(bagTitle, `Bag ${packed.length}/3`);
     bag.setAttribute('aria-label', `Sora’s bag, ${packed.length} of 3 packed`);
     slots.forEach((slot, i) => {
@@ -93,4 +93,9 @@ export default {
   title: 'Pack for the festival',
   help: ['Read the story page.', 'Choose the picture that fits.', 'Read why it belongs.', 'Choose Next part, then Share story.'],
   start, opening, commands, act, mountField,
+  another(state, ui, grade = state.grade) {
+    if (!encounterReady(state)) return null;
+    const next = start({ kind: 'reading', request: state.request === 2 ? 1 : 2, found: [] }, { grade, chapter: state.chapter });
+    return { ...next, line: opening(next.state, next.ui, grade) };
+  },
 };

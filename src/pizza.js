@@ -41,8 +41,9 @@ const cutsHalves = grade => num(grade) >= 5;
 export function normalizePizza(input, grade = 3, chapter = 1) {
   const s = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
   const base = { kind: 'math', activity: 'pizza', grade: Math.round(clamp(grade, 0, 5)), chapter: chapter === 1 ? 1 : 0 };
+  const request = Number.isInteger(s.request) ? Math.max(1, Math.min(base.grade >= 5 ? 2 : 3, s.request)) : 1;
   // Older saves keep their pizza even when New pizza now offers a different cycle.
-  const slices = ALL_CUTS.includes(s.slices) ? s.slices : startingSlices(base.grade);
+  const slices = ALL_CUTS.includes(s.slices) ? s.slices : PIZZA_CUTS(base.grade)[(request - 1) % PIZZA_CUTS(base.grade).length];
   const halves = s.halves === true;
   const validPlates = Array.isArray(s.plates) && s.plates.length === PIZZA_PLATES && Array.from(s.plates).every(n => Number.isInteger(n));
   let plates = validPlates
@@ -50,7 +51,7 @@ export function normalizePizza(input, grade = 3, chapter = 1) {
     : Array(PIZZA_PLATES).fill(0);
   let tried = validPlates && s.tried === true;
   if (sum(plates) > 2 * slices || (!halves && plates.some(n => n % 2 === 1))) { plates = Array(PIZZA_PLATES).fill(0); tried = false; }
-  return { ...base, slices, halves, plates, tried };
+  return { ...base, request, slices, halves, plates, tried };
 }
 
 export const pieceUnits = s => (s.halves ? 1 : 2);
@@ -104,7 +105,7 @@ export const PIZZA_LINES = {
   tapHint: 'Tap a friend to give them a slice.',
   cutEmpty: 'The pizza is empty. Nothing to cut.',
   cutAlready: 'The slices are already halves.',
-  readyOpening: 'Fair shares! Choose Serve pizza, or make a new pizza.',
+  readyOpening: 'Your pizza party is ready. Serve pizza, or Try another.',
   fairNeedsCut: 'Fair! New pizza brings one with leftovers to cut.',
   takeSlice: name => `One slice back from ${name}.`,
   takeHalf: name => `One half back from ${name}.`,

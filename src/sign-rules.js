@@ -27,7 +27,7 @@ export function reconcileTiles(tiles, text) {
 export function normalizeSign(input, grade) {
   const source = input && typeof input === 'object' ? input : {};
   const text = typeof source.text === 'string' ? source.text.slice(0, 120) : '';
-  const clean = { text };
+  const clean = { text, request: Number.isInteger(source.request) ? Math.max(1, Math.min(2, source.request)) : 1 };
   if (typeof source.scenario === 'string') clean.scenario = source.scenario;
   if (Array.isArray(source.kept) && source.kept.every(word => typeof word === 'string')) {
     clean.kept = [...new Set(source.kept.map(word => word.toLowerCase()))].slice(0, 20);
@@ -51,7 +51,7 @@ export const SIGN_RULE_LINES = Object.freeze({
   end: 'End your sentence with . or !',
   sentence: 'One more sentence.',
   describing: 'Add a describing word, like bright.',
-  ready: 'Your sign is ready. Add words, or put it up.',
+  ready: 'Your sign is ready. Put up sign, or Try another.',
   openingK: 'Tap two words for your welcome sign.',
   openingSentence: 'Write a sentence. Start with a capital. End with . or !',
   openingDescribing: 'Write two sentences. Use a describing word.',
@@ -79,8 +79,8 @@ export function signHint(state) {
 }
 export function signOpening(state) {
   const scenario = scenarioById(state?.scenario, state?.grade);
-  if (scenario) return scenario.prompt;
   if (signReady(state)) return SIGN_RULE_LINES.ready;
+  if (scenario) return scenario.prompt;
   return !(state?.grade > 0) ? SIGN_RULE_LINES.openingK
     : state.grade < 3 ? SIGN_RULE_LINES.openingSentence : SIGN_RULE_LINES.openingDescribing;
 }

@@ -63,7 +63,7 @@ export function cartWeights(grade) {
 
 // Protect the starting load only while it is still the complete left prefix. Older drafts stay intact.
 export function fixedCount(state, grade = state?.grade) {
-  const fixed = startingCargo(grade).left;
+  const fixed = startingCargo(grade, state?.request).left;
   return Array.isArray(state?.left) && fixed.every((weight, i) => state.left[i] === weight) ? fixed.length : 0;
 }
 
@@ -118,6 +118,11 @@ const cart = {
   },
   // A saved draft with an emptied left bay must not claim "the left side weighs 8".
   opening: state => (!encounterReady(state) && state.left.length === 0 ? LINES.empty : encounterOpeningDialogue(state)),
+  another(state) {
+    const request = ((state.request ?? 1) % 3) + 1;
+    const fresh = this.start({ kind: 'math', request, ...startingCargo(state.grade, request) }, { grade: state.grade, chapter: state.chapter });
+    return { ...fresh, line: this.opening(fresh.state) };
+  },
   commands(state) {
     return [
       { id: 'load-left', label: 'Load left', icon: 'crate' },

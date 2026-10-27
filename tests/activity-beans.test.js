@@ -87,7 +87,7 @@ test('beans imports standalone with the exact grade, snapshot, title, reward, an
   assert.deepEqual(TRAY_TILES, ['seed', 'sun', 'water', 'bee', 'dark', 'dry']);
   assert.deepEqual(CHANGES, ['water', 'dark']);
   assert.deepEqual(beans.start(), { state: {
-    kind: 'science', activity: 'beans', grade: 2, chapter: 1, change: 'none', weeks: 0, bed: [],
+    kind: 'science', activity: 'beans', request: 1, grade: 2, chapter: 1, change: 'none', weeks: 0, bed: [],
   }, ui: {} });
   assert.equal(beans.kind, 'science');
   assert.equal(beans.title, 'Momo’s bean test');
@@ -124,7 +124,7 @@ test('cleaning rejects unrelated junk; normalization bounds and filters without 
     bed: Object.freeze(['bee', 'seed', 'dark', 'sun', 'seed', 'dry', null, {}, 'water']), ui: { phase: 'done' }, extra: '<script>' });
   const clean = normalizeBeans(source);
   assert.deepEqual(clean, ready('dark'));
-  assert.deepEqual(Object.keys(clean).sort(), ['activity', 'bed', 'change', 'chapter', 'grade', 'kind', 'weeks']);
+  assert.deepEqual(Object.keys(clean).sort(), ['activity', 'bed', 'change', 'chapter', 'grade', 'kind', 'request', 'weeks']);
   assert.deepEqual(source.bed, ['bee', 'seed', 'dark', 'sun', 'seed', 'dry', null, {}, 'water']);
   for (const bad of [null, 'seed', 12, {}, Symbol('bed')]) assert.deepEqual(normalizeBeans({ bed: bad }).bed, []);
   for (const change of [undefined, null, 'same', 'Water', 'both', {}, ['water'], Symbol('change')]) {
@@ -253,7 +253,7 @@ for (const change of CHANGES) test(`${change}: choose, watch two weeks, fill the
     assert.equal(say(field({ tile })), tile === 'water' ? `${LINES.water} ${LINES.allFour}` : LINES[tile]);
   }
   assert.equal(beansReady(result.state), true);
-  assert.equal(beans.opening(result.state), 'Your bed card is ready. Plant bed, or start over.');
+  assert.equal(beans.opening(result.state), 'Your bed card is ready. Plant bed, or Try another.');
   assert.equal(say(command('next')), LINES.ready);
   assert.equal(say(field({ tile: 'water' })), 'The water is back in the tray.');
   assert.equal(beansReady(result.state), false); assert.equal(result.state.weeks, 2);
@@ -383,7 +383,7 @@ test('help, stamps, field labels, and every generated sentence fit normal and Bi
   assert.equal(LINES.sun, 'Sun! Plants need sunlight to grow well.');
   assert.equal(LINES.water, 'Water! Plants need water to grow well.');
   assert.equal(LINES.bee, 'Bees move pollen between flowers. Beans can self-pollinate.');
-  for (const line of [...HELP, STAMP_BEANS, beans.title, beans.rewardLabel, ...Object.values(LINES).filter(v => typeof v === 'string')]) fits(line);
+  for (const line of [...HELP, STAMP_BEANS, beans.title, beans.rewardLabel, ...Object.values(LINES).filter(v => typeof v === 'string')]) { assert.ok(line.length <= 96, line); fits(line); }
   for (const tile of BED_TILES) fits(LINES.removed(TILE_NAMES[tile].toLowerCase()));
   for (const state of states()) {
     const view = fieldView(state);
@@ -584,4 +584,24 @@ test('fixed field geometry preserves the planned cups, choices, bed, and all six
   assert.ok(px('.beans-tray', 'left') + 6 * px('.beans-tile', 'width') + 5 * px('.beans-tray', 'gap') <= 520);
   assert.equal(px('.beans-tray', 'top') + px('.beans-tile', 'height'), 262);
   assert.ok(px('.beans-slots', 'top') + 2 * px('.beans-slot', 'height') + px('.beans-slots', 'gap') < px('.beans-bed', 'height'));
+});
+
+
+test('another starts a fresh dark cup and keeps its request', () => {
+  const first = beans.start(null, { grade: 2, chapter: 1 });
+  const next = beans.another(first.state, first.ui);
+  assert.equal(next.state.request, 2);
+  assert.equal(next.state.change, 'dark');
+  assert.equal(next.state.weeks, 0);
+  assert.equal(cleanBeansCreation(next.state).request, 2);
+  assert.equal(beans.another(next.state, next.ui).state.request, 1);
+});
+
+test('request two reset returns to the dark cup and disables reset', () => {
+  const second = beans.another(beans.start(null, { grade: 2, chapter: 1 }).state, {});
+  assert.equal(beans.commands(second.state)[2].disabled, true);
+  const advanced = beans.act(second.state, second.ui, { type: 'command', id: 'wait' });
+  const reset = beans.act(advanced.state, advanced.ui, { type: 'command', id: 'reset' });
+  assert.deepEqual(reset.state, second.state);
+  assert.match(reset.line, /dark box/);
 });

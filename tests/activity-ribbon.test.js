@@ -18,7 +18,7 @@ import { createState, saveDraft, saveState, loadState, getDraft, getCompleted } 
 
 const cmd = id => ({ type: 'command', id });
 const field = data => ({ type: 'field', ...data });
-const snapshot = (parts = {}) => ({ kind: 'reading', activity: 'ribbon', grade: 2, chapter: 1, found: [], story: 0, why: false, steps: 0, lesson: false, ...parts });
+const snapshot = (parts = {}) => ({ kind: 'reading', activity: 'ribbon', grade: 2, chapter: 1, found: [], request: 1, story: 0, why: false, steps: 0, lesson: false, ...parts });
 const ready = (story = 0) => snapshot({ story, why: true, steps: 3, lesson: true });
 const step = (session, action) => ribbon.act(session.state, session.ui, action);
 const freeze = session => {
@@ -26,6 +26,7 @@ const freeze = session => {
   return session;
 };
 function fits(text) {
+  assert.ok(text.length <= 96, `${text.length}: ${text}`);
   assert.equal(typeof text, 'string');
   for (const sentence of text.split(/(?<=[.!?…]["'”’)\]]*)\s+/)) assert.ok(sentence.length <= 56, `${sentence.length}: ${sentence}`);
   for (const limit of Object.values(PAGE_CHARS)) {
@@ -75,7 +76,7 @@ test('two cast stories preserve all five lines, options, cards, shuffles and les
       lines: ['Kiko wanted to play the big drum.', 'Her first beat was too fast. Boom!', 'The band could not keep up and stopped.', 'Kiko took a breath and played slow.', 'Soon the whole band played together.'],
       options: ['Beat too fast', 'Drum broke', 'Rain came', 'Lights off'],
       cards: ['Kiko drums', 'Band stops', 'All together'], shuffled: ['stop', 'together', 'drum'],
-      lessons: ['Take a breath and go steady.', 'Play as loud as you can.', 'Big drums are too hard.', 'Fast is always best.'],
+      lessons: ['Take a breath and go steady.', 'Play loud.', 'Big drums are too hard.', 'Fast is always best.'],
       lessonYes: 'Yes! Slow and steady helps a band. Choose Share ribbon.',
     },
   ];
@@ -125,7 +126,7 @@ test('standalone contract starts fresh from legacy reading saves and resumes eve
   assert.equal(ribbon.opening(fresh.state), STORIES[0].question);
   assert.equal(ribbonOpening(phases(0)[1]), 'Put the story in order. What happened first?');
   assert.equal(ribbonOpening(phases(0)[4]), 'Pick the lesson of the story.');
-  assert.equal(ribbonOpening(ready()), 'Your ribbon is ready. Share it, or try the next story.');
+  assert.equal(ribbonOpening(ready()), 'Your story ribbon is ready! Share it or Try another.');
 });
 
 test('normalization rejects foreign shapes, bounds numbers, and preserves only saved fields', () => {
@@ -235,8 +236,10 @@ for (const [index, story] of STORIES.entries()) test(`${story.id}: wrong tries, 
     assert.equal(read.line, `Line ${i + 1}: ${story.lines[i]}`);
   }
   const reread = step(s, cmd('read'));
-  assert.equal(reread.state, s.state); assert.equal(reread.ui, s.ui);
-  assert.equal(reread.line, story.lines.join(' ')); fits(reread.line);
+  assert.equal(reread.state, s.state);
+  assert.equal(reread.line, story.lines.slice(0, 2).join(' ')); fits(reread.line);
+  const second = step(reread, cmd('read')); const third = step(second, cmd('read'));
+  assert.deepEqual([reread.line, second.line, third.line].join(' '), story.lines.join(' '));
   const reset = step(s, cmd('reset')); fits(reset.line);
   assert.deepEqual(reset.state, snapshot({ story: index })); assert.equal(reset.ui, s.ui);
   assert.equal(reset.line, `The ribbon is empty. Read the story again. ${story.question}`);
@@ -567,4 +570,17 @@ test('field typography grows with tokens and the planned rectangles stay within 
   }
   assert.doesNotMatch(css, /font-size:\s*\d|text-overflow:\s*ellipsis|linear-gradient|radial-gradient/);
   env.mounted.destroy();
+});
+
+test('Try another starts the other story and wraps with fresh progress', () => {
+  const first = ready();
+  const next = ribbon.another(first, {});
+  assert.equal(next.state.request, 2);
+  assert.equal(next.state.story, 1);
+  assert.equal(next.state.why, false);
+  const done = { ...next.state, why: true, steps: 3, lesson: true };
+  const wrapped = ribbon.another(done, {});
+  assert.equal(wrapped.state.request, 1);
+  assert.equal(wrapped.state.story, 0);
+  assert.equal(wrapped.state.why, false);
 });

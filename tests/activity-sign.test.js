@@ -297,7 +297,7 @@ test('every scenario retains text, kept words and tile history through both real
     assert.ok(saveState(save({ ...createState(), chapter, grade: grade || 1 }, 'writing', source), storage));
     const loaded = loadState(storage);
     const draft = save === saveDraft ? getDraft(loaded, 'writing') : getCreations(loaded).writing;
-    assert.deepEqual(draft, { ...source, kept: ['zephyr'] });
+    assert.deepEqual(draft, { ...source, request: 1, kept: ['zephyr'] });
     const restored = sign.start(draft, { grade, chapter, seed: 99 });
     assert.deepEqual(restored.state, draft);
     assert.deepEqual(restored.ui.tiles, [tile]);
@@ -502,5 +502,20 @@ test('all screen feedback paths stay within 56 characters', () => {
       }
       fits(command(typed, 'remove').line); fits(command(typed, 'clear').line); fits(command(typed, 'next').line);
     }
+  }
+});
+
+test('another chooses a fresh deterministic scenario and resets the sign', () => {
+  for (let grade = 0; grade <= 5; grade++) {
+    const first = fresh(grade);
+    const ready = { ...first.state, text: scenario(first).example };
+    const second = sign.another(ready, first.ui);
+    assert.deepEqual(second, sign.another(ready, first.ui));
+    assert.equal(second.state.request, 2);
+    assert.notEqual(second.state.scenario, ready.scenario);
+    assert.equal(second.state.text, '');
+    assert.deepEqual(second.ui.hints, {});
+    assert.equal(second.line, sign.opening(second.state));
+    assert.equal(sign.another(second.state, second.ui).state.request, 1);
   }
 });

@@ -70,18 +70,18 @@ function glyph(name) {
   };
   return `<svg${name === 'drum' ? ' class="icon"' : ''} viewBox="0 0 24 24" width="24" height="24" fill="currentColor" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${art[name]}</svg>`;
 }
-const selected = (ui, grade) => helpSetFor(grade).helpers.find(person => person.id === ui?.helper) ?? helpSetFor(grade).helpers[0];
+const selected = (ui, grade, request = 1) => helpSetFor(grade, request).helpers.find(person => person.id === ui?.helper) ?? helpSetFor(grade, request).helpers[0];
 
 // This label is shared by the field and the grade-5 accessibility test.
 export function helperLabel(state, helper, grade = state?.grade) {
-  const person = selected({ helper }, grade);
+  const person = selected({ helper }, grade, state?.request);
   const job = jobOfHelper(state, person.id);
   return `${person.name}${grade === 5 ? '' : `, ${person.strength.toLowerCase()}`}. On ${job ? JOB_SHORT[job] : 'the bench'}.`;
 }
 
 function act(state, ui, action) {
-  const set = helpSetFor(state.grade);
-  const helper = selected(ui, state.grade).id;
+  const set = helpSetFor(state.grade, state.request);
+  const helper = selected(ui, state.grade, state.request).id;
   if (action?.type === 'field') {
     if (set.helperIds.includes(action.helper)) return {
       state, ui: action.helper === helper ? ui : { ...ui, helper: action.helper },
@@ -109,7 +109,7 @@ function act(state, ui, action) {
 }
 
 function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
-  const set = helpSetFor(grade);
+  let set = helpSetFor(grade);
   let cursor = 0;
   const root = document.createElement('div');
   root.className = 'helpday-field';
@@ -182,14 +182,36 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
   host.append(root);
   return {
     update(state, ui) {
-      const chosen = selected(ui, grade);
+      const nextSet = helpSetFor(grade, state.request);
+      if (nextSet !== set) {
+        set = nextSet;
+        jobs.forEach((part, i) => {
+          const job = set.jobs[i];
+          part.button.dataset.job = job.id;
+          part.button.querySelector('.helpday-glyph').innerHTML = glyph(job.glyph);
+          part.button.querySelector('.helpday-job-name').textContent = job.name;
+          part.button.querySelector('.helpday-need').textContent = job.need;
+          part.who = null;
+          part.figure.innerHTML = '';
+        });
+        helpers.forEach(({ button }, i) => {
+          const person = set.helpers[i];
+          button.dataset.helper = person.id;
+          button.innerHTML = `${figureMarkup(person.figure, { scale: 0.75 })}<span class="helpday-helper-words"><span class="helpday-helper-name"></span><span class="helpday-strength"></span><span class="helpday-at" hidden></span></span>`;
+          button.querySelector('.helpday-helper-name').textContent = person.name;
+          button.querySelector('.helpday-strength').textContent = person.strength;
+          button.querySelector('.helpday-strength').hidden = grade === 5;
+          helpers[i].at = button.querySelector('.helpday-at');
+        });
+      }
+      const chosen = selected(ui, grade, state.request);
       count.textContent = `Help Day · ${helpDayFitCount(state)} of 4`;
       jobs.forEach((part, i) => {
         const job = set.jobs[i], who = helperById(helperAt(state, job.id));
-        part.button.dataset.fit = who ? (fits(job.id, who.id, grade) ? 'yes' : 'no') : '';
+        part.button.dataset.fit = who ? (fits(job.id, who.id, grade, state.request) ? 'yes' : 'no') : '';
         part.button.dataset.filled = String(Boolean(who));
         part.button.setAttribute('aria-label', who
-          ? `${job.description}, ${job.needSays}. ${who.name} is here, ${fits(job.id, who.id, grade) ? 'it fits' : 'try again'}.`
+          ? `${job.description}, ${job.needSays}. ${who.name} is here, ${fits(job.id, who.id, grade, state.request) ? 'it fits' : 'try again'}.`
           : `${job.description}, ${job.needSays}, empty. Send ${chosen.name} here.`);
         // Only a changed occupant replaces the sprite; the card and its focus persist.
         if (part.who !== (who?.id ?? null)) {
@@ -197,7 +219,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
           part.who = who?.id ?? null;
         }
         part.badge.hidden = !who;
-        const badge = who && fits(job.id, who.id, grade) ? icon('check', { size: 20 }) : '?';
+        const badge = who && fits(job.id, who.id, grade, state.request) ? icon('check', { size: 20 }) : '?';
         if (part.badge.innerHTML !== badge) part.badge.innerHTML = badge;
       });
       helpers.forEach(({ button, at }, i) => {
@@ -225,12 +247,17 @@ export default {
   start(snapshot, { grade = 3, chapter = 1 } = {}) {
     const input = snapshot?.kind === 'community' && snapshot.activity === 'helpday' ? snapshot : {};
     const state = normalizeHelpday(input, grade, chapter);
-    return { state, ui: { helper: helpSetFor(state.grade).helperIds[0] } };
+    return { state, ui: { helper: helpSetFor(state.grade, state.request).helperIds[0] } };
   },
   opening: helpdayOpening,
+  another(state) {
+    const request = state.request === 2 ? 1 : 2;
+    const next = this.start({ kind: 'community', activity: 'helpday', request }, { grade: state.grade, chapter: state.chapter });
+    return { ...next, line: this.opening(next.state) };
+  },
   commands(state, ui) {
     return [
-      { id: 'ask', label: `Ask ${selected(ui, state.grade).name}`, icon: 'people' },
+      { id: 'ask', label: `Ask ${selected(ui, state.grade, state.request).name}`, icon: 'people' },
       { id: 'next', label: 'Next job', icon: 'help' },
       { id: 'undo', label: 'Undo', icon: 'undo', disabled: state.crew.length === 0 },
       { id: 'finish', label: 'Start day', icon: 'check', finish: true, disabled: !helpdayReady(state) },

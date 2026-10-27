@@ -21,6 +21,7 @@ const review = id => ({ type: 'field', review: id });
 const snapshot = (deck = 0, solved = []) => ({ kind: KIND, activity: ACTIVITY, chapter: 1, grade: 3, deck, solved });
 const sentences = text => text.split(/(?<=[.!?…]["'”’)\]]*)\s+/).filter(Boolean);
 function fits(text) {
+  assert.ok(text.length <= 96, `${text.length}: ${text}`);
   assert.equal(typeof text, 'string');
   for (const sentence of sentences(text)) assert.ok(sentence.length <= 56, `${sentence.length}: ${sentence}`);
 }
@@ -107,7 +108,7 @@ test('cleaning rejects unrelated junk, bounds numbers, filters foreign ids, and 
   const input = { ...snapshot(1), solved: ['yuki-studio', 'hana-path', 'momo-kitchen', 'hana-path', null, {}, 'pip-letters'], phase: 'prove', pick: 'community', title: '<script>' };
   const safe = normalizeTales(input, 5, 1);
   assert.deepEqual(safe.solved, ['hana-path', 'pip-letters', 'yuki-studio']);
-  assert.deepEqual(Object.keys(safe).sort(), ['activity', 'chapter', 'deck', 'found', 'grade', 'kind', 'solved']);
+  assert.deepEqual(Object.keys(safe).sort(), ['activity', 'chapter', 'deck', 'found', 'grade', 'kind', 'request', 'solved']);
   assert.deepEqual(cleanTalesCreation(safe), safe);
   assert.deepEqual(normalizeTales(safe, safe.grade, safe.chapter), safe);
   for (const chapter of [-99, 2, 99, NaN, Infinity, '1', null]) {
@@ -448,4 +449,32 @@ test('review leaves room for three two-row lines at both text sizes, without shr
       + 2 * parseFloat(lines.gap) + 3 * (2 * font(line) * Number(line['line-height']) + paddingY(line) + 2 * parseFloat(line.border));
     assert.ok(height <= 268, `review's two-row line budget is ${height}px (large=${large})`);
   }
+});
+
+test('Try another switches decks and wraps to a fresh first request', () => {
+  for (const grade of [3, 4, 5]) {
+    const start = tales.start(undefined, { grade, chapter: 1 });
+    const done = { ...start.state, solved: TALE_DECKS[start.state.deck].map(t => t.id) };
+    const next = tales.another(done, start.ui);
+    assert.equal(next.state.request, 2);
+    assert.notEqual(next.state.deck, done.deck);
+    assert.deepEqual(next.state.solved, []);
+    const nextDone = { ...next.state, solved: TALE_DECKS[next.state.deck].map(t => t.id) };
+    const wrapped = tales.another(nextDone, next.ui);
+    assert.equal(wrapped.state.request, 1);
+    assert.equal(wrapped.state.deck, done.deck);
+    assert.deepEqual(wrapped.state.solved, []);
+  }
+});
+
+test('Try another changes the current deck after Start over', () => {
+  const initial = tales.start(undefined, { grade: 3, chapter: 1 });
+  const firstDone = { ...initial.state, solved: TALE_DECKS[initial.state.deck].map(t => t.id) };
+  const replay = tales.act(firstDone, initial.ui, { type: 'command', id: 'again' });
+  const replayDone = { ...replay.state, solved: TALE_DECKS[replay.state.deck].map(t => t.id) };
+  const next = tales.another(replayDone, replay.ui);
+  assert.equal(next.state.request, 2);
+  assert.equal(next.state.deck, (replayDone.deck + 1) % TALE_DECKS.length);
+  assert.notEqual(next.state.deck, replayDone.deck);
+  assert.deepEqual(next.state.solved, []);
 });

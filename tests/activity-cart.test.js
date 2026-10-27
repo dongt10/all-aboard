@@ -171,7 +171,7 @@ test('the opening never claims a weight for an emptied left bay', () => {
   const fresh = cart.start(null, { chapter: 1, grade: 3 });
   assert.equal(cart.opening(fresh.state, fresh.ui, 3), 'The left side weighs 8. Find crates that add up to 8.');
   const ready = cart.start({ kind: 'math', left: [2], right: [2], rolled: true }, { chapter: 0, grade: 0 });
-  assert.match(cart.opening(ready.state, ready.ui, 0), /ready to send/);
+  assert.match(cart.opening(ready.state, ready.ui, 0), /Try another/);
 });
 
 test('both raised cart bays stay below the total badges at either text size', () => {

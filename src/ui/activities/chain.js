@@ -9,7 +9,7 @@ import { INK, PAPER, PAPER_SHADE, SKY, SEA, GRASS, GRASS_DARK, WOOD, LANTERN } f
 
 export { LINES, nextNeedLine, tenthWord, cardLine, energyLine };
 export const CARDS = CHAIN_CARDS.map(id => ({ id, ...CARD_WORDS[id], glyph: CARD_GLYPHS[id] }));
-export const cardsFor = grade => chainFor(grade).cards.map(id => ({ id, ...CARD_WORDS[id], glyph: CARD_GLYPHS[id] }));
+export const cardsFor = (grade, request = 1) => chainFor(grade, request).cards.map(id => ({ id, ...CARD_WORDS[id], glyph: CARD_GLYPHS[id] }));
 export const helpFor = grade => [
   'Tap a card: who gets the sun’s energy next?',
   `For this example, use ${tenthWord(grade)} each step.`,
@@ -142,14 +142,14 @@ function act(state, ui, action) {
       };
     }
     if (action.id === 'reset' && state.chain[0] !== null) {
-      return { state: normalizeChain(null, state.grade, state.chapter), ui, line: LINES.reset };
+      return { state: normalizeChain({ kind: 'science', activity: 'chain', request: state.request }, state.grade, state.chapter), ui, line: LINES.reset };
     }
   }
   return { state, ui };
 }
 
 function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
-  const contentCards = cardsFor(grade);
+  const contentCards = [...cardsFor(grade), ...cardsFor(grade, 2)];
   const node = (tag, cls, parent) => {
     const el = document.createElement(tag);
     el.className = cls;
@@ -208,7 +208,7 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
   const cardsRail = node('div', 'chain-cards', root);
   cardsRail.setAttribute('role', 'group');
   cardsRail.setAttribute('aria-label', 'Who eats what');
-  const cards = contentCards.map(card => {
+  const cards = cardsFor(grade).map(card => {
     const b = node('button', 'chain-card', cardsRail);
     b.type = 'button';
     b.dataset.card = card.id;
@@ -274,10 +274,16 @@ function mountField(host, { grade = 3, dispatch = () => {} } = {}) {
     update(state, ui) {
       const focusedCard = cards.includes(document.activeElement) ? document.activeElement : null;
       cards.forEach((b, i) => {
-        const used = state.chain.includes(contentCards[i].id);
+        const card = cardsFor(state.grade, state.request)[i];
+        b.dataset.card = card.id;
+        b.querySelector('.chain-card-pic').innerHTML = glyph(card.id);
+        const label = b.querySelector('.chain-card-word');
+        label.textContent = fieldWord(card.id);
+        label.classList.toggle('chain-word--long', label.textContent.length > 7);
+        const used = state.chain.includes(card.id);
         b.disabled = used;
         b.classList.toggle('chain-card--placed', used);
-        b.setAttribute('aria-label', `${contentCards[i].word}${used ? ', placed' : ''}`);
+        b.setAttribute('aria-label', `${card.word}${used ? ', placed' : ''}`);
         b.querySelector('.chain-card-check').hidden = !used;
       });
       if (cardCursor.disabled) cardCursor = cards.find(b => !b.disabled);
@@ -327,6 +333,11 @@ export default {
     return { state: normalizeChain(snapshot, grade, chapter), ui: { shine: 0 } };
   },
   opening: chainOpening,
+  another(state) {
+    const request = state.request === 2 ? 1 : 2;
+    const next = this.start({ kind: 'science', activity: 'chain', request }, { grade: state.grade, chapter: state.chapter });
+    return { ...next, line: this.opening(next.state) };
+  },
   commands(state) {
     return [
       { id: 'shine', label: 'Shine!', icon: 'star' },

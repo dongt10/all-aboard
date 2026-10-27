@@ -27,7 +27,8 @@ export const CHAINS = {
     firstNumber: 'Pondweed catches sunlight first.',
   },
 };
-export const chainFor = grade => Number(grade) === 4 ? CHAINS.pond : CHAINS.bay;
+export const chainFor = (grade, request = 1) => (Number(grade) === 4) !== (request === 2) ? CHAINS.pond : CHAINS.bay;
+const requestNumber = value => Number.isInteger(value) ? Math.max(1, Math.min(2, value)) : 1;
 // Pictures follow the saved cards, even when an older grade-4 chart used the bay.
 export const chainOfCards = cards => (Array.isArray(cards) ? cards : [])
   .map(card => Object.values(CHAINS).find(chain => chain.cards.includes(card))).find(Boolean) ?? CHAINS.bay;
@@ -100,25 +101,27 @@ function normalizedChain(input, grade, chapter, content) {
   const g = bounded(grade, 3, 5, 3);
   const chain = validChainPrefix(s.chain, content);
   const energy = validEnergy(s.energy, chain);
-  const snapshot = { kind: 'science', activity: 'chain', grade: g, chapter: bounded(chapter, 1, 1, 1), chain, energy, shone: false };
+  const snapshot = { kind: 'science', activity: 'chain', request: requestNumber(s.request), grade: g, chapter: bounded(chapter, 1, 1, 1), chain, energy, shone: false };
   snapshot.shone = s.shone === true && chainComplete(snapshot, g);
   return snapshot;
 }
 export function normalizeChain(input = {}, grade = 3, chapter = 1) {
-  return normalizedChain(input, grade, chapter, chainFor(bounded(grade, 3, 5, 3)));
+  return normalizedChain(input, grade, chapter, chainFor(bounded(grade, 3, 5, 3), requestNumber(input?.request)));
 }
 
 // This activity only belongs to elementary grades 3–5. Other activities are rejected.
 export function cleanChainCreation(input) {
   if (!isPlainObject(input) || input.kind !== 'science' || input.activity !== 'chain') return null;
-  return normalizedChain(input, input.grade, input.chapter, chainOfCards(input.chain));
+  const content = requestNumber(input.request) === 2
+    ? chainFor(bounded(input.grade, 3, 5, 3), 2) : chainOfCards(input.chain);
+  return normalizedChain(input, input.grade, input.chapter, content);
 }
 
 export function chainComplete(s, grade = s?.grade) {
   const chain = Array.isArray(s?.chain) ? s.chain : [];
   const energy = Array.isArray(s?.energy) ? s.energy : [];
   if (chain.length !== 3 || energy.length !== 3) return false;
-  const content = chainFor(grade);
+  const content = chainFor(grade, s.request);
   if (!content.before.every((food, i) => content.cards.includes(chain[i]) && EATS[chain[i]] === food)) return false;
   return expectedEnergy(grade).every((want, i) => energy[i] === want);
 }
@@ -128,7 +131,7 @@ export const chainReady = s => Boolean(s) && s.kind === 'science' && s.activity 
 // A creature goes onto the lowest empty plate when it eats what sits on the plate before it.
 // status: 'placed' | 'used' | 'full' | 'wrong' | 'unknown'; food names what sits before the open plate.
 export function placeCard(s, card) {
-  const content = chainFor(s.grade);
+  const content = chainFor(s.grade, s.request);
   if (!content.cards.includes(card)) return { state: s, status: 'unknown' };
   if (s.chain.includes(card)) return { state: s, status: 'used' };
   const slot = openCardSlot(s.chain);
@@ -156,9 +159,9 @@ export function placeEnergy(s, n, grade = s.grade) {
 }
 
 export const LINES = {
-  opening: 'This chart shows pretend energy units. Groups grow over the same time. We compare their new growth. For this example, use one tenth. Real transfer varies. Who uses sunlight first?',
-  openingPart: 'These are pretend energy units for new growth. Groups grow over the same time. This example uses one tenth. Real transfer varies. Let’s finish the chart.',
-  openingReady: 'These are pretend energy units for new growth. Groups grow over the same time. This example uses one tenth. Real transfer varies. Your chart is ready. Pin it, or start over.',
+  opening: 'Use pretend energy units for new growth. Try one tenth. Real transfer varies. Who uses sunlight?',
+  openingPart: 'Pretend energy units show new growth. Real transfer varies.',
+  openingReady: 'Your sunbeam chart is ready. Pin it, or Try another.',
   needCard1: 'Who uses sunlight first? Tap a card.',
   needCard2: 'Who eats sea plants? Tap a card.',
   needCard3: 'Who eats little fish? Tap a card.',
@@ -193,18 +196,19 @@ export const LINES = {
 export function nextNeedLine(s, grade = s.grade) {
   if (s.chain[0] === null) return LINES.needCard1;
   const slot = openEnergySlot(s);
-  if (slot === 0) return LINES.first(grade);
+  if (slot === 0) return chainFor(grade, s.request).firstHint;
   if (slot > 0) return LINES.needNumber(slot + 1);
   const next = openCardSlot(s.chain);
-  if (next < PLATES) return chainFor(grade).needs[next];
+  if (next < PLATES) return chainFor(grade, s.request).needs[next];
   if (!chainComplete(s, grade)) return LINES.repair;
   return s.shone ? LINES.ready : LINES.allSet;
 }
 
 export function chainOpening(s) {
   if (chainReady(s)) return LINES.openingReady;
+  if (s.request === 2 && s.chain[0] === null) return 'A new food chain! Use one tenth here. Real transfer varies. Who uses sunlight first?';
   if (s.chain[0] === null) return LINES.opening;
-  return `${LINES.openingPart} ${nextNeedLine(s)}`;
+  return nextNeedLine(s);
 }
 
 // What Momo says after a card tap: a right card lands with its line and the next need; a wrong one explains why.
@@ -217,7 +221,7 @@ export function cardLine(card, state, grade = state.grade) {
   if (result.status === 'full') return `${LINES.full} ${nextNeedLine(state, grade)}`;
   if (result.status === 'wrong') {
     const why = result.slot === 0 ? LINES.wrongSun(words.plural) : LINES.wrongFood(words.plural, result.food);
-    return `${why} ${LINES.question(result.slot, grade)}`;
+    return `${why} ${chainFor(grade, state.request).questions[result.slot]}`;
   }
   return nextNeedLine(state, grade);
 }
@@ -228,7 +232,7 @@ export function energyLine(result, grade = result.state.grade) {
   const tenth = tenthWord(grade);
   switch (result.status) {
     case 'placed': {
-      const line = result.plate === 0 ? LINES.firstNumber(result.expected, grade)
+      const line = result.plate === 0 ? `Plate 1 gets ${result.expected}. ${chainFor(grade, state.request).firstNumber}`
         : LINES.number(result.plate + 1, result.expected, result.prev, tenth);
       return chainComplete(state, grade) ? `${line} ${LINES.shineHint}` : line;
     }
@@ -236,7 +240,7 @@ export function energyLine(result, grade = result.state.grade) {
       if (state.chain[0] === null) return LINES.nowhereEmpty;
       if (!chainComplete(state, grade)) return nextNeedLine(state, grade);
       return `${LINES.nowhereFull} ${state.shone ? 'Choose Pin chart.' : LINES.shineHint}`;
-    case 'first': return LINES.first(grade);
+    case 'first': return chainFor(grade, state.request).firstHint;
     case 'same': return LINES.same;
     case 'high': return LINES.high(tenth);
     case 'low': return LINES.low(tenth);

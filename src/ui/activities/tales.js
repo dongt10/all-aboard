@@ -278,4 +278,13 @@ export default {
   help: HELP,
   notReadyLine: LINES.notReady,
   start, opening, commands, act, mountField,
+  another(state) {
+    if (!talesReady(state)) return null;
+    const request = state.request === 2 ? 1 : 2;
+    const snapshot = request === 2
+      ? { kind: KIND, activity: 'tales', request, deck: (state.deck + 1) % TALE_DECKS.length, solved: [] }
+      : { kind: KIND, activity: 'tales', request };
+    const fresh = start(snapshot, { grade: state.grade, chapter: state.chapter });
+    return { ...fresh, line: talesOpening(fresh.state) };
+  },
 };

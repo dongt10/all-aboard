@@ -16,7 +16,7 @@ import { declarations, controlStyle } from './helpers/css.js';
 
 const cmd = id => ({ type: 'command', id });
 const field = slot => ({ type: 'field', slot });
-const fixture = { kind: 'math', activity: 'rows', grade: 2, chapter: 1, target: 12, crates: [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13] };
+const fixture = { kind: 'math', activity: 'rows', grade: 2, chapter: 1, request: 1, target: 12, crates: [0, 1, 2, 3, 5, 6, 7, 8, 10, 11, 12, 13] };
 const snapshot = parts => normalizeRows(parts);
 const rectangle = (height, width, top = 0, left = 0) => Array.from({ length: height }, (_, row) =>
   Array.from({ length: width }, (_, col) => (top + row) * GRID + left + col)).flat();
@@ -67,7 +67,7 @@ function mounted() {
 
 test('rows starts independently with the approved snapshot, four commands and matching saved rows', () => {
   const fresh = rows.start();
-  assert.deepEqual(fresh, { state: { kind: 'math', activity: 'rows', grade: 2, chapter: 1, target: 12, crates: [] }, ui: { paired: false } });
+  assert.deepEqual(fresh, { state: { kind: 'math', activity: 'rows', grade: 2, chapter: 1, request: 1, target: 12, crates: [] }, ui: { paired: false } });
   assert.equal(rows.kind, 'math');
   assert.equal(rows.title, 'Taro’s crate rows');
   assert.equal(rows.rewardLabel, 'Crate rows');
@@ -77,7 +77,7 @@ test('rows starts independently with the approved snapshot, four commands and ma
   for (const name of ['start', 'opening', 'commands', 'act', 'mountField']) assert.equal(typeof rows[name], 'function');
   assert.equal(rows.opening(fresh.state), 'I need 12 crates in equal rows. Build them any way.');
   assert.equal(rows.opening(snapshot({ crates: [0] })), "Let's finish the order. 12 crates in equal rows.");
-  assert.equal(rows.opening(fixture), 'Your rows are ready. Send cart, or make a new order.');
+  assert.equal(rows.opening(fixture), 'Your crate rows are ready. Send cart, or Try another.');
   assert.equal(rows.opening, rowsOpening);
   contract(fresh.state, fresh.ui); contract(fixture, fresh.ui);
   assert.deepEqual(rows.start(fixture).state, fixture);
@@ -102,7 +102,7 @@ test('normalization bounds slots, sorts once, drops duplicates and junk without 
   const input = freeze({ ...fixture, crates: [24, 0, 13, 0, -1, 25, 2.5, '4', null, NaN, Infinity, {}, Symbol('slot')], name: '<script>', paired: true });
   const result = normalizeRows(input);
   assert.deepEqual(result.crates, [0, 13, 24]);
-  assert.deepEqual(Object.keys(result).sort(), ['activity', 'chapter', 'crates', 'grade', 'kind', 'target']);
+  assert.deepEqual(Object.keys(result).sort(), ['activity', 'chapter', 'crates', 'grade', 'kind', 'request', 'target']);
   assert.notEqual(result.crates, input.crates);
   assert.deepEqual(normalizeRows(result), result);
   assert.deepEqual(cleanRowsCreation(result), result);
@@ -461,4 +461,18 @@ test('field words use shared font tokens and grow in Bigger words mode', () => {
   }
   assert.equal(declarations(css, '.rows-sum')['white-space'], 'normal');
   mount.destroy();
+});
+
+
+test('another cycles fresh orders and preserves request through cleaning', () => {
+  let state = rows.start(null, { grade: 2, chapter: 1 }).state;
+  for (const target of [10, 8, 12]) {
+    const result = rows.another(state, { paired: true });
+    assert.equal(result.state.target, target);
+    assert.deepEqual(result.state.crates, []);
+    assert.deepEqual(result.ui, { paired: false });
+    assert.equal(cleanRowsCreation(result.state).request, result.state.request);
+    assert.equal(result.line, rows.opening(result.state));
+    state = result.state;
+  }
 });

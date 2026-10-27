@@ -17,12 +17,13 @@ import { controlStyle, declarations, cssRules } from './helpers/css.js';
 
 const cmd = id => ({ type: 'command', id });
 const field = cell => ({ type: 'field', cell });
-const snapshot = (done = [], grade = 2, chapter = 1) => ({ kind: 'community', activity: 'compass', grade, chapter, done });
+const snapshot = (done = [], grade = 2, chapter = 1) => ({ kind: 'community', activity: 'compass', request: 1, grade, chapter, done });
 const cellOf = ([row, col]) => row * GRID + col;
 const subsets = Array.from({ length: 8 }, (_, mask) => ERRAND_IDS.filter((_, i) => mask & (1 << i)));
 const source = path => readFileSync(new URL(path, import.meta.url), 'utf8');
 
 function fits(line) {
+  assert.ok(line.length <= 96, `${line.length}: ${line}`);
   assert.equal(typeof line, 'string');
   for (const sentence of line.split(/(?<=[.!?…]["'”’)\]]*)\s+/)) assert.ok(sentence.length <= 56, `${sentence.length}: ${sentence}`);
   for (const cap of Object.values(PAGE_CHARS)) {
@@ -78,7 +79,7 @@ test('the map and errand paths match all six places and the two-step lantern tri
   assert.deepEqual(ERRAND_IDS, ['north', 'west', 'lantern']);
   for (const [place, point] of Object.entries(PLACES)) assert.equal(placeAt(cellOf(point)), place);
   for (const cell of [0, 1, 2, 24, -1, 25, 1.5, '7', null, NaN, {}, Symbol('cell')]) assert.equal(placeAt(cell), null);
-  assert.deepEqual(DIRECTION_HINT, { north: 'North is up on the map.', west: 'West is left on the map.', lantern: 'East is right, south is down.' });
+  assert.deepEqual(DIRECTION_HINT, { north: 'North is up on the map.', west: 'West is left on the map.', lantern: 'East is right, south is down.', east: 'East is right on the map.', south: 'South is down on the map.' });
 });
 
 test('start ignores legacy K–2 community saves and unrelated activity snapshots', () => {
@@ -212,7 +213,7 @@ test('full play-through explains the three jobs, resumes, hangs the map, and can
   }
   assert.equal(currentErrand(state), null);
   assert.equal(compassReady(state), true);
-  assert.equal(compass.opening(state), 'All three errands are done. Hang map, or start over.');
+  assert.equal(compass.opening(state), 'Your errand map is ready. Hang map, or Try another.');
   assert.equal(compass.commands(state).at(-1).disabled, false);
   assert.deepEqual(compass.act(state, ui, cmd('finish')), { state, ui });
   const reset = compass.act(state, ui, cmd('reset'));
@@ -398,12 +399,16 @@ test('mounted field builds once and keeps every button, figure, route and card n
     assert.equal(root.querySelector('.compass-pip').style.top, '118px');
     for (const cell of cells) fits(cell.getAttribute('aria-label'));
   }
-  assert.deepEqual(paths.map(path => path.dataset.marker), ['circle', 'square', 'triangle']);
+  assert.deepEqual(paths.map(path => path.dataset.marker), ['circle', 'square', 'triangle', 'square', 'triangle']);
   for (const path of paths) {
     const lines = path.querySelectorAll('polyline');
     assert.equal(lines.at(-1).parentElement.getAttribute('stroke-width'), '4');
     assert.equal(lines.at(-1).getAttribute('stroke-dasharray'), '8 5');
   }
+  const alternate = { ...snapshot(['north', 'east', 'south']), request: 2 };
+  mounted.update(alternate, {});
+  assert.deepEqual(root.querySelectorAll('*'), nodes);
+  assert.deepEqual(paths.filter(path => path.getAttribute('visibility') === 'visible').map(path => path.dataset.errand), ['north', 'east', 'south']);
   mounted.destroy();
   assert.equal(host.children.length, 0);
   assert.equal(Object.values(root.listeners).flat().length, 0);
@@ -553,4 +558,33 @@ test('optional compass hint names the destination and stale progress is ignored'
     assert.equal(fieldView(snapshot(['north']), ui).pip, 12);
     assert.equal(compass.act(snapshot(['north']), ui, field(10)).state.done.length, 1);
   }
+});
+
+
+test('another gives new east and south errands and saves its route', () => {
+  const first = compass.start();
+  let { state, ui } = compass.another(first.state, first.ui);
+  assert.equal(state.request, 2);
+  for (const cell of [13, 14, 17, 22, 7]) ({ state, ui } = compass.act(state, ui, { type: 'field', cell }));
+  assert.deepEqual(state.done, ['east', 'south', 'north']);
+  assert.equal(compassReady(state), true);
+  assert.equal(cleanCompassCreation(state).request, 2);
+  assert.equal(compass.another(state, ui).state.request, 1);
+});
+
+
+test('invalid request values normalize idempotently before errands', () => {
+  for (const request of [99, -4, 1.5, null, '2']) {
+    const once = normalizeCompass({ request, done: ['north', 'east', 'west'] });
+    assert.deepEqual(normalizeCompass(once), once);
+  }
+});
+
+test('request two reset keeps the east-first errands', () => {
+  const second = compass.another(compass.start().state, {});
+  let next = compass.act(second.state, second.ui, { type: 'field', cell: 13 });
+  next = compass.act(next.state, next.ui, { type: 'field', cell: 14 });
+  const reset = compass.act(next.state, next.ui, { type: 'command', id: 'reset' });
+  assert.deepEqual(reset.state, second.state);
+  assert.equal(fieldView(reset.state, reset.ui).errand, 'east');
 });
