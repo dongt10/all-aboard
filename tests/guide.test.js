@@ -1,12 +1,91 @@
 import { STAMP_CHAIN } from '../src/chain.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { guideEntries, stampCount, learnedText, stampGrade, SIDE_BIOS } from '../src/ui/guide.js';
+import { guideEntries, stampCount, learnedText, stampGrade, SIDE_BIOS, guideNarration } from '../src/ui/guide.js';
 import { createState, publishCreation, saveDraft, normalizeState } from '../src/progress.js';
 import { CHARACTERS } from '../src/data.js';
+import { openGuideWindow } from '../src/ui/screens/windows.js';
+import { Doc, Event } from './helpers/dom.js';
+import { createDefaultBand } from '../src/audio.js';
 
 const sign = { kind: 'writing', text: 'Welcome!', chapter: 0, grade: 0 };
 const SUBJECTS = CHARACTERS.map(c => c.id);
+
+function mountedGuide(t, { autoRead = false, state = createState(), id, busy = false } = {}) {
+  const doc = new Doc(), calls = [], gone = [];
+  for (const [key, value] of Object.entries({ document: doc, speechSynthesis: { cancel: () => calls.push(['stop']) } })) {
+    const before = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+    t.after(() => before ? Object.defineProperty(globalThis, key, before) : delete globalThis[key]);
+  }
+  state = { ...state, settings: { ...state.settings, autoRead } };
+  const stage = doc.createElement('div'); doc.body.append(stage);
+  const handle = openGuideWindow({ stage, getState: () => state, speak: words => calls.push(['speak', words]),
+    go: (...args) => gone.push(args), scenes: { busy, pause() {} } }, { id });
+  t.after(() => handle?.close());
+  return { stage, handle, calls, gone, state, spoken: () => calls.filter(([kind]) => kind === 'speak').map(([, words]) => words) };
+}
+
+for (const autoRead of [false, true]) test(`Guide entry, click and keyboard changes respect Read to me (${autoRead})`, t => {
+  const f = mountedGuide(t, { autoRead, id: 'writing' });
+  const entries = guideEntries(f.state), selected = entries.find(e => e.id === 'writing');
+  assert.deepEqual(f.spoken(), autoRead ? [guideNarration(selected)] : []);
+  if (autoRead) assert.equal(f.calls.at(-1)[0], 'speak', 'entry speaks after the window cancels previous speech');
+  f.stage.querySelector('[data-action="hear"]').click();
+  assert.equal(f.spoken().at(-1), guideNarration(selected));
+  assert.ok(f.stage.querySelector('.win-backdrop'), 'Hear leaves the Guide open');
+  assert.deepEqual(f.gone, []);
+  const before = f.spoken().length;
+  const tiles = f.stage.querySelectorAll('.guide-tile');
+  tiles[0].click();
+  assert.equal(f.spoken().length, before + Number(autoRead));
+  tiles[0].focus();
+  tiles[0].dispatchEvent(new Event('keydown', { key: 'ArrowRight' }));
+  assert.equal(tiles[1].getAttribute('aria-pressed'), 'true');
+  assert.equal(f.spoken().length, before + 2 * Number(autoRead));
+  f.stage.querySelector('[data-action="hear"]').click();
+  assert.equal(f.spoken().at(-1), guideNarration(entries[1]));
+  f.handle.close();
+  assert.equal(f.calls.at(-1)[0], 'stop', 'closing cancels narration');
+});
+
+test('Guide does not narrate when a scene transition prevents opening', t => {
+  const f = mountedGuide(t, { autoRead: true, busy: true });
+  assert.equal(f.handle, null);
+  assert.deepEqual(f.spoken(), []);
+});
+
+test('every neighbor has Hear and short narration with only its available actions', t => {
+  const f = mountedGuide(t);
+  for (const [i, entry] of guideEntries(f.state).entries()) {
+    f.stage.querySelectorAll('.guide-tile')[i].click();
+    f.stage.querySelector('[data-action="hear"]').click();
+    const text = f.spoken().at(-1);
+    assert.ok(text.includes(entry.name) && text.includes(entry.bio));
+    assert.equal(text.includes('Choose Find'), entry.canFind);
+    assert.equal(text.includes('Choose Visit'), entry.canVisit);
+    assert.equal(text.includes('Let’s explore.'), Boolean(entry.stamp));
+    for (const line of text.split(/(?<=[.!?…])\s+/)) assert.ok(line.length <= 56, line);
+    const actions = f.stage.querySelectorAll('.guide-page [data-action]');
+    assert.ok(actions.length <= 4);
+    for (const action of actions) assert.ok(action.querySelector('span').textContent.length <= 12);
+  }
+});
+
+test('published stamps describe exploration in both the visible page and narration', t => {
+  let state = publishCreation(createState(), 'writing', sign);
+  state = publishCreation(state, 'music', { ...createDefaultBand(), kind: 'music', chapter: 0, grade: 0 });
+  const f = mountedGuide(t, { state, id: 'writing' });
+  assert.match(f.stage.querySelector('.guide-stamp').textContent, /^We explored:/);
+  f.stage.querySelector('[data-action="hear"]').click();
+  assert.match(f.spoken().at(-1), /We explored\./);
+  assert.doesNotMatch(f.spoken().at(-1), /Learned|You’ll learn/);
+  const index = guideEntries(state).findIndex(e => e.id === 'music');
+  f.stage.querySelectorAll('.guide-tile')[index].click();
+  assert.equal(f.stage.querySelectorAll('.guide-page [data-action]').length, 4, 'Hear, Find, Visit and Save song');
+  f.stage.querySelector('[data-action="hear"]').click();
+  assert.match(f.spoken().at(-1), /Save song keeps your band to listen to later\./);
+});
 
 test('a published grade-2 banner earns the coral-blue color-pattern stamp', () => {
   const state = publishCreation({ ...createState(), chapter: 1, grade: 2 }, 'art', {

@@ -1,4 +1,9 @@
 /* In-stage windows: Comfort, Credits, Paused, Grade, Matsuri Guide, Help. */
+/* Speech recovery stays outside the playfield; stage fitting reserves its measured height. */
+.voice-status { position: fixed; bottom: 0; left: 0; width: 100%; z-index: 110; padding: 6px 12px max(6px, env(safe-area-inset-bottom, 0px)); background: var(--paper); color: var(--ink); border-top: 4px solid var(--ink); font-family: var(--font-read); font-size: var(--text-small); line-height: 1.25; pointer-events: none; }
+body:has(.large-text) .voice-status { font-size: 20px; }
+.stage-viewport { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--voice-status-height, 0px)); }
+
 .win--grade { width: 880px; }
 .win--guide { width: 912px; height: 100%; }
 .win--help { width: 720px; }
@@ -48,7 +53,7 @@
 .guide-record { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .guide-record .icon { width: 20px; height: 20px; }
 .guide-record__status { flex: 1 1 200px; min-width: 0; font-size: var(--text-small); color: var(--ink-soft); }
-.guide-page__actions { display: flex; gap: 12px; margin-top: auto; }
+.guide-page__actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: auto; }
 
 /* Help: numbered steps, each with Hear. */
 .help-steps { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }

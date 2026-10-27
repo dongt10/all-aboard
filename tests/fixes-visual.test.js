@@ -8,6 +8,23 @@ const css = paths => paths.map(read).join('\n').replace(/\/\*[\s\S]*?\*\//g, '')
 const rulesFor = (text, selector) => [...text.matchAll(/([^{}]+)\{([^}]*)\}/g)]
   .filter(([, sel]) => sel.split(',').map(s => s.trim()).includes(selector)).map(([, , body]) => body).join(';');
 
+test('speech status reserves stage space and Guide actions can wrap at Bigger words', async () => {
+  const styles = css(['src/ui/screens/windows.css']);
+  assert.match(rulesFor(styles, '.voice-status'), /position:\s*fixed/);
+  assert.match(rulesFor(styles, '.voice-status'), /bottom:\s*0/);
+  assert.match(rulesFor(styles, '.voice-status'), /pointer-events:\s*none/);
+  assert.match(rulesFor(styles, '.stage-viewport'), /padding-bottom:\s*calc\(env\(safe-area-inset-bottom,\s*0px\)\s*\+\s*var\(--voice-status-height,\s*0px\)\)/);
+  assert.match(rulesFor(styles, 'body:has(.large-text) .voice-status'), /font-size:\s*20px/);
+  assert.match(rulesFor(styles, '.guide-page__actions'), /flex-wrap:\s*wrap/);
+  const { fitStage } = await import('../src/ui/stage.js');
+  for (const [width, height] of [[960, 540], [844, 390], [390, 844]]) {
+    for (const statusHeight of [48, 96, 144]) {
+      const fit = fitStage(width, height, { bottom: statusHeight });
+      assert.ok(fit.top + fit.height <= height - statusHeight + 0.001, 'the game fits above the measured status');
+    }
+  }
+});
+
 test('every scene root is its own stacking context, so windows, item-get and the wipe sit above it', () => {
   const all = css(['src/ui/screens/title.css', 'src/ui/screens/village.css', 'src/ui/screens/encounter.css', 'src/ui/screens/music.css', 'src/ui/screens/parade.css']);
   for (const root of ['.scene', '.village', '.enc', '.music', '.parade']) {

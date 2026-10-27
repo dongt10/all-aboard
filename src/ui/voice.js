@@ -12,10 +12,10 @@ const matches = (name, family) => new RegExp(`\\b${family}\\b`, 'i').test(name);
 // English locale, quality/locality tier, name preference, variant, then default.
 // Return an original voice object without changing the browser's inventory.
 export function pickVoice(voices) {
-  const ranked = voices.filter(voice => /^en/i.test(voice.lang)
+  const ranked = voices.filter(voice => /^en(?:[-_]|$)/i.test(voice.lang)
     && !NOVELTY.test(voice.name)
-    && (ALLOW_REMOTE_VOICES || voice.localService !== false)).map(voice => {
-    const local = voice.localService !== false;
+    && (voice.localService === true || (ALLOW_REMOTE_VOICES && voice.localService === false))).map(voice => {
+    const local = voice.localService === true;
     const family = PREFERRED.findIndex(name => matches(voice.name, name));
     const natural = /\bMicrosoft\b.*\bNatural\b/i.test(voice.name)
       ? NATURAL.findIndex(name => matches(voice.name, name)) : -1;
@@ -39,11 +39,64 @@ export function pickVoice(voices) {
 }
 
 let chosenVoice = null;
+let notice = null;
+let noticeObserver = null;
+let noticeHeight = null;
+let request = 0;
+
+function measureNotice() {
+  if (!notice?.isConnected) return;
+  const height = notice.getBoundingClientRect().height;
+  if (height === noticeHeight) return;
+  noticeHeight = height;
+  document.body.style.setProperty('--voice-status-height', `${height}px`);
+  if (globalThis.window?.dispatchEvent && globalThis.Event) window.dispatchEvent(new Event('resize'));
+}
+
+function showNotice(failed = false) {
+  if (!globalThis.document?.body) return;
+  if (!notice || !notice.isConnected) {
+    noticeObserver?.disconnect();
+    noticeHeight = null;
+    notice = document.createElement('aside');
+    notice.className = 'voice-status';
+    notice.setAttribute('role', 'status');
+    notice.setAttribute('aria-live', 'polite');
+    document.body.append(notice);
+    if (globalThis.ResizeObserver) {
+      noticeObserver = new ResizeObserver(measureNotice);
+      noticeObserver.observe(notice);
+    }
+  }
+  notice.textContent = (failed ? 'Voice failed. ' : 'Voice unavailable. ')
+    + 'Ask a grown-up to add an English voice on this device. '
+    + 'Then press Hear. Pictures and text still work.';
+  measureNotice();
+}
+function clearNotice() {
+  if (!notice) return;
+  noticeObserver?.disconnect();
+  noticeObserver = null;
+  notice.remove();
+  notice = null;
+  noticeHeight = null;
+  document.body.style.removeProperty('--voice-status-height');
+  if (globalThis.window?.dispatchEvent && globalThis.Event) window.dispatchEvent(new Event('resize'));
+}
 const discoverySynth = globalThis.speechSynthesis;
+function refresh(synth = discoverySynth) {
+  chosenVoice = pickVoice(synth?.getVoices?.() ?? []);
+  if (notice?.isConnected) {
+    if (chosenVoice && globalThis.SpeechSynthesisUtterance) {
+      notice.textContent = 'Voice ready. Press Hear again. Pictures and text still work.';
+      measureNotice();
+    } else showNotice();
+  }
+  return chosenVoice;
+}
 if (discoverySynth) {
-  const refresh = () => { chosenVoice = pickVoice(discoverySynth.getVoices?.() ?? []); };
   refresh();
-  if (discoverySynth.addEventListener) discoverySynth.addEventListener('voiceschanged', refresh);
+  if (discoverySynth.addEventListener) discoverySynth.addEventListener('voiceschanged', () => refresh());
   else {
     const previous = discoverySynth.onvoiceschanged;
     discoverySynth.onvoiceschanged = function (event) {
@@ -56,21 +109,29 @@ if (discoverySynth) {
 // Read-aloud through the browser's own voices. Return the utterance so callers can watch its end,
 // or false when speech is unavailable. The utterance remains truthy for callers checking success.
 export function speak(text) {
+  const current = ++request;
   const synth = globalThis.speechSynthesis;
-  if (!synth || !globalThis.SpeechSynthesisUtterance) return false;
+  if (!synth || !globalThis.SpeechSynthesisUtterance) { showNotice(); return false; }
   synth.cancel();
   const words = String(text ?? '').trim();
   if (!words) return false;
+  const selected = refresh(synth);
+  if (!selected) { showNotice(); return false; }
   const utterance = new globalThis.SpeechSynthesisUtterance(words);
-  if (chosenVoice && synth === discoverySynth) utterance.voice = chosenVoice;
+  utterance.voice = selected;
   utterance.lang = utterance.voice?.lang || 'en-US';
   utterance.rate = 0.95;
   utterance.pitch = 1.0;
   utterance.volume = 1.0;
-  synth.speak(utterance);
+  utterance.addEventListener('end', () => { if (current === request) clearNotice(); });
+  utterance.addEventListener('error', event => {
+    if (current === request && event.error !== 'canceled' && event.error !== 'interrupted') showNotice(true);
+  });
+  try { synth.speak(utterance); } catch { showNotice(true); return false; }
   return utterance;
 }
 
 export function stopSpeaking() {
+  ++request;
   globalThis.speechSynthesis?.cancel();
 }

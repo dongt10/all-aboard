@@ -96,6 +96,9 @@ export function soundsPanelMarkup(band, grade, selected) {
     </div>`;
 }
 
+const soundsTabId = id => `sounds-tab-${id}`;
+const SOUNDS_PANEL_ID = 'sounds-panel';
+
 // Which control to refocus after the panel is rebuilt under the keyboard.
 export function focusKey(dataset = {}) {
   if (dataset.tab) return `[data-tab="${dataset.tab}"]`;
@@ -142,13 +145,14 @@ export function openSoundsWindow(ctx, { getBand, getGrade, getSelected, onEdit, 
   };
   const body = document.createElement('div');
   body.className = 'sounds';
-  body.innerHTML = `<div class="sounds-tabs" role="tablist" aria-label="Musicians">${CAST.map(c => `<button type="button" role="tab" class="px-chip sounds-tab" data-tab="${c.id}" style="--musician:${MUSICIAN_COLORS[c.id]}"><i class="music-swatch"></i>${c.icon} ${c.name}</button>`).join('')}</div>
-    <div class="sounds-panel" role="tabpanel"></div>
+  body.innerHTML = `<div class="sounds-tabs" role="tablist" aria-label="Musicians">${CAST.map(c => `<button type="button" role="tab" id="${soundsTabId(c.id)}" aria-controls="${SOUNDS_PANEL_ID}" class="px-chip sounds-tab" data-tab="${c.id}" style="--musician:${MUSICIAN_COLORS[c.id]}"><i class="music-swatch"></i>${c.icon} ${c.name}</button>`).join('')}</div>
+    <div class="sounds-panel" role="tabpanel" id="${SOUNDS_PANEL_ID}"></div>
     <p class="sr-only sounds-feedback" aria-live="polite" aria-atomic="true"></p>`;
   const panel = body.querySelector('.sounds-panel');
   const feedback = body.querySelector('.sounds-feedback');
 
   function paint() {
+    panel.setAttribute('aria-labelledby', soundsTabId(selected));
     body.querySelectorAll('[data-tab]').forEach(tab => {
       const on = tab.dataset.tab === selected;
       tab.setAttribute('aria-selected', String(on));
