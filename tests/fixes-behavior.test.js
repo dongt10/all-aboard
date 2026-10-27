@@ -55,9 +55,10 @@ const slot = (stage, id) => stage.querySelectorAll('.cmd-slot').find(b => b.data
 const grade2 = () => ({ ...createState(), chapter: 1, grade: 2 });
 
 // ---- B1, B8: Music finishing ----
-test('music: B during the item-get card does not leave, and the band still gets published', async () => {
+test('music: B waits for the reward, then publication offers Guide and Village', async t => {
   const ctx = fakeCtx();
   const scene = createMusicScene(ctx);
+  t.after(() => scene.destroy());
   scene.mount();
   slot(ctx.stage, 'quiet').click();          // Send band waits for an edit or a play; See beat counts as a play
   slot(ctx.stage, 'save').click();
@@ -72,7 +73,10 @@ test('music: B during the item-get card does not leave, and the band still gets 
   card.querySelector('.item-get__go').click();
   await tick();
   assert.ok(getCreations(ctx.getState()).music, 'the band was published');
-  assert.deepEqual(ctx.gone, [['village', { focus: 'music', celebrate: 'music' }]]);
+  assert.deepEqual(ctx.gone, [], 'the completion hint stays visible until the child chooses');
+  assert.ok(slot(ctx.stage, 'guide'));
+  slot(ctx.stage, 'village').click(); await tick();
+  assert.deepEqual(ctx.gone, [['village', { focus: 'music' }]]);
   scene.destroy();
 });
 

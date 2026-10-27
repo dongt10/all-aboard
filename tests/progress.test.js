@@ -5,7 +5,7 @@ import { normalizeEncounterSnapshot } from '../src/encounters.js';
 import { createDefaultBand } from '../src/audio.js';
 const memoryStorage = () => { const map = new Map(); return { getItem:key=>map.get(key)??null, setItem:(key,value)=>map.set(key,value) }; };
 const sign = text => ({kind:'writing',text,chapter:0,grade:0});
-const banner = {kind:'art',chapter:0,grade:0,background:'#fff1cf',stamps:[{shape:'star',color:'#e96163',x:25,y:45,rotation:90}]};
+const banner = {kind:'art',chapter:0,grade:0,background:'#fff1cf',stamps:[{shape:'star',color:'#e96163',x:25,y:45,rotation:90,flipped:false}]};
 
 test('drafts survive without granting completion; publish preserves actual creation', () => {
   const original = createState();
@@ -529,7 +529,7 @@ test('Band autoplay defaults on for old saves and remembers an explicit stop', (
 test('editable presets round-trip with the child’s notes, form and zero volumes intact', () => {
   const storage = memoryStorage();
   const state = { ...createState(), chapter: 1, grade: 5 };
-  const band = { ...createDefaultBand(), preset: 'minecraft', chapter: 1, grade: 5, tempo: 60, form: 'ABA', masterVolume: 0 };
+  const band = { ...createDefaultBand(), preset: 'minecraft', chapter: 1, grade: 5, tempo: 60, form: 'ABA', masterVolume: 0, lesson: { played: false, echoed: false } };
   band.tracks[0].notes = [4, null, 2, null, 0, 1, null, 3];
   band.tracks[1].volume = 0;
   band.tracks[3].enabled = false;
@@ -546,5 +546,21 @@ test('old and unknown presets remain Meadow without inventing audible parts', ()
     const band = cleanCreation('music', { kind: 'music', preset, chapter: 0, grade: 0 });
     assert.equal(band.preset, 'meadow');
     assert.ok(band.tracks.every(track => !track.enabled && track.notes.every(note => note === null)));
+  }
+});
+
+test('art flip values are strictly normalized and survive draft and publication storage', () => {
+  for (const [value, expected] of [[true, true], [false, false], ['true', false], [undefined, false]]) {
+    const snapshot = { ...banner, stamps: [{ ...banner.stamps[0], flipped: value }] };
+    const cleaned = cleanCreation('art', snapshot);
+    const normalized = normalizeEncounterSnapshot('art', snapshot, 0, 0);
+    assert.equal(cleaned.stamps[0].flipped, expected);
+    assert.equal(normalized.stamps[0].flipped, expected);
+    const storage = memoryStorage();
+    assert.equal(saveState(saveDraft(createState(), 'art', snapshot), storage), true);
+    const loaded = loadState(storage);
+    assert.equal(getDraft(loaded, 'art').stamps[0].flipped, expected);
+    assert.equal(saveState(publishCreation(loaded, 'art', snapshot), storage), true);
+    assert.equal(getCreations(loadState(storage)).art.stamps[0].flipped, expected);
   }
 });

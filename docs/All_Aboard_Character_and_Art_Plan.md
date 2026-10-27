@@ -182,9 +182,13 @@ In the current static game, “backend” means the in-browser game logic that s
 
 ### Reference art is the source of truth
 
-The original design overrides all. Taro, Momo, Yuki and Fumi come from the team’s reference drawings in [docs/art/source/neighbors](art/source/neighbors): `ref-03.png`, `ref-08.png`, `ref-21.png` and `ref-22.png`, respectively. Their sheets are derived using [manifest.json](art/source/neighbors/manifest.json), never redrawn or recolored. The references are pinned by hash and never replaced; [tests/figures-references.test.js](../tests/figures-references.test.js) checks the drawings and derived pixels. To change the art, change the reference and the pinned hash on purpose.
+The original design overrides all. All nine manifest characters come from the team’s reference drawings in [docs/art/source/neighbors](art/source/neighbors): Taro (`ref-03.png`), Momo (`ref-08.png`), Yuki (`ref-21.png`), Fumi (`ref-22.png`), Sora (`ref-27.png`), Hana (`ref-25.png`), Kiko (`ref-26.png`), Pip (`ref-23.png`) and Nori (`ref-24.png`). Their sheets follow the recorded derivations in [manifest.json](art/source/neighbors/manifest.json). The references are pinned by hash; [tests/figures-references.test.js](../tests/figures-references.test.js) checks the drawings and derived pixels.
 
-Yuki and Fumi also have back views derived the same way. A character whose coat is not symmetric (Yuki's patches, Fumi's pocket tag) gets its own right-side recipe instead of a mirror.
+The recorded transforms sample each 4 × 4 source block at offset (0, 0), remove the listed swatch box, and remove either all matching background pixels (Taro) or only the border-connected background (the other eight). Alpha is snapped at the manifest’s threshold of 128. Momo drops sampled rows 21, 22, 24, 26 and 48; Hana drops rows 56 and 57. After row removal, the vertical shifts are Taro −4, Momo −1, Yuki −5, Fumi −5, Sora −5, Hana −4, Kiko −1, Pip −5 and Nori −4; horizontal shifts are zero. Feet end on row 56.
+
+Frame transforms keep walking changes within the recorded leg columns on rows 48–56 and joy changes within each eye box. Side stands have pinned hashes: Taro and Kiko use right-mirror columns [0, 1, 2], Momo uses [2, 1, 0], and Yuki, Fumi, Sora, Hana, Pip and Nori have separate right-side views. Yuki, Fumi, Sora, Hana and Kiko also have pinned back stands. The recorded color swaps are Taro #efa54e → #ff9a3c and Momo #aee2d6 → #3fcfbf; the other seven references keep their colors. These recorded transforms and color substitutions are pending team confirmation; this describes the current assets, not new permission to redraw or recolor them.
+
+All nine characters require intentional source-reference, pinned-hash and manifest derivation updates for art changes. Keep existing source drawings intact; do not directly edit a protected neighbor’s PNG to resolve a documentation inconsistency.
 
 ### Sprite sheets in the game (current)
 
@@ -198,7 +202,9 @@ Every character is drawn on the team’s **64 × 64 chibi canvas**, the one the 
 | **Columns** | Step A, stand, step B, joy | Joy is the happy face on the front row only. Non-walkers fill only the stand column. |
 | **Pixels** | Fully opaque or fully clear | No soft edges. Silhouette edges are dark outlines. |
 
-Sheets live in `assets/figures/` (`player-boy.png`, `player-girl.png`, then one per neighbor). For Taro, Momo, Yuki and Fumi, change the reference and pinned hash on purpose, then derive the sheet using the manifest; for other characters, edit their PNG in a pixel editor and keep the layout. `npm test` checks the reference hashes and transforms, size, feet row, outlines, and that no two characters share a silhouette. The source layers for the boy and girl are in `docs/art/source/`.
+Sheets live in `assets/figures/` (`player-boy.png`, `player-girl.png`, then one per neighbor). For all nine manifest characters, intentionally update the source-reference, pinned hash and manifest derivation before regenerating a sheet. `npm test` checks the reference hashes and transforms, size, feet row, outlines, and that no two characters share a silhouette.
+
+The boy and girl use separate source layers in `docs/art/source/`; edit those layers while preserving the player-sheet layout. Their source-layer workflow does not authorize direct edits to the nine protected neighbors’ PNGs.
 
 ### Original proposal
 

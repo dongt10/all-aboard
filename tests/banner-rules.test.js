@@ -9,7 +9,7 @@ import { cleanCreation } from '../src/progress.js';
 import { creationMarkup } from '../src/ui/creations.js';
 import { paginate, PAGE_CHARS } from '../src/ui/dialogue.js';
 
-const stamp = (cell, shape = 'star', color = '#e96163', rotation = 0) => ({ ...stampPosition(cell), shape, color, rotation });
+const stamp = (cell, shape = 'star', color = '#e96163', rotation = 0) => ({ ...stampPosition(cell), shape, color, rotation, flipped: false });
 const state = (grade, stamps = []) => ({ kind: 'art', chapter: grade ? 1 : 0, grade, background: '#fff1cf', stamps });
 const patternState = grade => state(grade, PATTERN_CELLS.map(cell => ({ ...stamp(cell), ...expectedAt(grade, cell) })));
 const mirrorState = grade => state(grade, [6, 11, 7, 10].map(cell => stamp(cell)).concat(grade >= 4 ? [stamp(12, 'circle', '#559fc7'), stamp(17, 'circle', '#559fc7')] : []));
@@ -83,7 +83,7 @@ test('mirror readiness requires matching pairs, four visible stamps, then six in
       assert.equal(bannerReady({ ...ready, stamps: ready.stamps.filter((_, index) => index !== i) }), false);
       for (const wrong of [{ shape: 'leaf' }, { color: '#6dbea0' }]) assert.equal(bannerReady({ ...ready, stamps: ready.stamps.map((s, index) => index === i ? { ...s, ...wrong } : s) }), false);
     }
-    assert.equal(bannerReady({ ...ready, stamps: ready.stamps.map((s, i) => ({ ...s, rotation: i * 45 })) }), true, 'matching is independent of turn');
+    assert.equal(bannerReady({ ...ready, stamps: ready.stamps.map((s, i) => ({ ...s, rotation: i * 45 })) }), false, 'turned silhouettes must mirror');
     assert.equal(bannerReady(state(grade, [stamp(6), stamp(11)])), false);
     if (grade >= 4) {
       assert.equal(bannerReady({ ...ready, stamps: ready.stamps.map(s => ({ ...s, color: '#e96163' })) }), false);
@@ -130,14 +130,14 @@ test('banner rule dialogue and grade help fit both page limits', () => {
   }
 });
 
-test('art previews derive the starting row before child art and draw the mirror fold only in grades 3–5', () => {
+test('finished art previews derive the starting row and never draw the editor fold', () => {
   for (let grade = 0; grade <= 5; grade++) {
     const draft = state(grade, [stamp(29)]), before = structuredClone(draft);
     const markup = creationMarkup('art', draft);
     assert.match(markup, /viewBox="0 0 100 65"/); assert.match(markup, /aria-label="Your painted festival banner"/);
     assert.doesNotMatch(markup, /<script|onload|NaN|Infinity|undefined|<image|<linearGradient/);
     assert.equal((markup.match(/<g transform="translate/g) ?? []).length, grade === 1 || grade === 2 ? 4 : 1);
-    assert.equal(markup.includes('creation-banner-fold'), grade >= 3);
+    assert.equal(markup.includes('creation-banner-fold'), false);
     if (grade === 1 || grade === 2) {
       assert.ok(markup.indexOf('translate(8 6)') < markup.indexOf('translate(92 50)'));
       assert.equal(creationMarkup('art', state(grade)).match(/<g transform="translate/g).length, yukiStamps(grade).length);
@@ -145,4 +145,16 @@ test('art previews derive the starting row before child art and draw the mirror 
     }
     assert.deepEqual(draft, before);
   }
+});
+
+test('mirror checks reflected silhouettes and actual rotational symmetry', () => {
+  const pair = (shape, leftTurn, rightTurn, flipped = false) => state(3, [stamp(6, shape, '#e96163', leftTurn), { ...stamp(11, shape, '#e96163', rightTurn), flipped }]);
+  assert.equal(symmetryReport(pair('leaf', 0, 0)).symmetric, false);
+  assert.equal(symmetryReport(pair('leaf', 0, 0, true)).symmetric, true);
+  assert.equal(symmetryReport(pair('star', 0, 45)).symmetric, false);
+  assert.equal(symmetryReport(pair('flower', 0, 180)).symmetric, true);
+  assert.equal(symmetryReport(pair('circle', 0, 90)).symmetric, true);
+  const invalid = { ...stamp(6), flipped: 'true' };
+  assert.equal(cleanCreation('art', state(3, [invalid])).stamps[0].flipped, false);
+  assert.equal(normalizeEncounterSnapshot('art', state(3, [invalid]), 3, 1).stamps[0].flipped, false);
 });

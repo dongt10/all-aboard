@@ -152,7 +152,7 @@ test('an earned guide page shows what the child made there', async () => {
 test('learnedText gives the planned sentence at every grade for every subject', () => {
   const expect = {
     math: ['Same number on both sides is equal.', 'Different crates can weigh the same.', 'Equal rows add up: 4 + 4 + 4 = 12.', 'Sharing equally is dividing: 8 ÷ 4 = 2 each.', 'Sharing equally is dividing: 12 ÷ 4 = 3 each.', 'A leftover can be split: 6 ÷ 4 = 1 and a half.'],
-    science: ['Shade keeps the sun off the ice.', 'Shade keeps the sun off the ice.', 'Plants need sun and water. Change one thing to test.', STAMP_CHAIN, 'A pond chain keeps one tenth at each step too.', 'Only 10% of energy moves up each step of a chain.'],
+    science: ['Shade keeps the sun off the ice.', 'Shade keeps the sun off the ice.', 'Plants need sun and water. Change one thing to test.', STAMP_CHAIN, 'This pond chart uses one tenth. Real transfer varies.', 'This chart uses 10% at each step. Real transfer varies.'],
     reading: ['Letters make a word you can read.', 'The story tells you what to pack.', 'Some stories have a lesson.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.', 'Clues in the text prove who a tale is about.'],
     writing: ['Words make a message for a reader.', 'Check capitals and marks in a message.', 'Check words and marks for your reader.', 'A reason tells your reader why.', 'Details and reasons help your reader.', 'Choose words for different readers.'],
     art: ['Shapes and colors make a design.', 'A pattern repeats: star, circle, star, circle.', 'A color pattern repeats: coral, blue, coral, blue.', ...Array(3).fill('A mirror design is the same on both sides.')],
@@ -178,7 +178,7 @@ test('the guide reads stamps with the current grade: chapter 0 is Kindergarten e
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 1 }).science, 'Shade keeps the sun off the ice.');
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 3 }).music, 'A tune can go up, down, or stay the same.');
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 5 }).music, 'A steady part holds up a changing tune.');
-  assert.equal(learnedAt({ ...k, chapter: 1, grade: 4 }).science, 'A pond chain keeps one tenth at each step too.');
+  assert.equal(learnedAt({ ...k, chapter: 1, grade: 4 }).science, 'This pond chart uses one tenth. Real transfer varies.');
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 4 }).math, 'Sharing equally is dividing: 12 ÷ 4 = 3 each.');
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 4 }).community, 'Every job needs the strength that fits it.');
   assert.equal(learnedAt({ ...k, chapter: 1, grade: 5 }).community, 'Ask about a strength before you hand out a job.');

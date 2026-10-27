@@ -1,3 +1,4 @@
+import { stampFilled, stampSource, yukiStamps } from '../banner-rules.js';
 import { pizzaCreationMarkup } from '../pizza.js';
 import { chainCreationMarkup } from '../chain.js';
 import { helpdayCreationMarkup } from '../helpday.js';
@@ -59,35 +60,20 @@ const PAINT_STEPS = {
 };
 const paintSteps = fill => PAINT_STEPS[fill.toLowerCase()] ?? [PAPER, '#4a4e7a'];
 
-// One row per pixel. Rotation is sampled back onto this grid so a 45-degree saved stamp never
-// introduces diagonal strokes or fractional coordinates. The border is one filled pixel, not a stroke.
-const STAMPS = {
-  circle: ['....#####....', '..#########..', '.###########.', '.###########.', '#############', '#############', '#############', '#############', '#############', '.###########.', '.###########.', '..#########..', '....#####....'],
-  star: ['......#......', '.....###.....', '.....###.....', '....#####....', '#############', '.###########.', '..#########..', '...#######...', '...#######...', '..#########..', '..####.####..', '.###.....###.', '.##.......##.'],
-  leaf: ['......######.', '....########.', '...#########.', '..##########.', '.###########.', '.###########.', '.##########..', '.##########..', '.#########...', '.########....', '.#######.....', '.#####.......', '###..........'],
-  heart: ['..###...###..', '.#####.#####.', '#############', '#############', '#############', '#############', '.###########.', '..#########..', '...#######...', '....#####....', '.....###.....', '......#......', '.............'],
-  flower: ['.....###.....', '....#####....', '....#####....', '.##.#####.##.', '#############', '#############', '#############', '#############', '#############', '.##.#####.##.', '....#####....', '....#####....', '.....###.....'],
-  diamond: ['......#......', '.....###.....', '....#####....', '...#######...', '..#########..', '.###########.', '#############', '.###########.', '..#########..', '...#######...', '....#####....', '.....###.....', '......#......'],
-};
-function stampShape(shape, fill, rotation) {
-  const rows = STAMPS[shape] ?? STAMPS.diamond, [light, shade] = paintSteps(fill);
-  const angle = (Number.isFinite(rotation) ? rotation % 360 : 0) * Math.PI / 180;
-  const cos = Math.cos(angle), sin = Math.sin(angle);
-  const inside = (x, y) => rows[Math.round(-x * sin + y * cos) + 6]?.[Math.round(x * cos + y * sin) + 6] === '#';
-  const toneAt = (x, y) => {
-    if (!inside(x, y)) return null;
-    const edge = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1);
-    const tone = edge ? INK : !inside(x - 2, y) || !inside(x, y - 2) ? light
-      : !inside(x + 2, y) || !inside(x, y + 2) ? shade : fill;
-    return shape === 'flower' && Math.abs(x) <= 1 && Math.abs(y) <= 1 ? LANTERN : tone;
-  };
+function stampShape(shape, fill, rotation, flipped) {
+  const [light, shade] = paintSteps(fill);
+  const inside = (x, y) => stampFilled(shape, x, y, rotation, flipped);
   const pixels = [];
-  for (let y = -9; y <= 9; y++) for (let x = -9; x <= 9;) {
-    const tone = toneAt(x, y), start = x++;
-    while (x <= 9 && toneAt(x, y) === tone) x++;
-    if (tone) pixels.push(rect(start, y, x - start, 1, tone));
+  for (let y = 0; y < 32; y++) for (let x = 0; x < 32; x++) {
+    if (!inside(x, y)) continue;
+    let tone = !inside(x - 1, y) || !inside(x + 1, y) || !inside(x, y - 1) || !inside(x, y + 1) ? INK
+      : !inside(x + 3, y) || !inside(x, y + 3) ? shade : !inside(x - 3, y) || !inside(x, y - 3) ? light : fill;
+    const [sx, sy] = stampSource(x, y, rotation, flipped);
+    if (tone !== INK && shape === 'flower' && sx >= 6 && sx <= 9 && sy >= 6 && sy <= 9) tone = sx === 6 || sy === 6 ? PAPER : '#f4bf4f';
+    if (tone !== INK && shape === 'leaf' && sx + sy === 15 && sx > 3 && sx < 12) tone = shade;
+    pixels.push(rect(x, y, 1, 1, tone));
   }
-  return pixels.join('');
+  return `<svg x="-7" y="-7" width="14" height="14" viewBox="0 0 32 32">${pixels.join('')}</svg>`;
 }
 
 export function creationMarkup(id, s = {}) {
@@ -102,11 +88,7 @@ export function creationMarkup(id, s = {}) {
   if (id === 'reading' && s.activity === 'tales' && solvedCount(s) > 0) return talesCreationMarkup(s);
   if (id === 'art') {
     // Yuki's starting row belongs to the grade, never to the saved stamps.
-    const pattern = s.grade === 1 ? [{ shape: 'star', color: '#e96163' }, { shape: 'circle', color: '#e96163' }]
-      : s.grade === 2 ? [{ shape: 'flower', color: '#e96163' }, { shape: 'flower', color: '#559fc7' }] : null;
-    const yuki = pattern ? [0, 1, 2].map(cell => ({ ...pattern[cell % 2], x: 8.33 + cell * 16.66, y: 10, rotation: 0 })) : [];
-    const stamps = [...yuki, ...(Array.isArray(s.stamps) ? s.stamps : [])];
-    const fold = s.grade >= 3 ? `<g class="creation-banner-fold">${Array.from({ length: 9 }, (_, i) => rect(49, 3 + i * 6, 2, 3, INK)).join('')}</g>` : '';
+    const stamps = [...yukiStamps(s.grade), ...(Array.isArray(s.stamps) ? s.stamps : [])];
     const fill = color(s.background, PAPER_SHADE), [light, shade] = paintSteps(fill);
     // A stepped, sewn hem: each 12px pennant ends at the same height as the original cloth.
     const hem = Array.from({ length: 100 }, (_, x) => 58 + Math.floor((6 - Math.abs(((x - 10 + 108) % 12) - 6)) / 2) * 2);
@@ -116,9 +98,11 @@ export function creationMarkup(id, s = {}) {
       + hem.map((bottom, x) => rect(x, 56, 1, bottom - 55, INK)
         + (x > 0 && x < 99 ? rect(x, 56, 1, Math.max(1, Math.min(bottom, hem[x - 1], hem[x + 1]) - 56), shade) : '')).join('')
       + Array.from({ length: 16 }, (_, i) => rect(3 + i * 6, 54, 3, 1, light)).join('');
-    return `<svg class="creation creation--art" viewBox="0 0 100 65" shape-rendering="crispEdges" aria-label="Your painted festival banner">${cloth}${fold}${stamps.slice(0, 60).map(t => {
+    const flippedCount = stamps.slice(0, 60).filter(stamp => stamp?.flipped === true).length;
+    const description = flippedCount ? `Your painted festival banner. ${flippedCount} flipped ${flippedCount === 1 ? 'stamp' : 'stamps'}.` : 'Your painted festival banner';
+    return `<svg class="creation creation--art" viewBox="0 0 100 65" shape-rendering="crispEdges" aria-label="${description}">${cloth}${stamps.slice(0, 60).map(t => {
       const x = Math.round(Math.max(5, Math.min(95, Number(t?.x) || 0))), y = Math.round(Math.max(5, Math.min(52, (Number(t?.y) || 0) * 0.55)));
-      return `<g transform="translate(${x} ${y})">${stampShape(t?.shape, color(t?.color, LANTERN), Number(t?.rotation) || 0)}</g>`;
+      return `<g transform="translate(${x} ${y})">${stampShape(t?.shape, color(t?.color, LANTERN), Number(t?.rotation) || 0, t?.flipped === true)}</g>`;
     }).join('')}${rect(0, 0, 100, 1, INK)}${rect(0, 1, 1, 57, INK)}${rect(99, 1, 1, 57, INK)}</svg>`;
   }
   if (id === 'music') {

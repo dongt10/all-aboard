@@ -166,10 +166,11 @@ test('exact grade 2 selects its activities before the unchanged grade bands', ()
   assert.deepEqual(cart.start(readyFor('math', 3), options), cart.start(null, options));
 });
 
-test('legacy snapshots retain their old shape and readiness at every grade', () => {
+test('legacy snapshots retain readiness and add plain stamp defaults at every grade', () => {
   for (const [chapter, grade] of SCOPES) for (const kind of Object.keys(READY)) {
     const input = { ...(['art', 'writing'].includes(kind) ? readyFor(kind, grade) : READY[kind]), grade, chapter };
-    assert.deepEqual(normalizeEncounterSnapshot(kind, input, grade, chapter), input);
+    const expected = kind === 'art' ? { ...input, stamps: input.stamps.map(stamp => ({ ...stamp, flipped: false })) } : input;
+    assert.deepEqual(normalizeEncounterSnapshot(kind, input, grade, chapter), expected);
     assert.equal(encounterReady(input), true);
   }
 });

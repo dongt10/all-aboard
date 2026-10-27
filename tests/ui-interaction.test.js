@@ -250,3 +250,34 @@ test('extra dialogue controls are opt-in', async t => {
   dialogue.say('Sora', 'A short new message.');
   assert.equal(doc.activeElement, host.querySelector('[data-act="hear"]'), 'replacing a paged message also keeps named focus');
 });
+
+test('dialogue announcement combines the current speaker and page, including repagination', async t => {
+  const { Doc } = await import('./helpers/dom.js');
+  const { createDialogue } = await import('../src/ui/dialogue.js');
+  const previous = globalThis.document, observer = globalThis.MutationObserver;
+  const doc = new Doc(); globalThis.document = doc;
+  let notify; globalThis.MutationObserver = class { constructor(fn) { notify = fn; } observe() {} disconnect() {} };
+  t.after(() => { globalThis.document = previous; globalThis.MutationObserver = observer; });
+  const host = doc.createElement('div'); doc.body.append(host);
+  let large = false;
+  const dialogue = createDialogue(host, { isLarge: () => large });
+  t.after(() => dialogue.destroy());
+  const announcement = host.querySelector('.dlg__announcement');
+  const text = host.querySelector('.dlg__text');
+  dialogue.say('Sora', 'First sentence has enough words to fill a page. Second sentence asks the important question. Third sentence gives another clue.');
+  assert.equal(announcement.textContent, `Sora: ${dialogue.current()}`);
+  assert.equal(text.getAttribute('aria-live'), null);
+  assert.equal(announcement.getAttribute('aria-live'), 'polite');
+  assert.equal(announcement.getAttribute('aria-atomic'), 'true');
+  host.querySelector('.dlg__more').click();
+  assert.equal(announcement.textContent, `Sora: ${dialogue.current()}`);
+  dialogue.say('Mika', 'Hello!');
+  assert.equal(announcement.textContent, 'Mika: Hello!');
+  dialogue.say('', 'Welcome!');
+  assert.equal(announcement.textContent, 'Welcome!');
+  dialogue.say('Mika', '  ');
+  assert.equal(announcement.textContent, '');
+  dialogue.say('Sora', 'First sentence fills this page. Second sentence asks the question.');
+  large = true; notify();
+  assert.equal(announcement.textContent, `Sora: ${dialogue.current()}`);
+});

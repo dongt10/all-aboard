@@ -1,13 +1,14 @@
 import { keyIntent } from '../input.js';
 import { icon } from '../icons.js';
 import { fitSignPreviews } from '../creations.js';
+import { stopSpeaking } from '../voice.js';
 
 let serial = 0;
 
 // Resolves true only when the child accepts, or false on cancellation. Callers must opt in
 // to editing again and reset their finishing state after a false result.
 // artHTML and figureHTML are trusted markup; the name is set as text.
-export function showItemGet(stage, { name, artHTML = '', figureHTML = '', allowEdit = false } = {}) {
+export function showItemGet(stage, { name, artHTML = '', figureHTML = '', allowEdit = false, speak = () => false, autoRead = false } = {}) {
   let cancel;
   const promise = new Promise(resolve => {
     const opener = document.activeElement;
@@ -25,7 +26,8 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '', allowE
         <button type="button" class="px-button item-get__inspect">Look closer</button>
         <p class="item-get__description" aria-live="polite">Look closer at your creation, or add it to the festival.</p>
         <div class="item-get__actions">
-          <button type="button" class="px-button px-button--finish item-get__go">${icon('play', { size: 22 })}<span>Add to fest</span></button>
+          <button type="button" class="px-button px-button--finish item-get__go">${icon('play', { size: 22 })}<span>Add to town</span></button>
+          <button type="button" class="px-button item-get__hear">${icon('hear', { size: 22 })}<span>Hear</span></button>
           ${allowEdit ? '<button type="button" class="px-button item-get__edit">Keep editing</button>' : ''}
         </div>
       </section>`;
@@ -34,7 +36,9 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '', allowE
     const button = card.querySelector('.item-get__go');
     const inspect = card.querySelector('.item-get__inspect');
     const edit = card.querySelector('.item-get__edit');
-    const controls = [inspect, button, ...(edit ? [edit] : [])];
+    const hear = card.querySelector('.item-get__hear');
+    const narration = `You made ${name ?? ''}! Choose Add to town for the festival.`;
+    const controls = [inspect, button, hear, ...(edit ? [edit] : [])];
     const dimmed = [...stage.children].filter(child => !child.inert);   // the scene behind can't take focus
     dimmed.forEach(child => { child.inert = true; });
 
@@ -43,6 +47,7 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '', allowE
     function finish(accepted) {
       if (done) return;
       done = true;
+      stopSpeaking();
       disposeSign();
       backdrop.remove();
       dimmed.forEach(child => { child.inert = false; });
@@ -51,6 +56,7 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '', allowE
     }
     cancel = () => finish(false);
     button.addEventListener('click', () => finish(true));
+    hear.addEventListener('click', () => speak(narration));
     edit?.addEventListener('click', () => finish(false));
     inspect.addEventListener('click', () => {
       const art = card.querySelector('.item-get__art');
@@ -86,6 +92,8 @@ export function showItemGet(stage, { name, artHTML = '', figureHTML = '', allowE
     stage.append(backdrop);
     disposeSign = fitSignPreviews(card.querySelector('.item-get__art'), 240, 164);
     button.focus({ preventScroll: true });
+    stopSpeaking();
+    if (autoRead) speak(narration);
   });
   promise.cancel = cancel;
   return promise;

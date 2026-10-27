@@ -49,12 +49,13 @@ export function cleanCreation(subjectId, input) {
     return { ...base, left: cargo(input.left), right: cargo(input.right), rolled: input.rolled === true };
   }
   if (subjectId === 'science') return { ...base, canopy: ['left', 'right', 'none'].includes(input.canopy) ? input.canopy : 'none', time: finite(input.time, 0, 20, 0) };
-  if (subjectId === 'art') return { ...base, background: safeColor(input.background), stamps: (Array.isArray(input.stamps) ? input.stamps : []).filter(stamp => isObject(stamp) && ['star', 'flower', 'leaf', 'circle'].includes(stamp.shape) && artColors.includes(stamp.color)).slice(0, 30).map(stamp => ({ shape: shortText(stamp.shape, 24), color: safeColor(stamp.color), x: finite(stamp.x, 5, 95), y: finite(stamp.y, 5, 95), rotation: finite(stamp.rotation, 0, 359) })) };
+  if (subjectId === 'art') return { ...base, background: safeColor(input.background), stamps: (Array.isArray(input.stamps) ? input.stamps : []).filter(stamp => isObject(stamp) && ['star', 'flower', 'leaf', 'circle'].includes(stamp.shape) && artColors.includes(stamp.color)).slice(0, 30).map(stamp => ({ shape: shortText(stamp.shape, 24), color: safeColor(stamp.color), x: finite(stamp.x, 5, 95), y: finite(stamp.y, 5, 95), rotation: finite(stamp.rotation, 0, 359), flipped: stamp.flipped === true })) };
   if (subjectId === 'reading') return { ...base, found: ['key', 'umbrella', 'book'].filter(value => Array.isArray(input.found) && input.found.includes(value)) };
   if (subjectId === 'writing') return { ...base, ...normalizeSign(input, base.grade) };
   if (subjectId === 'community') return { ...base, ...normalizeCommunityMap(input) };
   const trackIds = ['bass', 'voice', 'melody', 'percussion'];
-  return { ...base, preset: normalizePreset(input.preset), tempo: TEMPOS.includes(input.tempo) ? input.tempo : 90, form: FORMS.includes(input.form) ? input.form : 'A', masterVolume: finite(input.masterVolume, 0, 1, 0.45), tracks: trackIds.map(id => {
+  const lesson = { played: base.chapter === 0 && input.lesson?.played === true, echoed: base.chapter === 1 && base.grade === 2 && input.lesson?.echoed === true };
+  return { ...base, lesson, preset: normalizePreset(input.preset), tempo: TEMPOS.includes(input.tempo) ? input.tempo : 90, form: FORMS.includes(input.form) ? input.form : 'A', masterVolume: finite(input.masterVolume, 0, 1, 0.45), tracks: trackIds.map(id => {
     const track = Array.isArray(input.tracks) ? input.tracks.find(item => isObject(item) && item.id === id) : null;
     return { id, enabled: track?.enabled === true, pattern: track?.pattern === 1 ? 1 : 0, notes: Array.from({ length: 8 }, (_, index) => { const note = track?.notes?.[index]; return Number.isInteger(note) && note >= 0 && note <= 4 ? note : null; }), volume: finite(track?.volume, 0, 1, 0.65) };
   }) };

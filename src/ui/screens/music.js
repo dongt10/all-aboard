@@ -60,7 +60,7 @@ export function createMusicScene(ctx) {
   let root = null, menu = null, dialogue = null, engine = null, playback = null, sounds = null, presetWindow = null;
   let band = null, grade = 0, lead = null, selected = 'melody';
   let quiet = false, quietTimer = null, quietBand = null, quietBeat = 0, playedOnce = false;
-  let echoed = false, published = false;
+  let echoed = false, published = false, justPublished = false;
   let echo = null, echoCount = 0, echoToken = 0;   // echo: { mask, phase: 'demo' | 'copy', beat, timer }
   let destroyed = false, finishing = false;
   let presetUndo = null, audition = false, muteDialogue = false, suppressPlaybackLine = 0;
@@ -193,7 +193,10 @@ export function createMusicScene(ctx) {
   }
 
   // ---- Sound ----
-  function refreshMenu() { menu?.set(musicCommands({ playing: Boolean(playback?.active), quiet, edited: edited() })); }
+  function refreshMenu() {
+    const commands = musicCommands({ playing: Boolean(playback?.active), quiet, edited: edited() });
+    menu?.set(justPublished ? [commands[0], commands[1], { id: 'guide', label: 'Kiko’s page', icon: 'help' }, { id: 'village', label: 'Village', icon: 'back' }] : commands);
+  }
   function paintPreset() {
     const id = normalizePreset(band.preset), example = BAND_PRESETS[id];
     $('.music-preset__name').textContent = example.name;
@@ -291,7 +294,7 @@ export function createMusicScene(ctx) {
   // ---- Saving and editing ----
   const saveNow = () => {
     meaningful = true;
-    ctx.commit(saveDraft(ctx.getState(), 'music', withScope(band, ctx.getState())));
+    ctx.commit(saveDraft(ctx.getState(), 'music', withScope({ ...band, lesson: { played: playedOnce, echoed } }, ctx.getState())));
   };
   // Every edit (stage taps and the Sounds window alike) ends a running echo demo first, so the demo band
   // never picks up the change on its next beat.
@@ -299,6 +302,7 @@ export function createMusicScene(ctx) {
   function edit(next, { line, save = true } = {}) {
     interruptDemo();
     band = next;
+    justPublished = false;
     meaningful = true;
     engine.update(band);
     paintPreset();
@@ -393,12 +397,11 @@ export function createMusicScene(ctx) {
   }
 
   // Presets are editable band scores. Switching keeps the child's volume and chosen form; one Undo
-  // restores the entire previous score and Kindergarten's explicit playback credit.
+  // restores the entire previous score without changing lesson evidence.
   function choosePreset(id) {
     const preset = normalizePreset(id);
     if (preset === normalizePreset(band.preset)) return;
-    presetUndo = { band: sanitizeBandSnapshot(band), playedOnce };
-    playedOnce = false;
+    presetUndo = { band: sanitizeBandSnapshot(band) };
     const next = { ...defaultBandFor(grade, preset), masterVolume: band.masterVolume, form: band.form };
     edit(next);
     sayPlayback(`${BAND_PRESETS[preset].name} is your starting tune. Tap a friend or a lantern to make it yours.`);
@@ -408,7 +411,6 @@ export function createMusicScene(ctx) {
     if (!presetUndo) return;
     const previous = presetUndo;
     presetUndo = null;
-    playedOnce = previous.playedOnce;
     edit(previous.band);
     sayPlayback('Your previous band is back. Your edits are safe.');
   }
@@ -475,20 +477,26 @@ export function createMusicScene(ctx) {
     finishing = true;   // the card is up: B and Village wait for it
     const app = ctx.getState();
     const scope = { chapter: app.chapter, grade: app.grade, subjectId: 'music' };
-    const creation = withScope(band, scope);
-    reward = showItemGet(ctx.stage, { name: 'Festival band', artHTML: creationMarkup(scope.subjectId, creation), figureHTML: figureMarkup('music', { pose: 'joy', scale: 2 }) });
+    const creation = withScope({ ...band, lesson: { played: playedOnce, echoed } }, scope);
+    reward = showItemGet(ctx.stage, { name: 'Festival band', artHTML: creationMarkup(scope.subjectId, creation), figureHTML: figureMarkup('music', { pose: 'joy', scale: 2 }), speak: ctx.speak, autoRead: app.settings.autoRead });
     const accepted = await reward;
     reward = null;
     const current = ctx.getState();
     if (!accepted || destroyed || current.chapter !== scope.chapter || current.grade !== scope.grade) return;
     ctx.commit(publishCreation(current, scope.subjectId, creation));
-    await ctx.go('village', { focus: scope.subjectId, celebrate: scope.subjectId });
+    published = true;
+    justPublished = true;
+    finishing = false;
+    refreshMenu();
+    say('Kiko', 'Save song is on Kiko’s Guide page.');
   });
   function choose(id) {
     if (id === 'play') togglePlay();
     else if (id === 'quiet') toggleQuiet();
     else if (id === 'tunes') openSounds();
     else if (id === 'save') void finish();
+    else if (id === 'guide') { stopAll({ silent: true }); ctx.open.guide('music'); }
+    else if (id === 'village') void leave();
   }
   const onHidden = () => { if (document.hidden) stopAll(); };
   const onPageHide = () => stopAll();
@@ -526,6 +534,8 @@ export function createMusicScene(ctx) {
       lead = leadTrack(grade);
       const draft = getDraft(state, 'music');
       meaningful = Boolean(draft);
+      playedOnce = grade === 0 && draft?.lesson?.played === true;
+      echoed = grade === 2 && draft?.lesson?.echoed === true;
       band = sanitizeBandSnapshot(draft ?? defaultBandFor(grade));
       // Older saves acquire A when loaded; grade 4's locked form needs both phrases.
       if (grade === 4 && band.form === 'A') band.form = 'AB';

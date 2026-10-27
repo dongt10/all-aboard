@@ -48,7 +48,8 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
   root.className = 'dlg';
   root.tabIndex = -1;
   root.innerHTML = `<div class="px-frame dlg__frame">
-      <p class="dlg__text" aria-live="polite" aria-atomic="true"></p>
+      <p class="dlg__text"></p>
+      <p class="sr-only dlg__announcement" aria-live="polite" aria-atomic="true"></p>
       <p class="dlg__text dlg__measure" aria-hidden="true"></p>
       <button type="button" class="px-chip dlg__more" hidden><span class="dlg__arrow" aria-hidden="true"></span><span>More</span></button>
     </div>
@@ -61,6 +62,7 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
     </div>`;
   const text = root.querySelector('.dlg__text');
   const measure = root.querySelector('.dlg__measure');
+  const announcement = root.querySelector('.dlg__announcement');
   const fonts = document.fonts;
   const more = root.querySelector('.dlg__more');
   const tab = root.querySelector('.dlg__speaker');
@@ -77,6 +79,7 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
 
   function render() {
     text.textContent = queue[0] ?? '';
+    announcement.textContent = queue[0] ? [tab.textContent, queue[0]].filter(Boolean).join(': ') : '';
     const hasMore = queue.length > 1;
     const pagingFocused = document.activeElement === more || document.activeElement === skip;
     more.hidden = !hasMore;

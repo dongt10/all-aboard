@@ -209,11 +209,11 @@ function fakeCtx(state = createState()) {
   stage.className = 'stage';
   doc.body.append(stage);
   const ctx = {
-    stage, gone: [], commits: [],
+    stage, gone: [], commits: [], spoken: [],
     getState: () => state,
     commit(next) { ctx.commits.push(next); state = next; return state; },
     go(name, params) { ctx.gone.push([name, params]); return Promise.resolve(true); },
-    speak() {}, announce() {},
+    speak(text) { ctx.spoken.push(text); }, announce() {},
     open: { help() {} },
     scenes: { busy: false, pause() {} },
   };
@@ -303,7 +303,9 @@ for (const flow of flows) {
     const root = ctx.stage.querySelector(flow.rootSelector);
     const before = ctx.getState(), commits = ctx.commits.length;
     assert.equal(root.inert, true);
+    const cancellations = speech.cancels;
     scene.destroy();
+    assert.ok(speech.cancels > cancellations, 'teardown cancels speech');
     assert.equal(ctx.stage.querySelector('.item-get'), null);
     assert.equal(ctx.stage.children.length, 0, 'scene and reward both leave the stage');
     assert.equal(root.inert, false, 'the reward releases its inert sibling');
@@ -359,12 +361,19 @@ for (const flow of flows) {
       button.click();
       button.click();
       await tick();
-      finish.click();
-      await tick();
+      if (flow.name === 'encounter') { finish.click(); await tick(); }
       assert.equal(ctx.commits.length, commits + 1, 'exactly one publication commit');
-      assert.deepEqual(getCreations(ctx.getState()), { [flow.subjectId]: creation });
+      const published = getCreations(ctx.getState())[flow.subjectId];
+      if (flow.name === 'music') {
+        assert.deepEqual({ ...published, lesson: creation.lesson }, creation);
+        assert.ok(published.lesson, 'published music retains lesson evidence');
+      } else assert.deepEqual(published, creation);
       assert.equal(ctx.getState().settings.largeText, true, 'unrelated changes are preserved');
-      assert.deepEqual(ctx.gone, [['village', { focus: flow.subjectId, celebrate: flow.subjectId }]]);
+      if (flow.name === 'music') {
+        assert.deepEqual(ctx.gone, []);
+        assert.ok(slot(ctx.stage, 'guide'), 'Guide remains available after publication');
+        assert.equal(slot(ctx.stage, 'save'), undefined, 'Send band is replaced after publication');
+      } else assert.deepEqual(ctx.gone, [['village', { focus: flow.subjectId, celebrate: flow.subjectId }]]);
       assert.equal(ctx.stage.querySelector('.item-get'), null);
       assert.equal(ctx.stage.querySelector(flow.rootSelector).inert, false);
       scene.destroy();
@@ -418,3 +427,64 @@ for (const cancelBy of ['click', 'Escape', 'x', 'Backspace']) {
     assert.equal(ctx.gone.length, 1);
   });
 }
+
+test('reward narration is optional, repeatable, keyboard accessible, and stops on close', async () => {
+  for (const autoRead of [false, true]) {
+    const ctx = fakeCtx(), spoken = [], before = speech.cancels;
+    const reward = showItemGet(ctx.stage, { name: 'Your sign', allowEdit: true, autoRead, speak: line => spoken.push(line) });
+    const card = ctx.stage.querySelector('.item-get');
+    const hear = card.querySelector('.item-get__hear');
+    const line = 'You made Your sign! Choose Add to town for the festival.';
+    assert.equal(speech.cancels, before + 1);
+    assert.deepEqual(spoken, autoRead ? [line] : []);
+    assert.equal(card.querySelector('.item-get__go').textContent.includes('Add to town'), true);
+    hear.click(); hear.click();
+    hear.focus(); hear.dispatchEvent(new Event('keydown', { key: 'z' }));
+    assert.deepEqual(spoken.slice(-3), [line, line, line]);
+    assert.ok(ctx.stage.querySelector('.item-get'));
+    hear.dispatchEvent(new Event('keydown', { key: 'Tab' }));
+    assert.equal(doc.activeElement, card.querySelector('.item-get__edit'));
+    doc.activeElement.dispatchEvent(new Event('keydown', { key: 'Tab' }));
+    assert.equal(doc.activeElement, card.querySelector('.item-get__inspect'));
+    if (autoRead) card.querySelector('.item-get__go').click(); else reward.cancel();
+    assert.equal(await reward, autoRead);
+    assert.equal(speech.cancels, before + 2);
+  }
+});
+
+for (const flow of flows) for (const autoRead of [false, true]) {
+  test(`${flow.name} reward uses Read to me ${autoRead} and Hear stays open`, async t => {
+    const initial = flow.state ?? grade2();
+    const state = { ...initial, settings: { ...initial.settings, autoRead } };
+    const { ctx, card } = openReward(t, flow, state);
+    const expected = `You made ${flow.name === 'music' ? 'Festival band' : 'Festival sign'}! Choose Add to town for the festival.`;
+    const rewardLines = () => ctx.spoken.filter(line => line.startsWith('You made '));
+    assert.deepEqual(rewardLines(), autoRead ? [expected] : []);
+    card.querySelector('.item-get__hear').click();
+    assert.equal(rewardLines().at(-1), expected);
+    assert.ok(ctx.stage.querySelector('.item-get'));
+    assert.deepEqual(ctx.getState().progress, {});
+  });
+}
+
+test('reward focus cycles in both directions and leaves native Enter and Space activation to the browser', async () => {
+  for (const allowEdit of [false, true]) {
+    const ctx = fakeCtx(), spoken = [];
+    const reward = showItemGet(ctx.stage, { name: 'Sign', allowEdit, speak: text => spoken.push(text) });
+    const card = ctx.stage.querySelector('.item-get');
+    const controls = ['.item-get__inspect', '.item-get__go', '.item-get__hear', ...(allowEdit ? ['.item-get__edit'] : [])].map(s => card.querySelector(s));
+    controls[0].focus();
+    controls[0].dispatchEvent(new Event('keydown', { key: 'Tab', shiftKey: true }));
+    assert.equal(doc.activeElement, controls.at(-1));
+    doc.activeElement.dispatchEvent(new Event('keydown', { key: 'Tab' }));
+    assert.equal(doc.activeElement, controls[0]);
+    const hear = card.querySelector('.item-get__hear'); hear.focus();
+    for (const key of ['Enter', ' ']) {
+      const event = new Event('keydown', { key });
+      hear.dispatchEvent(event);
+      assert.equal(event.defaultPrevented, false, `${key} retains native button activation`);
+      assert.deepEqual(spoken, [], 'test DOM does not synthesize a native click');
+    }
+    reward.cancel(); await reward;
+  }
+});
