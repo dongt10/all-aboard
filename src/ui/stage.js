@@ -17,9 +17,20 @@ export function fitStage(viewportWidth, viewportHeight, safeArea = {}) {
 
 export function visibleViewport(host) {
   const view = host.visualViewport;
-  return view
+  const visible = view
     ? { width: view.width, height: view.height, left: view.offsetLeft, top: view.offsetTop, scale: view.scale ?? 1 }
     : { width: host.innerWidth, height: host.innerHeight, left: 0, top: 0, scale: 1 };
+  const active = host.document?.activeElement;
+  const editing = active?.matches('input, textarea, select') || active?.isContentEditable;
+  const standalone = host.navigator?.standalone || host.matchMedia?.('(display-mode: standalone), (display-mode: fullscreen)').matches;
+  if (standalone && visible.scale === 1 && !editing) {
+    // iOS Home Screen launches can retain Safari's old visual height and offsets.
+    // Only trust the larger layout height without browser bars, zoom, or a keyboard.
+    visible.height = Math.max(visible.height, host.document?.documentElement?.clientHeight || 0);
+    visible.left = 0;
+    visible.top = 0;
+  }
+  return visible;
 }
 
 export function applySettings(stage, settings = {}) {
@@ -45,6 +56,9 @@ export function mountStage(root) {
   let dismissed = playAnyway.get();
   let opener = null;
   let box = null;
+  let lastMeasurement = '';
+  let frame = null;
+  let timers = [];
   const button = card.querySelector('button');
   const usable = el => {
     if (!el?.isConnected || !stage.contains(el) || el.disabled || !el.getClientRects().length) return false;
@@ -59,19 +73,24 @@ export function mountStage(root) {
       // A restored tab may already be zoomed before the first fit. Establish its unzoomed
       // layout once, then let the browser magnify and pan it like any other page.
       if (view.scale > 1.01) view = { ...view, width: view.width * view.scale, height: view.height * view.scale, left: 0, top: 0 };
-      viewport.style.left = `${view.left}px`;
-      viewport.style.top = `${view.top}px`;
-      viewport.style.width = `${view.width}px`;
-      viewport.style.height = `${view.height}px`;
       const padding = window.getComputedStyle?.(viewport) ?? {};
-      box = fitStage(view.width, view.height, {
+      const safeArea = {
         left: parseFloat(padding.paddingLeft), right: parseFloat(padding.paddingRight),
         top: parseFloat(padding.paddingTop), bottom: parseFloat(padding.paddingBottom),
-      });
-      stage.style.transform = `translate(${box.left}px, ${box.top}px) scale(${box.scale})`;
-      // Phone backdrops extend the scene's flat color bands without changing its coordinates.
-      viewport.style.setProperty('--stage-top', `${box.top}px`);
-      viewport.style.setProperty('--stage-height', `${box.height}px`);
+      };
+      const measurement = [view.width, view.height, view.left, view.top, ...Object.values(safeArea)].join(',');
+      if (measurement !== lastMeasurement) {
+        viewport.style.left = `${view.left}px`;
+        viewport.style.top = `${view.top}px`;
+        viewport.style.width = `${view.width}px`;
+        viewport.style.height = `${view.height}px`;
+        box = fitStage(view.width, view.height, safeArea);
+        stage.style.transform = `translate(${box.left}px, ${box.top}px) scale(${box.scale})`;
+        // Phone backdrops extend the scene's flat color bands without changing its coordinates.
+        viewport.style.setProperty('--stage-top', `${box.top}px`);
+        viewport.style.setProperty('--stage-height', `${box.height}px`);
+        lastMeasurement = measurement;
+      }
     }
     if (!box) return;
     root.dataset.portrait = String(box.portrait);
@@ -88,6 +107,23 @@ export function mountStage(root) {
       opener = null;
     }
   }
+  function stopSettling() {
+    if (frame !== null) cancelAnimationFrame(frame);
+    frame = null;
+    timers.forEach(timer => clearTimeout(timer));
+    timers = [];
+  }
+  function settle() {
+    stopSettling();
+    fit();
+    // Launch, restore, and rotation can finish changing the viewport without a resize event.
+    frame = requestAnimationFrame(() => { frame = null; fit(); });
+    timers = [100, 300, 700, 1500].map(delay => setTimeout(fit, delay));
+  }
+  function onVisibilityChange() {
+    if (document.visibilityState === 'visible') settle();
+    else stopSettling();
+  }
   card.addEventListener('keydown', event => {
     if (event.key === 'Tab') { event.preventDefault(); button.focus(); }
   });
@@ -95,14 +131,24 @@ export function mountStage(root) {
   viewport.append(stage, card);
   root.append(viewport);
   window.addEventListener('resize', fit);
-  window.addEventListener('orientationchange', fit);
+  window.addEventListener('load', settle);
+  window.addEventListener('pageshow', settle);
+  window.addEventListener('orientationchange', settle);
+  window.addEventListener('visibilitychange', onVisibilityChange, true);
+  const orientation = window.screen?.orientation;
+  orientation?.addEventListener('change', settle);
   const visualViewport = window.visualViewport;
   visualViewport?.addEventListener('resize', fit);
   visualViewport?.addEventListener('scroll', fit);
-  fit();
+  settle();
   return { stage, destroy() {
+    stopSettling();
     window.removeEventListener('resize', fit);
-    window.removeEventListener('orientationchange', fit);
+    window.removeEventListener('load', settle);
+    window.removeEventListener('pageshow', settle);
+    window.removeEventListener('orientationchange', settle);
+    window.removeEventListener('visibilitychange', onVisibilityChange, true);
+    orientation?.removeEventListener('change', settle);
     visualViewport?.removeEventListener('resize', fit);
     visualViewport?.removeEventListener('scroll', fit);
     viewport.remove();
