@@ -7,7 +7,7 @@
 
 /* Stalls and the creations on display beside them */
 .village-stall { position: absolute; width: 128px; height: 80px; pointer-events: none; }
-.village-stall > svg { display: block; width: 128px; height: 80px; }
+.village-stall > img { display: block; width: 128px; height: 80px; image-rendering: pixelated; }
 .village-easel {
   position: absolute; width: 80px; height: 56px; display: grid; place-items: center; padding: 7px; box-sizing: border-box;
   background: var(--paper); border: 1px solid var(--ink); pointer-events: none;

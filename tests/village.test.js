@@ -165,6 +165,20 @@ test('stalls tell made, visited in an older save, and new apart', () => {
   assert.equal(stallState('music', {}, []), 'new');
 });
 
+test('each stall is its own crisp 128×80 sprite that stands on its bottom edge', async () => {
+  const { stallSVG } = await import('../src/ui/village-map.js');
+  for (const { id } of CHARACTERS) {
+    const src = stallSVG(id).match(/src="([^"]+)"/)[1];
+    assert.equal(src, `assets/village/stalls/${id}.png`);
+    const { width, height, rgba } = readPNG(new URL(`../${src}`, import.meta.url));
+    assert.deepEqual([width, height], [128, 80], id);
+    const solid = y => Array.from({ length: width }, (_, x) => rgba[(y * width + x) * 4 + 3]).some(a => a === 255);
+    assert.ok(solid(76) || solid(77), `${id} reaches the ground`);
+  }
+  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
+  assert.match(cssBlock(css, '.village-stall > img'), /width:\s*128px.*height:\s*80px.*image-rendering:\s*pixelated/);
+});
+
 test('saved creations render safely', () => {
   assert.match(creationMarkup('writing', { text: '<img src=x onerror=alert(1)>' }), /&lt;img src=x onerror=alert\(1\)&gt;/);
   const stamps = Array.from({ length: 30 }, (_, i) => ({ shape: 'star', color: i ? '#e96163' : 'url(javascript:alert(1))', x: i * 3, y: 50, rotation: 0 }));

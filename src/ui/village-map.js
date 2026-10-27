@@ -1,5 +1,4 @@
 // Village furniture and movement on the shared crossroads layout.
-import { INK, INK_SOFT, PAPER, PAPER_SHADE, WOOD, LANTERN, LETTERBOX, FINISH, SUBJECT_THEME } from './palette.js';
 import { VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, HUD_ZONES, EASELS, ROAD_MASK, STAGE } from './village-layout.js';
 import { maskFromRGBA, createWalkable } from './walkable.js';
 export { VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, HUD_ZONES } from './village-layout.js';
@@ -233,65 +232,7 @@ export function guideArrow(from, to) {
 
 /* ---------- Art ---------- */
 
-const rect = (x, y, w, h, fill) => `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${fill}"/>`;
-
-// Hand-picked steps of the festival tokens: light always comes from the upper left.
-const TIMBER = { base: WOOD, light: '#dca372', shade: '#885036' };
-const GOLD = { base: LANTERN, light: '#ffe69a', shade: '#c28b2c' };
-const SHEET = { base: PAPER, light: '#ffffff', shade: PAPER_SHADE };
-const CLOTH = {
-  math: { base: SUBJECT_THEME.math.color, light: '#ffcb87', shade: '#bd672e' },
-  science: { base: SUBJECT_THEME.science.color, light: '#98ead8', shade: '#258e89' },
-  art: { base: SUBJECT_THEME.art.color, light: '#ffc5dc', shade: '#bc568a' },
-  reading: { base: SUBJECT_THEME.reading.color, light: '#acd9ff', shade: '#3977b8' },
-  writing: { base: SUBJECT_THEME.writing.color, light: '#dbcbff', shade: '#7961b4' },
-  community: { base: SUBJECT_THEME.community.color, light: '#b9ec98', shade: '#4f934a' },
-  music: { base: SUBJECT_THEME.music.color, light: '#ffed9b', shade: '#b9932d' },
-};
-
-// Nested fills, never strokes: every outer edge occupies exactly one logical pixel.
-function panel(x, y, w, h, { base, light, shade }) {
-  return rect(x, y, w, h, INK) + rect(x + 1, y + 1, w - 2, h - 2, base)
-    + rect(x + 1, y + 1, w - 2, 1, light) + rect(x + 1, y + 2, 1, h - 3, light)
-    + rect(x + w - 2, y + 2, 1, h - 3, shade) + rect(x + 2, y + h - 2, w - 3, 1, shade);
-}
-
-function post(x, y, w, h) {
-  return panel(x, y, w, h, TIMBER) + rect(x + 2, y + h - 4, w - 3, 2, TIMBER.shade)
-    + rect(x + 2, y + 4, 1, 1, INK) + rect(x + w - 3, y + 10, 1, Math.min(8, h - 12), TIMBER.shade)
-    + rect(x + 2, y + h - 8, 1, 1, INK);
-}
-
-// One stall, 128×80, drawn in the subject color: an awning, posts, and a counter.
+// Each stall is a 128×80 pixel sprite painted by scripts/draw-stalls.js (re-run it after changing the art).
 export function stallSVG(id) {
-  const cloth = CLOTH[id] ?? GOLD;
-  const stripes = Array.from({ length: 8 }, (_, i) => {
-    const x = 8 + i * 14, tone = i % 2 ? SHEET : cloth;
-    return rect(x, 6, 14, 19, tone.base) + rect(x, 6, 14, 2, tone.light)
-      + rect(x + 1, 8, 2, 14, tone.light) + rect(x + 12, 8, 2, 17, tone.shade)
-      + rect(x, 23, 12, 2, tone.shade);
-  }).join('');
-  const scallops = Array.from({ length: 8 }, (_, i) => {
-    const x = 8 + i * 14, tone = i % 2 ? SHEET : cloth;
-    return rect(x, 25, 14, 4, INK) + rect(x + 2, 29, 10, 3, INK)
-      + rect(x + 1, 25, 12, 3, tone.base) + rect(x + 3, 28, 8, 3, tone.shade)
-      + rect(x + 1, 25, 10, 1, tone.light) + rect(x + 3, 29, 6, 1, tone.base);
-  }).join('');
-  return `<svg viewBox="0 0 128 80" width="128" height="80" shape-rendering="crispEdges" aria-hidden="true" focusable="false">`
-    + panel(20, 36, 88, 26, SHEET) + rect(22, 54, 84, 4, PAPER_SHADE)
-    + [28, 48, 76, 98].map(x => rect(x, 38, 2, 18, PAPER_SHADE)).join('')
-    + post(14, 30, 6, 32) + post(108, 30, 6, 32)
-    + panel(4, 2, 120, 30, TIMBER) + rect(7, 5, 114, 21, INK) + stripes + scallops
-    + panel(4, 2, 120, 4, TIMBER)
-    // Tiny wares read as a crate, a jar, a bottle and a folded cloth at village scale.
-    + panel(30, 44, 10, 12, cloth) + rect(34, 46, 1, 8, cloth.shade) + rect(32, 49, 6, 1, INK)
-    + panel(46, 46, 12, 10, GOLD) + panel(48, 44, 8, 4, TIMBER)
-    + panel(88, 45, 10, 11, { base: FINISH, light: '#3f9a72', shade: '#155c40' }) + panel(90, 42, 6, 5, TIMBER)
-    + panel(70, 48, 12, 8, { base: LETTERBOX, light: INK_SOFT, shade: INK }) + rect(72, 52, 8, 1, INK_SOFT)
-    + panel(6, 56, 116, 22, TIMBER) + panel(6, 56, 116, 7, TIMBER)
-    + rect(8, 74, 112, 3, TIMBER.shade)
-    + [34, 62, 90].map(x => rect(x, 63, 1, 12, TIMBER.shade) + rect(x + 1, 63, 1, 10, TIMBER.light)).join('')
-    + [12, 40, 68, 96].map(x => rect(x, 65, 1, 1, INK) + rect(x + 16, 72, 1, 1, INK)
-      + rect(x + 3, 68, 12, 1, TIMBER.shade) + rect(x + 6, 69, 6, 1, TIMBER.light)).join('')
-    + '</svg>';
+  return `<img src="assets/village/stalls/${id}.png" width="128" height="80" alt="" draggable="false" aria-hidden="true">`;
 }
