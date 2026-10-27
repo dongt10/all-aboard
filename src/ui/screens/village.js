@@ -1,5 +1,6 @@
 // Hanabi Bay, the bright overworld: stalls, wandering neighbors, the player, the HUD and the festival board.
 import { CHARACTERS } from '../../data.js';
+import { reactionLine } from '../../reactions.js';
 import { getCreations, getCompleted, getDraft, canStartParade } from '../../progress.js';
 import { SUBJECT_THEME } from '../palette.js';
 import { icon } from '../icons.js';
@@ -42,7 +43,6 @@ const helpPicture = page => [
   icon('star', { size: 56 }), icon('star', { size: 56 }), icon('map', { size: 56 }),
   '<span class="village-help__mark">!</span>', '<span class="village-help__mark">...</span>', icon('check', { size: 56 }),
 ][page];
-export const CELEBRATE_LINE = 'That’s going straight into the festival!';
 const A_KEYS = new Set(['Enter', ' ', 'z', 'Z']);
 const WALK_HINT = 'Walk up to a neighbor, then press Enter.';
 
@@ -70,10 +70,11 @@ export function talkKeyWins(near, { button = false, onRoot = false, inVillage = 
   return (button || onRoot) && inVillage && !inDialogue;
 }
 
-// Who speaks when the village opens: the neighbor whose creation was just made, else Pip's welcome while this
-// grade has nothing made yet, else nobody. Never moves focus; mount() keeps that on the player controls.
-export function openingLine({ creations = {}, celebrate = null } = {}) {
-  if (celebrate && CHARACTERS.some(c => c.id === celebrate)) return { id: celebrate, words: CELEBRATE_LINE };
+// A celebration may be voiced by another neighbor; otherwise Pip welcomes an empty grade.
+// Opening dialogue never moves focus from the player controls.
+export function openingLine({ creations = {}, celebrate = null, grade = 0 } = {}) {
+  const reaction = reactionLine(celebrate, creations?.[celebrate], grade);
+  if (reaction) return reaction;
   if (!Object.keys(creations ?? {}).length) return { id: 'pip', words: WELCOME_LINE };
   return null;
 }
@@ -669,8 +670,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       drawPlayer();
       drawTalk();
       drawFind();
-      const opening = openingLine({ creations: getCreations(state()), celebrate });
-      if (opening) { if (opening.id !== 'pip') sparkle(opening.id); say(opening.id, opening.words, { opening: true }); }   // nothing made yet: Pip says what to do
+      const opening = openingLine({ creations: getCreations(state()), celebrate, grade: state().chapter === 0 ? 0 : state().grade });
+      if (opening) { if (celebrate) sparkle(celebrate); say(opening.id, opening.words, { opening: true }); }   // nothing made yet: Pip says what to do
       if (findTarget) ctx.announce?.(`Find ${nameOf(findTarget)}. Follow the arrow.`);
       const button = focus && root.querySelector(`.village-actor[data-id="${focus}"]`);
       (button || root).focus({ preventScroll: true });   // the welcome never takes focus from the player controls

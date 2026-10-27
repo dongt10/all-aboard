@@ -306,15 +306,19 @@ test('a saved draft in this grade marks its stall started, and switching grade c
   assert.equal(statusOf(made, 'math'), 'made');
 });
 
-test('the village opens with the celebrated neighbor, else Pip\'s welcome until something is made, else quietly', async () => {
-  const { openingLine, WELCOME_LINE, CELEBRATE_LINE } = await import('../src/ui/screens/village.js');
-  assert.deepEqual(openingLine({ creations: {} }), { id: 'pip', words: WELCOME_LINE });
-  assert.deepEqual(openingLine(), { id: 'pip', words: WELCOME_LINE }, 'no arguments: a fresh grade');
-  assert.equal(openingLine({ creations: { math: { kind: 'math' } } }), null, 'once anything is made, Pip stays quiet');
-  assert.deepEqual(openingLine({ creations: {}, celebrate: 'art' }), { id: 'art', words: CELEBRATE_LINE }, 'a fresh creation speaks first, not the welcome');
-  assert.deepEqual(openingLine({ creations: { art: { kind: 'art' } }, celebrate: 'art' }), { id: 'art', words: CELEBRATE_LINE });
-  assert.deepEqual(openingLine({ creations: {}, celebrate: 'nobody' }), { id: 'pip', words: WELCOME_LINE }, 'an unknown celebrate id falls back');
-  assert.ok(CELEBRATE_LINE.length <= 56);
+test('village opening uses the saved creation and grade, then welcome or silence', async () => {
+  const { openingLine, WELCOME_LINE } = await import('../src/ui/screens/village.js');
+  const { reactionLine } = await import('../src/reactions.js');
+  const creation = { kind: 'art', background: '#e96163', stamps: [{ shape: 'star', color: '#559fc7', x: 10, y: 10, rotation: 0 }] };
+  assert.deepEqual(openingLine(), { id: 'pip', words: WELCOME_LINE });
+  assert.equal(openingLine({ creations: { art: creation } }), null);
+  assert.deepEqual(openingLine({ creations: { art: creation }, celebrate: 'art', grade: 3 }), reactionLine('art', creation, 3));
+  assert.match(openingLine({ creations: { art: creation }, celebrate: 'art', grade: 3 }).words, /1 stamp! Blue/);
+  assert.deepEqual(openingLine({ creations: {}, celebrate: 'art' }), reactionLine('art', undefined, 0));
+  assert.deepEqual(openingLine({ creations: {}, celebrate: 'nobody' }), { id: 'pip', words: WELCOME_LINE });
+  const sign = { kind: 'writing', scenario: 'invite-yuki', text: 'Yuki, join our parade! Bring your bright banner.' };
+  assert.equal(openingLine({ creations: { writing: sign }, celebrate: 'writing', grade: 3 }).id, 'art', 'the saved sign reader speaks');
+  assert.equal(openingLine({ creations: { writing: sign }, celebrate: 'writing', grade: 0 }).id, 'writing', 'the scenario must belong to this grade');
 });
 
 test('a started neighbor button shows three dots and says "Started. Tap to continue."', async () => {
@@ -598,7 +602,13 @@ for (const large of [false, true]) test(`a rebuilt village's creation celebratio
   const state = publishCreation(createState(), 'music', { kind: 'music' });
   const f = villageFixture(t, { state, celebrate: 'music', large });
   assert.equal(f.root.querySelector('.dlg__speaker').textContent, 'Kiko');
-  assert.equal(f.root.querySelector('.dlg__text').textContent, 'That’s going straight into the festival!');
+  assert.ok(f.root.querySelector('.dlg__text').textContent);
+  if (large) assert.equal(f.root.querySelector('.dlg__more').hidden, false, 'Bigger words has an unread page');
+  while (!f.root.querySelector('.dlg__more').hidden) {
+    clock.advance(60000);
+    assert.equal(f.root.querySelector('.village-dialogue').hidden, false, 'unread pages never auto-close');
+    f.root.querySelector('.dlg__more').click();
+  }
   clock.advance((large ? 6000 : 4000) - 1);
   assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
   clock.advance(1);

@@ -76,7 +76,7 @@ test('music: B waits for the reward, then publication offers Guide and Village',
   assert.deepEqual(ctx.gone, [], 'the completion hint stays visible until the child chooses');
   assert.ok(slot(ctx.stage, 'guide'));
   slot(ctx.stage, 'village').click(); await tick();
-  assert.deepEqual(ctx.gone, [['village', { focus: 'music' }]]);
+  assert.deepEqual(ctx.gone, [['village', { focus: 'music', celebrate: 'music' }]]);
   scene.destroy();
 });
 
