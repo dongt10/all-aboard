@@ -44,7 +44,7 @@ const FRY = [
 const CAST_NAMES = words('Taro Momo Sora Fumi Yuki Hana Kiko Pip Nori Cricket');
 export const DESCRIBING_WORDS = Object.freeze(['bright', 'warm', 'kind', 'happy', 'big', 'loud']);
 const FESTIVAL_WORDS = words(`hello hi hey welcome friend friends neighbor neighbors neighbour neighbours
-  Willow Bay lantern lanterns parade festival festivals drum drums banner banners sign signs stall stalls
+  Hanabi Bay lantern lanterns parade festival festivals drum drums banner banners sign signs stall stalls
   cart carts crate crates pizza pizzas stew ice map maps square bench benches garden gardens bay village
   villages summer matsuri tanuki rabbit otter fox cat deer sparrow duck turtle cricket carpenter chef
   storyteller writer designer guide musician courier helper kiosk band music song songs dance dancing

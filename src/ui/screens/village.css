@@ -1,4 +1,4 @@
-/* Willow Bay overworld. Everything is absolutely positioned on the 960×540 stage. */
+/* Hanabi Bay overworld. Everything is absolutely positioned on the 960×540 stage. */
 .village { position: absolute; inset: 0; isolation: isolate; overflow: hidden; background: var(--grass); outline: none; }
 .village:focus-visible { box-shadow: inset 0 0 0 4px var(--paper), inset 0 0 0 8px var(--ink); }
 .village-map { position: absolute; left: 0; top: 0; width: 960px; height: 540px; display: block; image-rendering: auto; }

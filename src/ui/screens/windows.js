@@ -106,7 +106,7 @@ export function openCreditsWindow(ctx) {
   return open(ctx, 'credits', {
     title: 'Credits',
     body: `<div class="credits-window">
-      <p>The team who brought Willow Bay to life.</p>
+      <p>The team who brought Hanabi Bay to life.</p>
       <dl class="credits-window__artists">
         <div><dt>Backend</dt>
           <dd>Dong · <a href="https://github.com/dongt10" target="_blank" rel="noopener noreferrer">@dongt10 on GitHub</a></dd>
