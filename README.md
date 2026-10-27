@@ -4,6 +4,16 @@
 
 All Aboard is a playable village adventure for **Kindergarten and grades 1–5**, designed with neurodivergent children in mind. Explore Willow Bay as it gets ready for a Japanese summer festival, meet animal neighbors in handheld-game encounter scenes, and put your own creations into the village and its parade.
 
+**[Play All Aboard in your browser](https://dongt10.github.io/all-aboard/)** — no installation needed.
+
+## Credits
+
+- **Backend:** [Dong (@dongt10)](https://github.com/dongt10) and [Isaac (@TerminatorLV)](https://github.com/TerminatorLV).
+- **Frontend — character art:** Alison ([@almixao on Instagram](https://www.instagram.com/almixao/)), who created the character artwork.
+- **Frontend — background art:** [Reem Amro (@reemamro08)](https://github.com/reemamro08), who created Willow Bay’s hand-drawn background.
+
+Choose **Credits** on the game’s title screen to meet the team. The musical reference credit for C418’s “Minecraft” remains in [Kiko’s music stage](#kikos-music-stage-by-grade) below.
+
 ## Quick start — play on your computer
 
 ### 1. Install Node.js
@@ -15,8 +25,8 @@ Install the **LTS version** from [nodejs.org](https://nodejs.org/en/download), t
 Open Terminal and paste:
 
 ```sh
-git clone https://github.com/dongt10/all-abroad.git
-cd all-abroad
+git clone https://github.com/dongt10/all-aboard.git
+cd all-aboard
 npm run dev
 ```
 

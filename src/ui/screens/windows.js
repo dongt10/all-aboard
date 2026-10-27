@@ -102,6 +102,27 @@ export function openComfortWindow(ctx) {
   return open(ctx, 'comfort', { title: 'Comfort', body });
 }
 
+export function openCreditsWindow(ctx) {
+  return open(ctx, 'credits', {
+    title: 'Credits',
+    body: `<div class="credits-window">
+      <p>The team who brought Willow Bay to life.</p>
+      <dl class="credits-window__artists">
+        <div><dt>Backend</dt>
+          <dd>Dong · <a href="https://github.com/dongt10" target="_blank" rel="noopener noreferrer">@dongt10 on GitHub</a></dd>
+          <dd>Isaac · <a href="https://github.com/TerminatorLV" target="_blank" rel="noopener noreferrer">@TerminatorLV on GitHub</a></dd>
+        </div>
+        <div><dt>Frontend</dt>
+          <dd>Alison · Character art · <a href="https://www.instagram.com/almixao/" target="_blank" rel="noopener noreferrer">@almixao on Instagram</a></dd>
+          <dd>Reem Amro · Background art · <a href="https://github.com/reemamro08" target="_blank" rel="noopener noreferrer">@reemamro08 on GitHub</a></dd>
+        </div>
+      </dl>
+      <p class="credits-window__note">Profile links open in a new tab.</p>
+    </div>`,
+    initialFocus: () => ctx.stage.querySelector('.win__close'),
+  });
+}
+
 export function openPauseWindow(ctx) {
   const body = document.createElement('div');
   body.className = 'pause-window';

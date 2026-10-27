@@ -1,7 +1,14 @@
-/* In-stage windows: Comfort, Paused, Grade, Matsuri Guide, Help. */
+/* In-stage windows: Comfort, Credits, Paused, Grade, Matsuri Guide, Help. */
 .win--grade { width: 880px; }
 .win--guide { width: 912px; height: 100%; }
 .win--help { width: 720px; }
+.win--credits { width: 800px; }
+.credits-window { display: grid; gap: 20px; }
+.credits-window__artists { display: grid; gap: 20px; margin: 0; }
+.credits-window__artists dt { font-weight: 700; color: var(--ink-soft); font-size: var(--text-command); }
+.credits-window__artists dd { margin: 4px 0 0; font-size: var(--text-command); }
+.credits-window a { color: var(--ink); text-underline-offset: 4px; }
+.credits-window__note { color: var(--ink-soft); font-size: var(--text-small); }
 
 .comfort-window { display: grid; gap: 12px; }
 .comfort-window .px-toggle { justify-content: space-between; }
