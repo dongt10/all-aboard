@@ -1,0 +1,87 @@
+/* Logical pixels on the existing 960×540 stage. Keep the phone reading floor
+   even when a grown-up switches Bigger words off; that setting still enlarges
+   the main text. All overrides are scoped to stage.js's phone classification. */
+.phone {
+  --text-small: 20px; --text-field: 20px; --text-name: 20px;
+  --text-command: 22px; --text-body: 24px; --text-title: 40px;
+}
+.phone.large-text {
+  --text-small: 20px; --text-field: 24px; --text-name: 24px;
+  --text-command: 26px; --text-body: 30px; --text-title: 40px;
+}
+
+/* The title's bottom row has 82px available; the grade tiles already have 96. */
+.phone .title__comfort .px-toggle,
+.phone .title-credits { min-height: 64px; }
+.phone .grade-tile__word,
+.phone .px-toggle__state { font-size: 20px; }
+
+/* 64px HUD minus its two 4px padding edges leaves exactly 56px. */
+.phone .village-hud__buttons .px-icon-button,
+.phone .village-grade,
+.phone .enc__back { min-height: 56px; }
+.phone .village-talk { min-height: 56px; }
+.phone .village-talk__key,
+.phone .village-badge__mark { font-size: 20px; }
+
+/* The board keeps its 428×84 outer box. The Parade button spans its existing
+   two rows; the label and seven pips stay in the left column. */
+.phone .village-board__title { grid-column: 1; }
+.phone .village-board__pips { grid-column: 1; grid-row: 2; }
+.phone .village-parade { grid-column: 2; grid-row: 1 / 3; min-height: 64px; }
+
+/* Four 56px command cells + 8px gap + 8px padding + 8px border = 136px. */
+.phone .cmd-frame { padding-top: 4px; padding-bottom: 4px; }
+.phone .cmd-slot { min-height: 56px; }
+.phone .cmd-slot__cursor,
+.phone .dlg__arrow::before { font-size: 20px; }
+.phone .enc__guidance button { min-height: 56px; }
+
+/* More grows upward from its existing bottom anchor. Reserve its space in
+   both the visible text and the hidden rendered-fit probe. No stage region or
+   tab anchor moves. The fixed y=512 Replay/Skip row has only 28px remaining. */
+.phone .enc .dlg__frame,
+.phone .music .dlg__frame,
+.phone .parade .dlg__frame { padding-top: 16px; padding-bottom: 44px; }
+.phone .enc .dlg__measure,
+.phone .music .dlg__measure,
+.phone .parade .dlg__measure { margin-top: 6px; margin-bottom: 36px; }
+.phone .enc .dlg__text,
+.phone .music .dlg__text,
+.phone .parade .dlg__text { line-height: 1.1; }
+.phone .enc .dlg__more,
+.phone .music .dlg__more,
+.phone .parade .dlg__more { min-height: 56px; }
+.phone .enc .dlg__tabs [data-act="replay"],
+.phone .enc .dlg__tabs [data-act="skip"] { min-height: 28px; line-height: 1; }
+
+/* Windows can scroll their existing body when the larger controls need it. */
+.phone .win__close,
+.phone .comfort-window .px-toggle,
+.phone .help-steps .px-icon-button,
+.phone .fullscreen-message__actions button,
+.phone .item-get__card button,
+.phone .pause-window__actions button,
+.phone .guide-page__actions button,
+.phone .music-presets button,
+.phone .rotate-card button { min-height: 64px; }
+.phone .win__head { flex-shrink: 0; }
+.phone .item-get__actions { gap: 8px; }
+.phone .item-get__actions button { padding-inline: 8px; }
+
+/* Keep the lantern rail and music scene coordinates. Lanterns grow downward
+   inside the rail; the two top-left controls share an edge at y=72. */
+.phone .music-back { min-height: 56px; }
+.phone .music-sign,
+.phone .music-lantern { min-height: 64px; }
+.phone .music-example__credit,
+.phone .music-zzz i { font-size: 20px; }
+.phone .sounds-tab,
+.phone .sounds-pattern,
+.phone .sounds-beat,
+.phone .sounds-level { min-height: 64px; }
+.phone .sounds-slider input { min-height: 56px; }
+.phone .sounds-hint__icon { font-size: 20px; }
+
+/* Sign word tiles already occupy 64px rows. The check row has 60px total. */
+.phone .sign-check { min-height: 56px; }

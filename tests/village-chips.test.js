@@ -10,19 +10,21 @@ import { declarations, resolveVars } from './helpers/css.js';
 const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8');
 const tokens = readFileSync(new URL('../src/ui/tokens.css', import.meta.url), 'utf8');
 const kit = readFileSync(new URL('../src/ui/kit.css', import.meta.url), 'utf8');
+const phoneCSS = readFileSync(new URL('../src/ui/phone.css', import.meta.url), 'utf8');
 
 // The fake DOM has no font renderer. Supply deliberately roomy border-box fixtures;
 // runtime uses actual offset sizes, never these estimates. CSS determines both text sizes.
-function fixture(specs, large = false) {
+function fixture(specs, large = false, phone = false) {
   const doc = new Doc(), fonts = new Target();
   let reads = 0;
-  const variables = () => ({ ...declarations(tokens, ':root'), ...(large ? declarations(tokens, '.large-text') : {}) });
+  const variables = () => ({ ...declarations(tokens, ':root'), ...(large ? declarations(tokens, '.large-text') : {}),
+    ...(phone ? declarations(phoneCSS, '.phone') : {}), ...(phone && large ? declarations(phoneCSS, '.phone.large-text') : {}) });
   const fontSize = () => parseFloat(resolveVars(declarations(css, '.village-name')['font-size'], variables()));
   let extraWidth = 0;
-  const measure = el => {
+  const measure = (el, isTalk = false) => {
     Object.defineProperties(el, {
       offsetWidth: { get() { reads++; return Math.ceil(el.textContent.length * fontSize() * .65 + 24 + extraWidth); } },
-      offsetHeight: { get() { reads++; return Math.ceil(fontSize() * Number(declarations(kit, '.px-chip')['line-height']) + 12); } },
+      offsetHeight: { get() { reads++; return Math.max(isTalk && phone ? parseFloat(declarations(phoneCSS, '.phone .village-talk')['min-height']) : 0, Math.ceil(fontSize() * Number(declarations(kit, '.px-chip')['line-height']) + 12)); } },
     });
     return el;
   };
@@ -34,7 +36,7 @@ function fixture(specs, large = false) {
     measure(el.querySelector('.village-name'));
     return { id, el, pos: { x, y } };
   });
-  const talk = measure(doc.createElement('button'));
+  const talk = measure(doc.createElement('button'), true);
   talk.textContent = 'Enter · Talk to Pip';
   const layout = createVillageChipLayout(actors, talk, () => large, fonts);
   const boxes = (near = null) => actors.map(a => {
@@ -50,10 +52,10 @@ const check = boxes => boxes.forEach((box, i) => {
   boxes.slice(i + 1).forEach(other => assert.equal(overlaps(box, other), false, JSON.stringify([box, other])));
 });
 
-for (const large of [false, true]) {
-  test(`close Sora/Yuki chips stagger with ${large ? 'Bigger' : 'normal'} words`, () => {
-    const f = fixture([{ id: 'reading', x: 400, y: 250 }, { id: 'art', x: 480, y: 250 }], large);
-    assert.equal(f.fontSize(), large ? 20 : 16);
+for (const phone of [false, true]) for (const large of [false, true]) {
+  test(`close Sora/Yuki chips stagger with ${large ? 'Bigger' : 'normal'} words${phone ? ' on phone' : ''}`, () => {
+    const f = fixture([{ id: 'reading', x: 400, y: 250 }, { id: 'art', x: 480, y: 250 }], large, phone);
+    assert.equal(f.fontSize(), phone ? 20 : (large ? 20 : 16));
     f.layout.update(null);
     const boxes = f.boxes();
     check(boxes);
@@ -65,8 +67,8 @@ for (const large of [false, true]) {
     f.layout.destroy();
   });
 
-  test(`lone chip stays centred with ${large ? 'Bigger' : 'normal'} words`, () => {
-    const f = fixture([{ id: 'reading', x: 400, y: 250 }], large);
+  test(`lone chip stays centred with ${large ? 'Bigger' : 'normal'} words${phone ? ' on phone' : ''}`, () => {
+    const f = fixture([{ id: 'reading', x: 400, y: 250 }], large, phone);
     f.layout.update(null);
     const [box] = f.boxes();
     assert.equal(box.x + box.w / 2, 400);
@@ -74,8 +76,8 @@ for (const large of [false, true]) {
     f.layout.destroy();
   });
 
-  test(`Talk replaces Pip's name and avoids other chips with ${large ? 'Bigger' : 'normal'} words`, () => {
-    const f = fixture([{ id: 'reading', x: 400, y: 250 }, { id: 'pip', x: 470, y: 252 }, { id: 'art', x: 550, y: 250 }], large);
+  test(`Talk replaces Pip's name and avoids other chips with ${large ? 'Bigger' : 'normal'} words${phone ? ' on phone' : ''}`, () => {
+    const f = fixture([{ id: 'reading', x: 400, y: 250 }, { id: 'pip', x: 470, y: 252 }, { id: 'art', x: 550, y: 250 }], large, phone);
     f.layout.update('pip');
     check(f.boxes('pip'));
     assert.equal(parseFloat(f.talk.style.left), 470);
@@ -87,17 +89,17 @@ for (const large of [false, true]) {
     f.layout.destroy();
   });
 
-  test(`stage edges and crowded rows stay readable with ${large ? 'Bigger' : 'normal'} words`, () => {
+  test(`stage edges and crowded rows stay readable with ${large ? 'Bigger' : 'normal'} words${phone ? ' on phone' : ''}`, () => {
     for (const x of [10, 480, 950]) {
-      const f = fixture(CHARACTERS.map(c => ({ id: c.id, x, y: 510 })), large);
+      const f = fixture(CHARACTERS.map(c => ({ id: c.id, x, y: 510 })), large, phone);
       f.layout.update(null);
       check(f.boxes());
       f.layout.destroy();
     }
   });
 
-  test(`all village wander bounds avoid chip collisions with ${large ? 'Bigger' : 'normal'} words`, () => {
-    const f = fixture(Object.entries({ ...VILLAGE_SPOTS, ...SIDE_SPOTS }).map(([id, p]) => ({ id, ...p })), large);
+  test(`all village wander bounds avoid chip collisions with ${large ? 'Bigger' : 'normal'} words${phone ? ' on phone' : ''}`, () => {
+    const f = fixture(Object.entries({ ...VILLAGE_SPOTS, ...SIDE_SPOTS }).map(([id, p]) => ({ id, ...p })), large, phone);
     for (const tx of [0, .5, 1]) for (const ty of [0, .5, 1]) {
       f.actors.forEach(a => {
         const b = wanderBounds(a.id);

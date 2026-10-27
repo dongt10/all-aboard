@@ -170,5 +170,8 @@ export function createApp(root, { scenes = {}, storage } = {}) {
       unmountStage();
     },
   };
+  if (loaded.status === 'empty' && stage.classList.contains('phone')) {
+    ctx.commit({ ...state, settings: { ...state.settings, largeText: true } });
+  }
   return ctx;
 }
