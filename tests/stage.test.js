@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { fitStage, visibleViewport, mountStage, applySettings } from '../src/ui/stage.js';
+import { fitStage, visibleViewport, mountStage, applySettings, isPhone } from '../src/ui/stage.js';
+import { createApp } from '../src/ui/app.js';
+import { STORAGE_KEY, createState } from '../src/progress.js';
 import { Doc, Target, Event } from './helpers/dom.js';
 import { readPNG } from './helpers/png.js';
 import { serve } from '../server.js';
@@ -13,6 +15,20 @@ const phones = [
   ['iPhone 17e', 874, 402, 47],
   ['small iPhone', 667, 375, 0],
 ];
+
+test('phone detection excludes tablets and desktop windows', () => {
+  const view = { width: 874, height: 402 }, box = fitStage(view.width, view.height);
+  const device = (userAgent, width, height, coarse = true, maxTouchPoints = 0) => ({
+    navigator: { userAgent, maxTouchPoints }, screen: { width, height }, matchMedia: () => ({ matches: coarse }),
+  });
+  for (const [width, height] of [[402, 874], [440, 956]]) {
+    assert.equal(isPhone(device('Mozilla iPhone', width, height), view, box), true);
+  }
+  for (const host of [device('Mozilla iPad', 744, 1133), device('Mozilla Macintosh', 744, 1133, true, 5),
+    device('Mozilla Macintosh', 1920, 1080), device('Mozilla Windows', 1920, 1080), device('Mozilla iPhone', 402, 874, false)]) {
+    assert.equal(isPhone(host, view, box), false);
+  }
+});
 // Insets and toolbar heights are fixtures, not a table of browser/device constants.
 // Production always reads the viewport and CSS env values from the device.
 for (const [name, width, height, side] of phones) {
@@ -80,6 +96,52 @@ function install(t, visual = true) {
   return { doc, win, viewport, orientation, frames, timers, paint, tick };
 }
 
+test('phone classes and scale follow fit and coarse pointer changes', t => {
+  const { doc, win, viewport } = install(t);
+  const coarse = new Target(); coarse.matches = true;
+  win.matchMedia = query => query === '(pointer: coarse)' ? coarse : { matches: false };
+  win.navigator = { userAgent: 'iPhone' };
+  Object.assign(win.screen, { width: 440, height: 956 });
+  const handle = mountStage(doc.body), host = handle.stage.parentElement;
+  const expected = fitStage(956, 340, { left: 62, right: 62, bottom: 21 });
+  assert.equal(host.classList.contains('phone'), true);
+  assert.equal(handle.stage.classList.contains('phone'), true);
+  assert.equal(host.style['--stage-scale'], String(expected.scale));
+  assert.equal(handle.stage.style['--stage-scale'], String(expected.scale));
+  coarse.matches = false; coarse.fire(new Event('change'));
+  assert.equal(host.classList.contains('phone'), false);
+  assert.equal(handle.stage.classList.contains('phone'), false);
+  coarse.matches = true; viewport.fire(new Event('resize'));
+  assert.equal(host.classList.contains('phone'), true);
+  handle.destroy();
+  assert.equal(coarse.listeners.change.length, 0);
+});
+
+test('phone first launch saves larger text once and preserves existing settings', t => {
+  const { doc, win } = install(t);
+  win.navigator = { userAgent: 'iPhone' };
+  Object.assign(win.screen, { width: 440, height: 956 });
+  win.matchMedia = query => ({ matches: query === '(pointer: coarse)' });
+  const data = new Map(); let writes = 0;
+  const storage = { getItem: key => data.get(key) ?? null, setItem: (key, value) => { writes++; data.set(key, value); } };
+  let app = createApp(doc.body, { storage });
+  assert.equal(app.getState().settings.largeText, true);
+  assert.equal(JSON.parse(data.get(STORAGE_KEY)).settings.largeText, true);
+  assert.equal(writes, 1); assert.equal(app.saveOk, true);
+  app.destroy();
+  data.set(STORAGE_KEY, JSON.stringify(createState()));
+  app = createApp(doc.body, { storage });
+  assert.equal(app.getState().settings.largeText, false);
+  assert.equal(writes, 1);
+  app.destroy();
+  data.delete(STORAGE_KEY);
+  data.set('all-aboard-demo-v1', JSON.stringify({ ...createState(), version: 1 }));
+  app = createApp(doc.body, { storage });
+  assert.equal(app.getState().settings.largeText, false);
+  assert.equal(writes, 1);
+  app.destroy();
+});
+
 test('mounted stage follows visible resize and scroll offsets, applies safe areas, and tears down', t => {
   const { doc, win, viewport, orientation, frames, timers } = install(t);
   const handle = mountStage(doc.body), host = handle.stage.parentElement;
@@ -127,12 +189,12 @@ test('startup settling corrects stale measurements without resize and skips unch
   doc.documentElement.clientHeight = 440;
   tick(1200);
   assert.equal(host.style.height, '440px');
-  assert.equal(writes, 2);
+  assert.equal(writes, 4);
   assert.equal(frames.size, 0);
   assert.equal(timers.size, 0, 'settling ends after 1.5 seconds');
   viewport.height = 440;
   viewport.fire(new Event('resize'));
-  assert.equal(writes, 2, 'visual viewport catching up needs no duplicate layout');
+  assert.equal(writes, 4, 'visual viewport catching up needs no duplicate layout');
   handle.destroy();
 });
 

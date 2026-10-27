@@ -15,6 +15,18 @@ export function fitStage(viewportWidth, viewportHeight, safeArea = {}) {
   return { scale, width, height, left: left + (availableWidth - width) / 2, top: top + (availableHeight - height) / 2, portrait: viewportHeight > viewportWidth };
 }
 
+// A small window on a tablet or desktop is not a phone. Require a phone-like
+// user agent as well as touch, and exclude iPadOS's desktop-style user agent.
+export function isPhone(host, view, box) {
+  const ua = host.navigator?.userAgent ?? '';
+  const ipad = /iPad/i.test(ua) || (/Macintosh/i.test(ua) && (host.navigator?.maxTouchPoints ?? 0) > 1);
+  const mobile = /iPhone|iPod|Android.+Mobile/i.test(ua);
+  const screen = host.screen;
+  const screenShort = Math.min(screen?.width || Infinity, screen?.height || Infinity);
+  return !ipad && mobile && screenShort < 600 && Boolean(host.matchMedia?.('(pointer: coarse)').matches)
+    && (box.scale < 0.75 || Math.min(view.width, view.height) < 600);
+}
+
 export function visibleViewport(host) {
   const view = host.visualViewport;
   const visible = view
@@ -74,6 +86,7 @@ export function mountStage(root) {
   let lastMeasurement = '';
   let frame = null;
   let timers = [];
+  const coarse = window.matchMedia?.('(pointer: coarse)');
   const button = card.querySelector('button');
   const usable = el => {
     if (!el?.isConnected || !stage.contains(el) || el.disabled || !el.getClientRects().length) return false;
@@ -106,6 +119,8 @@ export function mountStage(root) {
         viewport.style.height = `${view.height}px`;
         box = fitStage(view.width, view.height, safeArea);
         stage.style.transform = `translate(${box.left}px, ${box.top}px) scale(${box.scale})`;
+        stage.style.setProperty('--stage-scale', String(box.scale));
+        viewport.style.setProperty('--stage-scale', String(box.scale));
         // Phone backdrops extend the scene's flat color bands without changing its coordinates.
         viewport.style.setProperty('--stage-top', `${box.top}px`);
         viewport.style.setProperty('--stage-height', `${box.height}px`);
@@ -113,6 +128,9 @@ export function mountStage(root) {
       }
     }
     if (!box) return;
+    const phone = isPhone(window, view, box);
+    stage.classList.toggle('phone', phone);
+    viewport.classList.toggle('phone', phone);
     root.dataset.portrait = String(box.portrait);
     const showCard = box.portrait && !dismissed;
     if (showCard && card.hidden) opener = document.activeElement;
@@ -160,6 +178,7 @@ export function mountStage(root) {
   const visualViewport = window.visualViewport;
   visualViewport?.addEventListener('resize', fit);
   visualViewport?.addEventListener('scroll', fit);
+  coarse?.addEventListener?.('change', fit);
   settle();
   return { stage, destroy() {
     stopSettling();
@@ -171,6 +190,7 @@ export function mountStage(root) {
     orientation?.removeEventListener('change', settle);
     visualViewport?.removeEventListener('resize', fit);
     visualViewport?.removeEventListener('scroll', fit);
+    coarse?.removeEventListener?.('change', fit);
     body.style.width = bodySize.width;
     body.style.height = bodySize.height;
     body.classList.remove('standalone-screen');
