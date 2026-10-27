@@ -114,7 +114,9 @@ test('reactions describe facts in each saved activity', () => {
     if (grade === 2) assert.match(art, /color pattern/i);
     if (grade >= 3) assert.match(art, /mirror/i);
     const writing = creation('writing', grade), reply = reactionLine('writing', writing, grade);
-    assert.match(reply.words, new RegExp(`\\b${writing.text.trim().split(/\s+/).length} words?\\b`));
+    const signText = writing.text.replace(/\s+/g, ' ').trim();
+    if (signText.length <= 40) assert.ok(reply.words.includes(`It says: ${signText}`), reply.words);
+    else assert.match(reply.words, new RegExp(`\\b${signText.split(' ').length} words?\\b`));
     assert.equal(reply.id, grade <= 2 ? 'science' : 'art');
     const community = say('community');
     if (grade < 2) { assert.match(community, /bench/i); if (grade) assert.match(community, /garden/i); }
@@ -140,14 +142,16 @@ test('sign readers and music silence follow saved details', () => {
   assert.match(reactionLine('science', noWater, 2).words, /no water/i);
 });
 
-test('each sign scenario addresses its saved reader and counts its words', () => {
+test('each sign scenario addresses its saved reader and reads a short sign back', () => {
   const readers = { Momo: 'science', Taro: 'math', Sora: 'reading', Yuki: 'art', Fumi: 'writing', Hana: 'community', Kiko: 'music', 'Kiko and the band': 'music', Pip: 'pip', Nori: 'nori' };
   for (const scenario of SIGN_SCENARIOS) for (const grade of scenario.grades) {
     const saved = clean('writing', grade, { scenario: scenario.id, text: scenario.example });
     const reaction = reactionLine('writing', saved, grade);
     check(reaction);
     assert.equal(reaction.id, readers[scenario.reader] ?? 'writing', scenario.id);
-    assert.match(reaction.words, new RegExp(`\\b${saved.text.trim().split(/\s+/).length} words?\\b`), scenario.id);
+    const signText = saved.text.replace(/\s+/g, ' ').trim();
+    if (signText.length <= 40) assert.ok(reaction.words.includes(`It says: ${signText}`), scenario.id);
+    else assert.match(reaction.words, new RegExp(`\\b${signText.split(' ').length} words?\\b`), scenario.id);
   }
 });
 

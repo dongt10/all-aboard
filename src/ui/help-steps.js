@@ -45,7 +45,7 @@ export function stepIndex(activity, state, ui = {}, grade = state?.grade) {
     case 'writing': index = state.text?.trim() ? 1 : 0; break;
     case 'community': { const needs = squareSteps(state).slice(0, -1); index = needs.every(s => s.done) ? 2 : needs.some(s => s.done) ? 1 : 0; break; }
     case 'reading': {
-      const found = normalizeReadingFound(state.found);
+      const found = normalizeReadingFound(state.found, state.request);
       index = found.includes(ui?.review) ? 2 : found.length ? 1 : 0;
       break;
     }

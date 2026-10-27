@@ -5,12 +5,12 @@ import { rowsReady, rowsReport } from './rows.js';
 import { pizzaReady, shareWords } from './pizza.js';
 import { beansReady, TILE_NAMES } from './beans.js';
 import { CARD_WORDS, ENERGY_TILES } from './chain.js';
-import { READING_ITEMS, READING_LABELS } from './reading.js';
+import { READING_LABELS, readingItems } from './reading.js';
 import { STORIES, ribbonReady } from './ribbon.js';
 import { TALE_DECKS, TALE_CAST } from './tales.js';
 import { STAMP_FORMS, patternReport, symmetryReport } from './banner-rules.js';
 import { scenarioById } from './sign-scenarios.js';
-import { ERRAND_IDS } from './compass.js';
+import { errandsFor } from './compass.js';
 import { helpSetOfCrew, helperById } from './helpday.js';
 import { CAST } from './music.js';
 import { FORMS, phraseNotes } from './audio.js';
@@ -79,7 +79,7 @@ function readingLine(s) {
     return names.length ? `You named ${list(names)} in the tales. Thank you!` : null;
   }
   if (s.activity !== undefined || !Array.isArray(s.found)) return null;
-  const packed = READING_ITEMS.filter(id => s.found.includes(id)).map(id => READING_LABELS[id].toLowerCase());
+  const packed = readingItems(s.request).filter(id => s.found.includes(id)).map(id => READING_LABELS[id].toLowerCase());
   return packed.length ? `You packed ${list(packed)}. Thank you for helping me!` : null;
 }
 
@@ -104,7 +104,12 @@ function signReaction(s, grade) {
   const readers = [...CHARACTERS, { id: 'pip', name: 'Pip' }, { id: 'nori', name: 'Nori' }];
   const reader = readers.find(character => character.name === scenario?.reader
     || (character.id === 'music' && scenario?.reader === 'Kiko and the band'));
-  const count = typeof s.text === 'string' ? s.text.trim().split(/\s+/).filter(Boolean).length : 0;
+  const text = typeof s.text === 'string' ? s.text.replace(/\s+/g, ' ').trim() : '';
+  const count = text ? text.split(' ').length : 0;
+  // A short sign is read back word for word: the reader noticing the child's own words is the point.
+  const quote = text && text.length <= 40 ? `It says: ${/[.!?…]$/.test(text) ? text : `${text}.`}` : '';
+  const readBack = quote ? `${reader ? 'A sign for me!' : 'Your sign is up!'} ${quote} ${reader ? 'Thank you, friend!' : 'Thank you!'}` : '';
+  if (readBack && fits(readBack)) return { id: reader ? reader.id : 'writing', words: readBack };
   if (reader) return { id: reader.id, words: count
     ? `A sign for me! ${count} ${count === 1 ? 'word' : 'words'} on your sign. Thank you, friend!`
     : 'You made a sign for me. Thank you!' };
@@ -116,9 +121,10 @@ function signReaction(s, grade) {
 function communityLine(s) {
   if (s.activity === 'compass') {
     if (!Array.isArray(s.done)) return null;
-    const errands = ERRAND_IDS.filter(id => s.done.includes(id));
-    const names = { north: 'flour', west: 'drum', lantern: 'lantern' };
-    return errands.length ? `${capital(list(errands.map(id => names[id])))} delivered! ${errands.length} ${errands.length === 1 ? 'errand' : 'errands'} done. Thank you!` : null;
+    const errands = errandsFor(s).map(errand => errand.id).filter(id => s.done.includes(id));
+    const names = { north: 'flour', west: 'drum', lantern: 'lantern', east: 'lantern', south: 'flour' };
+    const things = [...new Set(errands.map(id => names[id]).filter(Boolean))];
+    return errands.length && things.length ? `${capital(list(things))} delivered! ${errands.length} ${errands.length === 1 ? 'errand' : 'errands'} done. Thank you!` : null;
   }
   if (s.activity === 'helpday') {
     if (!Array.isArray(s.crew)) return null;
@@ -129,8 +135,8 @@ function communityLine(s) {
   }
   if (s.activity !== undefined || !Array.isArray(s.placements)) return null;
   const items = ['bench', 'quiet', 'sign'].filter(item => s.placements.some(p => p?.item === item));
-  const names = items.map(item => item === 'quiet' ? 'garden' : item);
-  return names.length ? `You placed a ${list(names)}. Thank you for planning our square!` : null;
+  const names = items.map(item => item === 'quiet' ? 'a garden' : `a ${item}`);
+  return names.length ? `You placed ${list(names)}. Thank you for planning our square!` : null;
 }
 
 function musicLine(s) {

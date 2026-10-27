@@ -147,7 +147,7 @@ export function createApp(root, { scenes = {}, storage } = {}) {
       pause: () => openPauseWindow(ctx),
       grade: () => openGradeWindow(ctx),
       guide: id => openGuideWindow(ctx, { id }),
-      help: (title, steps) => openHelpWindow(ctx, title, steps),
+      help: (title, steps, options) => openHelpWindow(ctx, title, steps, options),
     },
     speak: text => !destroyed && !document.hidden && speak(text),
     // Screen readers always hear it; Read to me says it aloud too.

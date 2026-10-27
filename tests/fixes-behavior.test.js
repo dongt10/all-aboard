@@ -1004,7 +1004,7 @@ test('encounter: every grade starts with the right picture and one Help instruct
       assert.equal(ctx.stage.querySelector('.enc__nav').hidden, false);
       ctx.stage.querySelector('[data-act="help"]').click();
       assert.equal(ctx.stage.querySelector('.help-steps__text').textContent, helpSteps(activity, grade)[0]);
-      assert.equal(ctx.stage.querySelector('[data-help="show"]'), null, 'no demo means no dead button');
+      assert.ok(ctx.stage.querySelector('[data-help="show"]'), `${grade} ${id}: every activity and grade has a Show me demo`);
       ctx.stage.querySelector('.win__close').click();
     } finally { scene.destroy(); }
   }
