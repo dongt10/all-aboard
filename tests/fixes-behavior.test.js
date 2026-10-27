@@ -68,6 +68,8 @@ test('music: B during the item-get card does not leave, and the band still gets 
   await tick();
   assert.deepEqual(ctx.gone, [], 'B is ignored while the card is up');
   card.firstElementChild.click();
+  assert.ok(ctx.stage.querySelector('.item-get'), 'the card background cannot accept');
+  card.querySelector('.item-get__go').click();
   await tick();
   assert.ok(getCreations(ctx.getState()).music, 'the band was published');
   assert.deepEqual(ctx.gone, [['village', { focus: 'music', celebrate: 'music' }]]);
@@ -821,4 +823,155 @@ test('wipe: the same transition reads the current Calm motion setting each time'
   await transition(() => {});
   assert.equal(doc.animations.calls.length, 2);
   assert.ok(doc.animations.calls.every(call => call.options.duration === 75));
+});
+
+// These drive native Enter keydown and Space keyup, as well as the app's Z routing.
+function physicalKey(key, target = doc.activeElement) {
+  pressKey(target, 'keydown', key);
+  pressKey(target, 'keyup', key);
+}
+function readPages(stage) {
+  const more = stage.querySelector('.dlg__more');
+  for (let count = 0; more && !more.hidden && count < 30; count++) more.click();
+  assert.ok(!more || more.hidden, 'all pages read');
+}
+
+test('encounter: unread opening has focus and priority over native Enter, Space, Z and taps', async () => {
+  for (const id of ['reading', 'math']) for (const key of ['Enter', ' ', 'z']) {
+    const app = realApp({ ...createState(), settings: { ...createState().settings, largeText: true } });
+    try {
+      await app.go('encounter', { id });
+      const more = app.stage.querySelector('.dlg__more');
+      assert.equal(doc.activeElement, more, `${id} starts on More`);
+      const before = JSON.stringify(app.getState());
+      const command = app.stage.querySelector('.cmd-slot:not(:disabled)');
+      command.click();
+      assert.equal(JSON.stringify(app.getState()), before, 'tap preserves unread instructions and work');
+      command.focus();
+      physicalKey(key);
+      assert.equal(JSON.stringify(app.getState()), before, `${key} pages instead of answering`);
+      readPages(app.stage);
+      assert.ok(app.stage.querySelector('.enc__menu').contains(doc.activeElement), 'last page moves to a named action area');
+      app.stage.querySelector('[data-act="replay"]').click();
+      assert.equal(more.hidden, false, 'current prompt can be replayed');
+      app.stage.querySelector('[data-act="skip"]').click();
+      assert.equal(more.hidden, true, 'Skip explicitly unlocks the activity');
+    } finally { app.destroy(); }
+  }
+});
+
+test('story: repeated Enter cannot choose a picture; every new part needs deliberate selection', async () => {
+  const app = realApp();
+  try {
+    await app.go('encounter', { id: 'reading' });
+    for (let i = 0; i < 15; i++) physicalKey('Enter');
+    assert.deepEqual(app.getState().progress, {});
+    assert.equal(app.stage.querySelector('.story-bag__title').textContent, 'Bag 0/3');
+    const orders = [];
+    for (const [index, answer] of ['key', 'umbrella', 'book'].entries()) {
+      readPages(app.stage);
+      assert.equal(doc.activeElement, app.stage.querySelector('.cmd-menu'), 'prompt has no preselected answer');
+      orders.push(app.stage.querySelectorAll('.cmd-slot').map(button => button.dataset.id).join(','));
+      slot(app.stage, `pick-${answer}`).dispatchEvent(new Event('pointerover', { pointerType: 'mouse' }));
+      assert.equal(doc.activeElement, app.stage.querySelector('.cmd-menu'), 'hover cannot preselect an answer');
+      for (let i = 0; i < 7; i++) physicalKey('Enter');
+      assert.equal(app.stage.querySelector('.story-bag__title').textContent, `Bag ${index}/3`);
+      physicalKey('ArrowRight');
+      assert.ok(doc.activeElement.classList.contains('cmd-slot'), 'arrow selects a real choice');
+      slot(app.stage, `pick-${answer}`).focus();
+      physicalKey('Enter');
+      readPages(app.stage);
+      if (index < 2) { slot(app.stage, 'next').focus(); physicalKey('Enter'); }
+    }
+    assert.equal(new Set(orders).size, 3, 'picture order varies by part');
+    assert.equal(app.stage.querySelector('.story-bag__title').textContent, 'Bag 3/3');
+    slot(app.stage, 'finish').click();
+    assert.ok(app.stage.querySelector('.item-get'));
+    assert.deepEqual(app.getState().progress, {}, 'opening reward does not publish');
+    app.stage.querySelector('.item-get__go').click();
+    await tick();
+    assert.ok(getCreations(app.getState()).reading);
+  } finally { app.destroy(); }
+});
+
+test('encounter: menu Up reaches art cloth and grade 2 crate slots; field Down returns', async () => {
+  for (const id of ['art', 'math']) {
+    const app = realApp(grade2());
+    try {
+      await app.go('encounter', { id });
+      readPages(app.stage);
+      app.stage.querySelector('.cmd-slot:not(:disabled)').focus();
+      physicalKey('ArrowUp');
+      const field = app.stage.querySelector('.enc__field');
+      assert.ok(field.contains(doc.activeElement), `${id}: Up enters field`);
+      if (id === 'art') {
+        physicalKey('ArrowRight');
+        assert.ok(doc.activeElement.dataset.cell !== undefined, 'cloth reached with arrows');
+      }
+      for (let i = 0; i < 12 && field.contains(doc.activeElement); i++) physicalKey('ArrowDown');
+      assert.ok(app.stage.querySelector('.enc__menu').contains(doc.activeElement), `${id}: Down returns to choices`);
+      assert.match(app.stage.querySelector('.enc__nav').textContent, /↑Field ↓Menu/);
+      assert.match(app.stage.querySelector('.enc__nav').getAttribute('aria-label'), /field edge/);
+    } finally { app.destroy(); }
+  }
+});
+
+test('encounter: an initially disabled finish has visible, hearable steps and readiness removes them', t => {
+  const ctx = fakeCtx(grade2());
+  const spoken = []; ctx.speak = text => spoken.push(text);
+  const scene = createEncounterScene(ctx, { id: 'writing' });
+  t.after(() => scene.destroy()); scene.mount(); readPages(ctx.stage);
+  const status = ctx.stage.querySelector('.enc__next');
+  assert.equal(slot(ctx.stage, 'finish').disabled, true);
+  assert.equal(status.hidden, false);
+  assert.match(status.querySelector('p').textContent, /^Next: /);
+  status.querySelector('button').click();
+  assert.deepEqual(spoken, [status.querySelector('p').textContent]);
+  const face = ctx.stage.querySelector('textarea');
+  face.value = 'Hello!'; face.dispatchEvent(new Event('input'));
+  assert.equal(slot(ctx.stage, 'finish').disabled, false);
+  assert.equal(status.hidden, true);
+  face.value = ''; face.dispatchEvent(new Event('input'));
+  assert.equal(status.hidden, false);
+});
+
+test('encounter: the finish flag routes a differently named command to reward acceptance', async () => {
+  const { ACTIVITIES } = await import('../src/ui/registry.js');
+  const original = ACTIVITIES.writing.commands;
+  ACTIVITIES.writing.commands = (...args) => original(...args).map(command => command.finish ? { ...command, id: 'publish' } : command);
+  const app = realApp();
+  try {
+    await app.go('encounter', { id: 'writing' }); readPages(app.stage);
+    const tiles = app.stage.querySelectorAll('.sign-tile');
+    tiles[0].click(); tiles[1].click();
+    slot(app.stage, 'publish').click();
+    assert.ok(app.stage.querySelector('.item-get'), 'finish flag works without a magic ID');
+    app.stage.querySelector('.item-get__go').click();
+    await tick();
+    assert.ok(getCreations(app.getState()).writing);
+  } finally { app.destroy(); ACTIVITIES.writing.commands = original; }
+});
+
+test('beans: unread results survive command and field taps and remain replayable', async () => {
+  const state = grade2(); state.settings = { ...state.settings, largeText: true };
+  const app = realApp(state);
+  try {
+    await app.go('encounter', { id: 'science' }); readPages(app.stage);
+    app.stage.querySelector('[data-change="water"]').click(); readPages(app.stage);
+    slot(app.stage, 'wait').click(); readPages(app.stage);
+    slot(app.stage, 'wait').click();
+    const more = app.stage.querySelector('.dlg__more');
+    assert.equal(more.hidden, false, 'result spans multiple Bigger words pages');
+    const before = JSON.stringify(app.getState());
+    const line = app.stage.querySelector('.dlg__text').textContent;
+    slot(app.stage, 'reset').click();
+    app.stage.querySelector('[data-change="dark"]').click();
+    assert.equal(JSON.stringify(app.getState()), before);
+    assert.equal(app.stage.querySelector('.dlg__text').textContent, line);
+    app.stage.querySelector('[data-act="hear"]').click();
+    assert.equal(app.stage.querySelector('.dlg__text').textContent, line);
+    readPages(app.stage);
+    app.stage.querySelector('[data-act="replay"]').click();
+    assert.equal(app.stage.querySelector('.dlg__text').textContent, line);
+  } finally { app.destroy(); }
 });

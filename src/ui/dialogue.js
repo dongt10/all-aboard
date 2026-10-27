@@ -43,10 +43,10 @@ export function paginate(text, maxChars, fitsRendered = () => true) {
 }
 
 // A dialogue box: a speaker tab, one short page of text, ▼ More when a page follows, and Hear / Help tabs.
-export function createDialogue(host, { speak = () => false, onHelp = () => {}, isLarge = () => false, autoRead = () => false, onPage = () => {} } = {}) {
+export function createDialogue(host, { speak = () => false, onHelp = () => {}, isLarge = () => false, autoRead = () => false, onPage = () => {}, onComplete = () => {}, extendedControls = false } = {}) {
   const root = document.createElement('div');
   root.className = 'dlg';
-  root.tabIndex = -1;   // where focus lands if the More button disappears under it
+  root.tabIndex = -1;
   root.innerHTML = `<div class="px-frame dlg__frame">
       <p class="dlg__text" aria-live="polite" aria-atomic="true"></p>
       <p class="dlg__text dlg__measure" aria-hidden="true"></p>
@@ -55,6 +55,8 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
     <span class="px-chip px-name dlg__speaker" hidden></span>
     <div class="dlg__tabs">
       <button type="button" class="px-chip dlg__tab" data-act="hear">${icon('hear')}<span>Hear</span></button>
+      <button type="button" class="px-chip dlg__tab" data-act="replay" hidden>${icon('undo')}<span>Replay</span></button>
+      <button type="button" class="px-chip dlg__tab" data-act="skip" hidden><span>Skip</span></button>
       <button type="button" class="px-chip dlg__tab" data-act="help">${icon('help')}<span>Help</span></button>
     </div>`;
   const text = root.querySelector('.dlg__text');
@@ -62,8 +64,10 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
   const fonts = document.fonts;
   const more = root.querySelector('.dlg__more');
   const tab = root.querySelector('.dlg__speaker');
+  const skip = root.querySelector('[data-act="skip"]');
+  const replay = root.querySelector('[data-act="replay"]');
   const limit = () => isLarge() ? PAGE_CHARS.large : PAGE_CHARS.normal;
-  let queue = [], remaining = '', large = Boolean(isLarge());   // queue[0] is the page on screen
+  let queue = [], remaining = '', message = '', large = Boolean(isLarge());   // queue[0] is the page on screen
   let speech = null;
   const reportPage = () => onPage({ text: queue[0] ?? '', hasMore: queue.length > 1, speech });
   const fitsRendered = page => {
@@ -74,34 +78,56 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
   function render() {
     text.textContent = queue[0] ?? '';
     const hasMore = queue.length > 1;
-    if (!hasMore && document.activeElement === more) root.focus();   // never leave focus on a hidden button
+    const pagingFocused = document.activeElement === more || document.activeElement === skip;
     more.hidden = !hasMore;
+    skip.hidden = !extendedControls || !hasMore;
+    replay.hidden = !extendedControls;
+    if (!hasMore && pagingFocused) (extendedControls ? replay : root.querySelector('[data-act="hear"]')).focus();
   }
+  const spokenPage = () => `${queue[0]}${queue.length > 1 ? ' More. Tap to continue.' : ''}`;
   function show() {
     render();
-    speech = queue[0] && autoRead() ? speak(queue[0]) : null;
+    speech = queue[0] && autoRead() ? speak(spokenPage()) : null;
     reportPage();
   }
   function next() {
     if (queue.length < 2) return false;
     remaining = remaining.slice(queue[0].length).trimStart();
+    const wasFocused = document.activeElement === more;
     queue.shift();
     show();
+    if (queue.length === 1) {
+      if (wasFocused) (extendedControls ? replay : root.querySelector('[data-act="hear"]')).focus();
+      onComplete();
+    }
     return true;
   }
   more.addEventListener('click', next);
   root.addEventListener('click', event => {
     const act = event.target.closest('[data-act]')?.dataset.act;
-    if (act === 'hear' && queue[0]) { speech = speak(queue[0]); reportPage(); }
+    if (act === 'hear' && queue[0]) { speech = speak(spokenPage()); reportPage(); }
+    if (act === 'replay' && message) { remaining = message; queue = paginate(remaining, limit(), fitsRendered); show(); }
+    if (act === 'skip' && queue.length > 1) {
+      const wasFocused = document.activeElement === skip;
+      queue = [queue.at(-1)]; remaining = queue[0]; show();
+      if (wasFocused) (extendedControls ? replay : root.querySelector('[data-act="hear"]')).focus();
+      onComplete();
+    }
     if (act === 'help') onHelp();
     if (event.target === text) next();   // tapping the words turns the page too
   });
 
   // Bigger words can flip while a page is showing, so the pages still to read are re-cut to fit.
   function repaginate() {
+    const hadMore = queue.length > 1;
+    const pagingFocused = document.activeElement === more || document.activeElement === skip;
     queue = paginate(remaining, limit(), fitsRendered);
     render();
     reportPage();
+    if (hadMore && queue.length === 1) {
+      if (pagingFocused) (extendedControls ? replay : root.querySelector('[data-act="hear"]')).focus();
+      onComplete();
+    }
   }
   const watch = new MutationObserver(() => {
     if (Boolean(isLarge()) === large) return;
@@ -117,12 +143,14 @@ export function createDialogue(host, { speak = () => false, onHelp = () => {}, i
       tab.textContent = speaker ?? '';
       tab.hidden = !speaker;
       large = Boolean(isLarge());
-      remaining = cleanText(words);
+      message = cleanText(words);
+      remaining = message;
       queue = paginate(remaining, limit(), fitsRendered);
       show();
     },
     next,
     hasMore: () => queue.length > 1,
+    focusMore() { if (queue.length < 2) return false; more.focus(); return true; },
     current: () => queue[0] ?? '',
     destroy() { watch.disconnect(); fonts?.removeEventListener('loadingdone', repaginate); root.remove(); },
   };

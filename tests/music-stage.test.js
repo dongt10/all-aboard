@@ -135,7 +135,7 @@ test('each grade finishes its lesson and the published band stays ready after st
       slot(ctx.stage, 'save').click(); await tick();
       const card = ctx.stage.querySelector('.item-get');
       assert.ok(card);
-      card.firstElementChild.click(); await tick();
+      card.querySelector('.item-get__go').click(); await tick();
       assert.ok(getCreations(ctx.getState()).music);
       assert.equal(isEdited(getCreations(ctx.getState()).music, grade), grade > 0, 'only K may send an untouched score');
       assert.equal(lessonDone(getCreations(ctx.getState()).music, {}, grade), grade > 0 && grade !== 2, 'scores alone do not prove Echo participation');
@@ -593,7 +593,7 @@ test('Send band publishes "Festival band" once edited; destroy clears everything
   slot(ctx.stage, 'save').click(); await tick();
   const card = ctx.stage.querySelector('.item-get');
   assert.ok(card); assert.equal(card.querySelector('.item-get__name').textContent, 'Festival band!');
-  card.firstElementChild.click(); await tick();
+  card.querySelector('.item-get__go').click(); await tick();
   assert.ok(getCreations(ctx.getState()).music);
   scene.destroy();
 });

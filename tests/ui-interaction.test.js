@@ -172,3 +172,81 @@ test('onceAtATime ignores repeat calls until the first settles', async () => {  
   release(); await new Promise(resolve => setTimeout(resolve, 0));
   run(); assert.equal(calls, 2);
 });
+
+test('dialogue offers spoken More, replay, skip, and a named focus after completion', async t => {
+  const { Doc } = await import('./helpers/dom.js');
+  const { createDialogue } = await import('../src/ui/dialogue.js');
+  const previous = globalThis.document, observer = globalThis.MutationObserver;
+  const doc = new Doc(); globalThis.document = doc;
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  t.after(() => { globalThis.document = previous; globalThis.MutationObserver = observer; });
+  const host = doc.createElement('div'); doc.body.append(host);
+  const spoken = []; let completed = 0;
+  const dialogue = createDialogue(host, { extendedControls: true, isLarge: () => true, autoRead: () => true, speak: text => { spoken.push(text); return true; }, onComplete: () => completed++ });
+  t.after(() => dialogue.destroy());
+  const message = 'First sentence has enough words to fill a page. Second sentence asks the important question. Third sentence gives another clue.';
+  dialogue.say('Sora', message);
+  assert.match(spoken.at(-1), /More\. Tap to continue\.$/);
+  const first = dialogue.current();
+  assert.equal(dialogue.focusMore(), true);
+  const more = host.querySelector('.dlg__more');
+  assert.equal(doc.activeElement, more);
+  host.querySelector('[data-act="hear"]').click();
+  assert.match(spoken.at(-1), /More\. Tap to continue\.$/);
+  dialogue.focusMore();
+  while (dialogue.hasMore()) more.click();
+  assert.equal(completed, 1);
+  assert.equal(doc.activeElement, host.querySelector('[data-act="replay"]'));
+  assert.doesNotMatch(spoken.at(-1), /Tap to continue/);
+  host.querySelector('[data-act="replay"]').click();
+  assert.equal(dialogue.current(), first);
+  assert.equal(dialogue.hasMore(), true);
+  const skip = host.querySelector('[data-act="skip"]');
+  skip.focus(); skip.click();
+  assert.equal(dialogue.hasMore(), false);
+  assert.equal(completed, 2);
+  assert.equal(doc.activeElement, host.querySelector('[data-act="replay"]'));
+  assert.equal(dialogue.focusMore(), false);
+});
+
+
+test('repagination transfers focus and signals completion when unread pages merge', async t => {
+  const { Doc } = await import('./helpers/dom.js');
+  const { createDialogue } = await import('../src/ui/dialogue.js');
+  const previous = globalThis.document, observer = globalThis.MutationObserver;
+  const doc = new Doc(); globalThis.document = doc;
+  let notify; globalThis.MutationObserver = class { constructor(fn) { notify = fn; } observe() {} disconnect() {} };
+  t.after(() => { globalThis.document = previous; globalThis.MutationObserver = observer; });
+  const host = doc.createElement('div'); doc.body.append(host);
+  let large = true, completed = 0;
+  const dialogue = createDialogue(host, { extendedControls: true, isLarge: () => large, onComplete: () => completed++ });
+  t.after(() => dialogue.destroy());
+  dialogue.say('Sora', 'First sentence fills this page. Second sentence asks the question.');
+  assert.equal(dialogue.focusMore(), true);
+  large = false; notify();
+  assert.equal(dialogue.hasMore(), false);
+  assert.equal(completed, 1);
+  assert.equal(doc.activeElement, host.querySelector('[data-act="replay"]'));
+});
+
+test('extra dialogue controls are opt-in', async t => {
+  const { Doc } = await import('./helpers/dom.js');
+  const { createDialogue } = await import('../src/ui/dialogue.js');
+  const previous = globalThis.document, observer = globalThis.MutationObserver;
+  const doc = new Doc(); globalThis.document = doc;
+  globalThis.MutationObserver = class { observe() {} disconnect() {} };
+  t.after(() => { globalThis.document = previous; globalThis.MutationObserver = observer; });
+  const host = doc.createElement('div'); doc.body.append(host);
+  const dialogue = createDialogue(host, { isLarge: () => true });
+  t.after(() => dialogue.destroy());
+  dialogue.say('Sora', 'First sentence fills this page. Second sentence asks the question.');
+  assert.equal(host.querySelector('[data-act="skip"]').hidden, true);
+  assert.equal(host.querySelector('[data-act="replay"]').hidden, true);
+  dialogue.focusMore();
+  while (dialogue.hasMore()) host.querySelector('.dlg__more').click();
+  assert.equal(doc.activeElement, host.querySelector('[data-act="hear"]'));
+  dialogue.say('Sora', 'First sentence fills this page. Second sentence asks the question.');
+  dialogue.focusMore();
+  dialogue.say('Sora', 'A short new message.');
+  assert.equal(doc.activeElement, host.querySelector('[data-act="hear"]'), 'replacing a paged message also keeps named focus');
+});

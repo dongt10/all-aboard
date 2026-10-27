@@ -9,6 +9,7 @@ import { icon } from '../icons.js';
 import { SUBJECT_THEME } from '../palette.js';
 import { createCommandMenu, arrangeCommands } from '../menu.js';
 import { createDialogue } from '../dialogue.js';
+import { keyIntent } from '../input.js';
 import { onceAtATime } from '../scenes.js';
 import { showItemGet } from './item-get.js';
 
@@ -43,19 +44,47 @@ export function createEncounterScene(ctx, { id } = {}) {
 
   const scoped = () => withScope(state, ctx.getState());
   const saveNow = () => ctx.commit(saveDraft(ctx.getState(), id, scoped()));
-  const say = line => dialogue.say(character.name, line);
+  const say = line => { dialogue.say(character.name, line); if (dialogue.hasMore()) dialogue.focusMore(); };
   const inField = () => root.querySelector('.enc__field').contains(document.activeElement);
   // If every command is disabled, keep focus on an editable field control.
   const focusMenu = () => { menu.focus(); return root.querySelector('.enc__menu').contains(document.activeElement); };
-  const focusField = () => root.querySelector('.enc__field').querySelector(FOCUSABLE)?.focus();
+  const focusField = () => {
+    const area = root.querySelector('.enc__field');
+    const control = area.querySelector('textarea:not(:disabled)') ?? area.querySelector('[tabindex="0"]') ?? area.querySelector(FOCUSABLE);
+    control?.focus();
+    return area.contains(document.activeElement);
+  };
+  const focusAction = () => {
+    if (id === 'writing' && !state.text.trim()) focusField();
+    else if (!focusMenu()) focusField();
+  };
 
-  const commands = () => arrangeCommands(activity.commands(state, ui, grade));   // the finish always ends up in slot 4
+  const commands = () => {
+    const list = activity.commands(state, ui, grade);
+    // Rotate story pictures between parts without changing their order after a wrong try.
+    if (activity.kind === 'reading' && list.length && list.every(command => command.id.startsWith('pick-'))) {
+      const offset = (state.found.length + 1) % list.length;
+      return arrangeCommands([...list.slice(offset), ...list.slice(0, offset)]);
+    }
+    return arrangeCommands(list);
+  };   // the finish always ends up in slot 4
   // Help can depend on the grade (K has no typing box, no crate sizes): helpFor(grade), help(grade) or a plain array.
   const helpSteps = () => (typeof activity.helpFor === 'function' ? activity.helpFor(grade)
     : typeof activity.help === 'function' ? activity.help(grade) : activity.help);
 
+  function updateMenu(next) {
+    const choosing = activity.kind === 'reading' && next.some(command => command?.id.startsWith('pick-'));
+    menu.set(next, { requireSelection: choosing });
+    const status = root.querySelector('.enc__next');
+    const pending = next.some(command => command?.finish && command.disabled);
+    status.hidden = !pending;
+    status.querySelector('p').textContent = pending ? `Next: ${helpSteps()?.slice(0, -1).join(' ') || 'Open Help for the steps.'}` : '';
+    root.querySelector('.enc__choose').hidden = !choosing;
+  }
+
   function dispatch(action) {
-    if (finishing) return;
+    if (finishing || destroyed) return;
+    if (dialogue.hasMore()) { field.update(state, ui); dialogue.focusMore(); return; }
     const returnToField = id === 'writing' && action?.type === 'command' && ['remove', 'clear'].includes(action.id)
       && root.querySelector('.enc__menu').contains(document.activeElement);
     const wasReady = encounterReady(state);
@@ -66,7 +95,7 @@ export function createEncounterScene(ctx, { id } = {}) {
     if (changed) { dirty = true; saveNow(); }
     field.update(state, ui);
     const next = commands();
-    menu.set(next);
+    updateMenu(next);
     if (returnToField && !state.text.trim()) focusField();
     const line = result.line || readinessLine(activity, next, wasReady, encounterReady(state));
     if (line) say(line);
@@ -81,13 +110,15 @@ export function createEncounterScene(ctx, { id } = {}) {
     const creation = withScope(state, scope);
     reward = showItemGet(ctx.stage, {
       name: activity.rewardLabel ?? character.reward.label,
+      allowEdit: true,
       artHTML: creationMarkup(scope.subjectId, creation),
       figureHTML: figureMarkup(id, { pose: 'joy', scale: 2 }),
     });
     const accepted = await reward;
     reward = null;
     const current = ctx.getState();
-    if (!accepted || destroyed || current.chapter !== scope.chapter || current.grade !== scope.grade) return;
+    if (!accepted) { if (!destroyed) { finishing = false; focusAction(); } return; }
+    if (destroyed || current.chapter !== scope.chapter || current.grade !== scope.grade) return;
     ctx.commit(publishCreation(current, scope.subjectId, creation));
     await ctx.go('village', { focus: scope.subjectId, celebrate: scope.subjectId });
   });
@@ -115,6 +146,11 @@ export function createEncounterScene(ctx, { id } = {}) {
           <div class="enc__who"><h1 class="px-name enc__name"></h1><span class="enc__grade"></span></div>
           <span class="px-chip enc__subject">${icon(theme.icon, { size: 18 })}<span></span></span>
         </header>
+        <aside class="enc__guidance">
+          <button type="button" class="px-chip enc__nav" aria-label="Up from choices goes to the field. Down at the field edge goes to choices.">↑Field ↓Menu</button>
+          <p class="enc__choose" hidden>Use arrows to pick a picture. Then press Enter.</p>
+          <div class="enc__next" hidden><p></p><button type="button" class="px-chip">Hear steps</button></div>
+        </aside>
         <section class="enc__field" aria-label=""></section>
         <div class="enc__dialogue"></div>
         <div class="enc__menu"></div>`;
@@ -124,6 +160,24 @@ export function createEncounterScene(ctx, { id } = {}) {
       root.querySelector('.enc__field').setAttribute('aria-label', activity.title);
       root.querySelector('.enc__back').addEventListener('click', () => leave());
       ctx.stage.append(root);
+      root.querySelector('.enc__nav').addEventListener('click', () => ctx.speak('Up from choices goes to the field. Down at the field edge goes to choices.'));
+      root.querySelector('.enc__next button').addEventListener('click', () => ctx.speak(root.querySelector('.enc__next p').textContent));
+      // Capture before native Enter/Space, Z routing, or field handlers can replace unread pages.
+      const isWork = target => root.querySelector('.enc__field').contains(target) || root.querySelector('.enc__menu').contains(target);
+      root.addEventListener('click', event => {
+        if (!dialogue?.hasMore() || !isWork(event.target)) return;
+        event.preventDefault(); event.stopPropagation(); dialogue.focusMore();
+      }, true);
+      root.addEventListener('beforeinput', event => {
+        if (!dialogue?.hasMore() || !isWork(event.target)) return;
+        event.preventDefault(); event.stopPropagation(); dialogue.focusMore();
+      }, true);
+      root.addEventListener('keydown', event => {
+        if (!dialogue?.hasMore() || !isWork(event.target) || !keyIntent(event) || keyIntent(event) === 'b') return;
+        event.preventDefault(); event.stopPropagation();
+        if (keyIntent(event) === 'a' && !event.repeat) dialogue.next();
+        else dialogue.focusMore();
+      }, true);
 
       field = activity.mountField(root.querySelector('.enc__field'), { grade, dispatch });
       dialogue = createDialogue(root.querySelector('.enc__dialogue'), {
@@ -131,15 +185,17 @@ export function createEncounterScene(ctx, { id } = {}) {
         onHelp: () => ctx.open.help(activity.title, helpSteps()),
         isLarge: () => ctx.stage.classList.contains('large-text'),
         autoRead: () => Boolean(ctx.getState().settings?.autoRead),
+        onComplete: focusAction,
+        extendedControls: true,
       });
       menu = createCommandMenu(root.querySelector('.enc__menu'), {
-        onChoose: commandId => (commandId === 'finish' ? finish() : dispatch({ type: 'command', id: commandId })),
+        onChoose: commandId => (commands().find(command => command?.id === commandId)?.finish ? finish() : dispatch({ type: 'command', id: commandId })),
+        onExitUp: focusField,
       });
       field.update(state, ui);
-      menu.set(commands());
+      updateMenu(commands());
       say(activity.opening(state, ui, grade));
-      if (id === 'writing' && !state.text.trim()) focusField();
-      else if (!focusMenu()) focusField();
+      if (!dialogue.hasMore()) focusAction();
     },
     handleIntent(intent) {
       if (finishing) return false;   // the item-get card handles its own A
