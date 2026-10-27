@@ -697,7 +697,7 @@ test('an untouched visit creates no music draft, while explicit play and edits d
         if (action === 'edit') ctx.stage.querySelector('[data-sign="speed"]').click();
         scene.handleIntent('b'); await tick();
         assert.equal(Boolean(getDraft(ctx.getState(), 'music')), action !== 'leave', `grade ${grade}: ${action}`);
-        assert.equal(ctx.gone.at(-1)[0], 'village');
+        assert.deepEqual(ctx.gone.at(-1), ['village', { focus: 'music' }], 'leaving without Send band does not celebrate');
       } finally { scene.destroy(); }
     }
   }
@@ -781,7 +781,7 @@ test('publishing offers Kiko’s page and Village within four commands', async (
   assert.match(text(ctx), /Save song is on Kiko’s Guide page/);
   assert.ok(ctx.stage.querySelectorAll('.cmd-slot').length <= 4);
   slot(ctx.stage, 'guide').click(); assert.equal(ctx.opened.at(-1), 'music');
-  slot(ctx.stage, 'village').click(); await tick(); assert.equal(ctx.gone.at(-1)[0], 'village');
+  slot(ctx.stage, 'village').click(); await tick(); assert.deepEqual(ctx.gone.at(-1), ['village', { focus: 'music', celebrate: 'music' }]);
   scene.destroy();
 });
 

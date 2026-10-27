@@ -468,7 +468,7 @@ export function createMusicScene(ctx) {
     if (finishing) return;
     stopAll();
     if (meaningful) saveNow();
-    await ctx.go('village', { focus: 'music' });
+    await ctx.go('village', { focus: 'music', ...(justPublished ? { celebrate: 'music' } : {}) });
   }
   const finish = onceAtATime(async () => {
     if (destroyed || finishing || !edited()) return;
