@@ -17,8 +17,8 @@ import {
 import { BACKGROUND, STALLS, EASELS, STAGE } from '../village-layout.js';
 
 const SIDE = {
-  pip: { name: 'Pip' },
-  nori: { name: 'Nori', line: 'You can go anywhere first. I’m going slowly. That’s my favorite speed.' },
+  pip: { name: 'Pip', speed: 48, stride: 150 },
+  nori: { name: 'Nori', speed: 12, stride: 500, line: 'You can go anywhere first. I’m going slowly. That’s my favorite speed.' },
 };
 // Pip greets every visit until the first creation is made in this grade. Each sentence fits one Bigger-words page.
 export const WELCOME_LINE = 'Welcome to Hanabi Bay! Tap a neighbor to help them make something.';
@@ -391,8 +391,9 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     a.el.style.top = px(rect.y);
     a.el.style.zIndex = String(Math.round(a.pos.y));
     a.el.style.setProperty('--badge-drop', px(Math.max(0, 72 + 96 - a.pos.y)));
-    const key = `${a.facing}:${a.step}`;
-    if (a.drawn !== key) { a.fig.innerHTML = figureMarkup(a.id, { facing: a.facing, step: a.step }); a.drawn = key; }
+    const key = `${a.facing}:${a.step}:${a.pose ?? 'idle'}`;
+    // Joy exists only on the front row; keep the original frame intact.
+    if (a.drawn !== key) { a.fig.innerHTML = figureMarkup(a.id, { facing: a.pose === 'joy' ? 'front' : a.facing, step: a.step, pose: a.pose }); a.drawn = key; }
   }
   function drawPlayer() {
     if (welcomeOpen) root.querySelector('.village-dialogue').classList.toggle('village-dialogue--top', dialogueBox(player.pos, WELCOME_LINE) === 'top');
@@ -448,8 +449,12 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   }
   function tickActor(a, dt, t) {
     if (!ready) return;
-    if (calm()) { a.pos = { ...homeSpot(a.id) }; a.target = null; a.facing = 'front'; a.step = 0; return; }
-    if (shouldHold(a)) { a.target = null; a.facing = 'front'; a.step = 0; a.waitUntil = Math.max(a.waitUntil, t + 1500); return; }
+    const side = SIDE[a.id], still = calm(), feet = still ? homeSpot(a.id) : a.pos;
+    const dx = player.pos.x - feet.x;
+    const facing = side && Math.abs(dx) > 8 && Math.hypot(dx, player.pos.y - feet.y) < STOP_RADIUS ? (dx < 0 ? 'left' : 'right') : 'front';
+    a.pose = side && (near === a.id || t < a.celebrateUntil) ? 'joy' : 'idle';
+    if (still) { a.pos = { ...homeSpot(a.id) }; a.target = null; a.facing = facing; a.step = 0; return; }
+    if (shouldHold(a)) { a.target = null; a.facing = facing; a.step = 0; a.waitUntil = Math.max(a.waitUntil, t + 1500); return; }
     if (!a.target) {
       if (t < a.waitUntil) return;
       const home = homeSpot(a.id);
@@ -457,12 +462,12 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       a.target = a.pos.x === home.x && a.pos.y === home.y ? wanderTarget(a.id) : { ...home };
       a.clock = 0;
     }
-    const move = stepToward(a.pos, a.target, WANDER_SPEED * dt / 1000);
+    const move = stepToward(a.pos, a.target, (side?.speed ?? WANDER_SPEED) * dt / 1000);
     a.pos = road().step(a.pos, move.pos);
     a.clock += dt;
     if (move.arrived) { a.target = null; a.facing = 'front'; a.step = 0; a.waitUntil = t + 1500 + Math.random() * 2500; return; }
     a.facing = move.facing;
-    a.step = STEP_CYCLE[Math.floor(a.clock / WANDER_STEP_MS) % 4];
+    a.step = STEP_CYCLE[Math.floor(a.clock / (side?.stride ?? WANDER_STEP_MS)) % 4];
   }
   function tickPlayer(dt) {
     if (!ready || !player.target) { player.step = 0; return; }
@@ -675,7 +680,16 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       root.addEventListener('keydown', onKey);
       root.addEventListener('keyup', onKey);
       alive = true;
-      for (const a of actors.values()) { a.waitUntil = now() + 500 + Math.random() * 2500; drawActor(a); }
+      for (const a of actors.values()) {
+        a.waitUntil = now() + 500 + Math.random() * 2500;
+        if (celebrate && SIDE[a.id]) { a.celebrateUntil = now() + 1500; a.pose = 'joy'; a.waitUntil = Math.max(a.waitUntil, a.celebrateUntil); }
+        drawActor(a);
+      }
+      // A slow map load has no animation loop yet, but the greeting still ends.
+      if (celebrate) setTimeout(() => {
+        if (!alive) return;
+        for (const a of actors.values()) if (SIDE[a.id]) { a.celebrateUntil = 0; a.pose = near === a.id ? 'joy' : 'idle'; drawActor(a); }
+      }, 1500);
       drawPlayer();
       drawTalk();
       drawFind();
