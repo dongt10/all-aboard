@@ -165,6 +165,26 @@ test('tapping the ground skips while still starting the player walk', t => {
   assert.equal(f.box.hidden, false);
 });
 
+test('a tap or key while Pip walks home from a delivery no longer snaps him home', t => {
+  const f = fixture(t);
+  arrive(f);
+  const goal = talkGoal('science', f.pos('science'));
+  f.advance(400);
+  const mid = f.pos('pip');
+  assert.notDeepEqual(mid, goal, 'Pip has left the reader');
+  assert.ok(Math.hypot(mid.x - SIDE_SPOTS.pip.x, mid.y - SIDE_SPOTS.pip.y) > 36, 'and is still on his way home');
+  f.tap(490, 460);
+  assert.deepEqual(f.pos('pip'), mid, 'a ground tap leaves him where he was');
+  pressKey(f.root, 'keydown', 'Enter');
+  pressKey(f.root, 'keyup', 'Enter');
+  assert.deepEqual(f.pos('pip'), mid, 'so does a key');
+  f.scene.handleIntent('b');
+  assert.deepEqual(f.pos('pip'), mid, 'and so does Back');
+  f.advance(30000);
+  assert.ok(realRoad.isWalkable(f.pos('pip')));
+  assert.ok(Math.hypot(f.pos('pip').x - SIDE_SPOTS.pip.x, f.pos('pip').y - SIDE_SPOTS.pip.y) <= 36, 'and he still finishes the walk home on his own');
+});
+
 for (const settings of [{ calm: true }, { reduced: true }]) test(`Calm ${JSON.stringify(settings)} reads at once without any delivery motion`, t => {
   const f = fixture(t, settings);
   assert.equal(f.box.hidden, false);
