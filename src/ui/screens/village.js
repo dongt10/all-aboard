@@ -1,6 +1,6 @@
 // Hanabi Bay, the bright overworld: stalls, wandering neighbors, the player, the HUD and the festival board.
 import { CHARACTERS } from '../../data.js';
-import { reactionLine } from '../../reactions.js';
+import { reactionLine, signReader } from '../../reactions.js';
 import { getCreations, getCompleted, getDraft, canStartParade } from '../../progress.js';
 import { SUBJECT_THEME } from '../palette.js';
 import { icon } from '../icons.js';
@@ -15,6 +15,8 @@ import {
   setRoad, road, loadRoad, clampWalk, roadPath, talkGoal, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, stallSVG, easelRect,
 } from '../village-map.js';
 import { BACKGROUND, STALLS, EASELS, STAGE } from '../village-layout.js';
+import { createScriptedWalk, stepScriptedWalk } from '../scripted-walk.js';
+import { keyIntent } from '../input.js';
 
 const SIDE = {
   pip: { name: 'Pip' },
@@ -192,6 +194,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   const player = { pos: { ...PLAYER_START }, target: null, path: [], tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
   let near = null;
   let timing = null, closeTimer = null, unwatchSpeech = null, welcomeOpen = false, helpWindow = null;
+  let deliveryTimer = null, deliveryPreview = null;
   const scope = () => { const s = ctx.getState(); return s.chapter === 1 ? `grade-${s.grade}` : 'kindergarten'; };
   const positionScope = scope();
   const savedPosition = villagePositions.get(ctx.stage)?.get(positionScope);
@@ -200,7 +203,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   const largeText = () => Boolean(ctx.stage?.classList.contains('large-text'));
   const calm = () => Boolean(ctx.stage?.classList.contains('calm') || ctx.stage?.closest?.('.calm') || globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
   const nameOf = id => SIDE[id]?.name ?? CHARACTERS.find(c => c.id === id)?.name ?? id;
-  const positions = () => Object.fromEntries([...actors.values()].map(a => [a.id, a.pos]));
+  const positions = () => Object.fromEntries([...actors.values()].filter(a => !a.delivery).map(a => [a.id, a.pos]));
 
   const visit = onceAtATime(async id => {
     hush();
@@ -439,12 +442,103 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
 
   /* ---------- Motion ---------- */
 
+  // Only the published sign chooses a reader. Waiting for the mask never holds a neighbor.
+  function deliverSign(opening) {
+    const sign = getCreations(state()).writing;
+    const reader = actors.get(signReader(sign, state().chapter === 0 ? 0 : state().grade)?.id);
+    if (celebrate !== 'writing' || !reader || calm()) return false;
+    const pip = actors.get('pip');
+    pip.delivery = { reader, opening, started: now(), phase: 'waiting' };
+    deliveryTimer = setTimeout(() => finishDelivery(pip, { home: true }), 1500);
+    drawTalk();
+    return true;
+  }
+  function faceDeliveryReader(a) {
+    const pip = actors.get('pip');
+    if (!a.held || pip?.delivery?.reader !== a || a === pip) return false;
+    a.target = null; a.step = 0;
+    a.facing = pip.pos.x < a.pos.x ? 'left' : pip.pos.x > a.pos.x ? 'right' : 'front';
+    return true;
+  }
+  function clearDelivery(a) {
+    clearTimeout(deliveryTimer); deliveryTimer = null;
+    deliveryPreview?.(); deliveryPreview = null;
+    a.el.querySelector('.village-delivery-sign')?.remove();
+    const d = a.delivery;
+    if (d?.holding) d.reader.held = d.wasHeld;
+    a.delivery = null;
+    a.pose = 'idle'; a.target = null; a.step = 0; a.drawn = '';
+  }
+  function finishDelivery(a, { home = false, silent = false } = {}) {
+    const d = a.delivery;
+    if (!d) return false;
+    const opening = d.opening;
+    clearDelivery(a);
+    if (home) a.pos = { ...SIDE_SPOTS.pip };
+    a.facing = 'front'; a.waitUntil = now() + 1500;
+    // Return along the road at the normal wander speed, then hand back to wandering.
+    // A straight wander step from a distant reader could cut across a stall.
+    const path = !home && roadPath(a.pos, SIDE_SPOTS.pip, 0);
+    if (path) {
+      a.delivery = { phase: 'home', walk: createScriptedWalk(a.pos, path, WANDER_SPEED), joyUntil: now() + 360 };
+      a.pose = 'joy';
+    } else if (!home) a.pos = { ...SIDE_SPOTS.pip };
+    drawActor(a);
+    if (a.pose === 'joy') a.fig.innerHTML = figureMarkup('pip', { pose: 'joy' });
+    drawTalk();
+    if (opening && !silent && !paused && !leaving && !ctx.stage?.querySelector('.win-backdrop')
+      && root.querySelector('.village-dialogue').hidden) say(opening.id, opening.words, { opening: true });
+    return Boolean(opening);
+  }
+  function skipDelivery({ silent = false } = {}) {
+    const pip = actors.get('pip');
+    return pip?.delivery ? finishDelivery(pip, { home: true, silent }) : false;
+  }
+  function tickDelivery(a, dt) {
+    const d = a.delivery;
+    if (calm()) { finishDelivery(a, { home: true }); return; }
+    if (d.opening && (paused || leaving || ctx.stage?.querySelector('.win-backdrop') || !root.querySelector('.village-dialogue').hidden)) {
+      finishDelivery(a, { home: true, silent: true }); return;
+    }
+    if (paused) return;
+    if (d.phase === 'waiting') {
+      if (!ready) return;
+      // Pip reads Pip's own mail at home; all other readers are held at their live feet.
+      const goal = d.reader === a ? SIDE_SPOTS.pip : talkGoal(d.reader.id, d.reader.pos);
+      const path = goal && roadPath(a.pos, goal, 0);
+      if (!path) { finishDelivery(a, { home: true }); return; }
+      clearTimeout(deliveryTimer);
+      deliveryTimer = setTimeout(() => finishDelivery(a, { home: true }), Math.max(0, 3000 - (now() - d.started)));
+      d.phase = 'out'; d.walk = createScriptedWalk(a.pos, path, PLAYER_SPEED * 1.5);
+      if (d.reader !== a) { d.wasHeld = d.reader.held; d.holding = true; d.reader.held = true; }
+      const token = document.createElement('span');
+      token.className = 'village-delivery-sign'; token.setAttribute('aria-hidden', 'true');
+      token.innerHTML = creationMarkup('writing', getCreations(state()).writing);
+      a.el.append(token);
+      deliveryPreview = fitSignPreviews(token, 64, 40);
+    }
+    if (d.phase === 'home' && d.joyUntil) {
+      if (now() < d.joyUntil) return;
+      d.joyUntil = 0; a.pose = 'idle'; a.drawn = '';
+    }
+    d.walk = stepScriptedWalk(d.walk, dt);
+    a.pos = d.walk.pos; a.facing = d.walk.facing; a.step = d.walk.step;
+    if (d.holding) { faceDeliveryReader(d.reader); drawActor(d.reader); }
+    if (d.walk.arrived) {
+      if (d.phase === 'out') finishDelivery(a);
+      else { clearDelivery(a); a.facing = 'front'; a.waitUntil = now() + 1500; }
+    }
+  }
+
   function shouldHold(a) {
+    if (a.held) return true;
     if (paused || calm() || a.id === findTarget) return true;
     if (player.visitOnArrive === a.id) return true;
     return Math.hypot(player.pos.x - a.pos.x, player.pos.y - a.pos.y) < STOP_RADIUS;
   }
   function tickActor(a, dt, t) {
+    if (a.delivery) { tickDelivery(a, dt, t); return; }
+    if (faceDeliveryReader(a)) return;
     if (!ready) return;
     if (calm()) { a.pos = { ...homeSpot(a.id) }; a.target = null; a.facing = 'front'; a.step = 0; return; }
     if (shouldHold(a)) { a.target = null; a.facing = 'front'; a.step = 0; a.waitUntil = Math.max(a.waitUntil, t + 1500); return; }
@@ -533,8 +627,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const length = path.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - path[i].x, p.y - path[i].y), 0);
     player.speed = Math.max(PLAYER_SPEED, length / (TAP_WALK_MS / 1000));
   }
-  function stepBy(intent) {
-    if (!welcomeOpen) hush();
+  function stepBy(intent, keepOpening = false) {
+    if (!welcomeOpen && !keepOpening) hush();
     player.facing = FACING_FOR[intent];
     if (!ready) { drawPlayer(); return; }
     if (player.tapWalk) { player.target = null; player.path = []; player.tapWalk = false; player.clock = 0; }
@@ -566,6 +660,16 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       if (swallowSpaceUp && event.key === ' ') { swallowSpaceUp = false; event.preventDefault(); }
       return;
     }
+    const intent = keyIntent(event);
+    const opensMenu = intent === 'a' && event.target?.closest?.('.village-hud, .village-board');
+    if (skipDelivery({ silent: Boolean(opensMenu) }) && (FACING_FOR[intent] || intent === 'b' || event.target === root || event.target?.closest?.('.village-actor, .village-talk'))) {
+      if (FACING_FOR[intent]) stepBy(intent, true);
+      if (intent) {
+        event.preventDefault();
+        if (event.key === ' ') swallowSpaceUp = true;
+        return;
+      }
+    }
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || !A_KEYS.has(event.key)) return;
     const target = event.target;
     const actorButton = Boolean(target?.closest?.('.village-actor, .village-talk'));   // never the HUD, the board or a window
@@ -581,6 +685,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   }
 
   function onClick(event) {
+    const skipped = skipDelivery({ silent: Boolean(event.target.closest('.village-actor, .village-talk, .village-hud, .village-board')) });
     const act = event.target.closest('[data-act]')?.dataset.act;
     if (act === 'village-help') { openHelp(); return; }
     if (act === 'dismiss-welcome') { hush(); return; }
@@ -596,7 +701,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       const point = { x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height };
       const path = roadPath(player.pos, point);
       if (!path) return;
-      if (!welcomeOpen) hush();
+      if (!welcomeOpen && !skipped) hush();
       player.visitOnArrive = null;
       player.speed = PLAYER_SPEED * 1.5;
       player.clock = 0;
@@ -671,7 +776,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       drawTalk();
       drawFind();
       const opening = openingLine({ creations: getCreations(state()), celebrate, grade: state().chapter === 0 ? 0 : state().grade });
-      if (opening) { if (celebrate) sparkle(celebrate); say(opening.id, opening.words, { opening: true }); }   // nothing made yet: Pip says what to do
+      if (opening) { if (celebrate) sparkle(celebrate); if (!deliverSign(opening)) say(opening.id, opening.words, { opening: true }); }   // nothing made yet: Pip says what to do
       if (findTarget) ctx.announce?.(`Find ${nameOf(findTarget)}. Follow the arrow.`);
       const button = focus && root.querySelector(`.village-actor[data-id="${focus}"]`);
       (button || root).focus({ preventScroll: true });   // the welcome never takes focus from the player controls
@@ -680,7 +785,9 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     },
     handleIntent(intent) {
       if (!root) return false;
-      if (FACING_FOR[intent]) { stepBy(intent); return true; }
+      const skipped = skipDelivery();
+      if (FACING_FOR[intent]) { stepBy(intent, skipped); return true; }
+      if (skipped && ['a', 'b'].includes(intent)) return true;
       if (intent === 'a') { pressA(); return true; }
       if (intent === 'b') { hush(); return true; }
       return false;
@@ -699,6 +806,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
         villagePositions.get(ctx.stage).set(positionScope, { ...player.pos });
       }
       helpWindow?.close();
+      if (actors.get('pip')?.delivery) clearDelivery(actors.get('pip'));
       cancelOpening();
       alive = false;
       cancelFrame(frame);

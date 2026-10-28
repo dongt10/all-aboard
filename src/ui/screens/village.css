@@ -162,3 +162,7 @@
 .village-help__mark { display: grid; place-items: center; width: 64px; height: 64px; border: 2px solid var(--ink); background: var(--paper); font-size: 40px; }
 .village-help__text { min-height: 3em; }
 .village-help__buttons { display: flex; justify-content: flex-end; gap: 12px; }
+
+/* ---- lane 7: Pip delivers your sign ---- */
+.village-delivery-sign { position: absolute; left: 4px; top: -29px; width: 64px; height: 40px; pointer-events: none; }
+.village-delivery-sign > .world-sign { position: absolute; left: 50%; top: 50%; width: 240px; max-width: none; max-height: none; overflow: visible; transform: translate(-50%, -50%) scale(var(--sign-scale, .1)); }
