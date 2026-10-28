@@ -111,6 +111,7 @@ const jobs = [
 for (const [id, grade, fields, speaker, label] of jobs) test(`${speaker} speaks at the ${label} easel in grade ${grade}`, t => {
   const state = saved(id, grade, fields), f = fixture(t, { state, focus: id, celebrate: id });
   const actor = f.root.querySelector(`.village-actor[data-id="${id}"]`), stall = f.root.querySelector(`.village-stall[data-id="${id}"]`);
+  if (id === 'writing') f.scene.handleIntent('b');   // Pip carries a sign to its reader first; B skips the walk and opens the line at once
   assert.equal(f.speaker(), speaker, 'Add to town reaction uses the worker');
   assert.equal(f.doc.activeElement, actor, 'the original neighbor keeps focus');
   assert.equal(stall.classList.contains('village-stall--sparkle'), true);
