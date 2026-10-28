@@ -1,40 +1,83 @@
-/* Title: logo, who you are, your grade, Start, and the comfort toggles. Logical stage px. */
+/* Evening lanterns. All coordinates are logical pixels on the 960 × 540 stage. */
 .scene { position: absolute; inset: 0; isolation: isolate; }
-.title { background: var(--sky); }
-.title__bunting { position: absolute; left: 0; right: 0; top: 0; height: 26px; display: flex; justify-content: space-around; border-top: 4px solid var(--ink); }
-.title__bunting i { width: 18px; height: 20px; background: var(--vermilion); border: 3px solid var(--ink); border-top: 0; }
-.title__bunting i:nth-child(even) { background: var(--lantern); }
-.title__ground { position: absolute; left: 0; right: 0; top: 440px; bottom: 0; background: var(--grass); border-top: 6px solid var(--grass-dark); }
-.title__logo {
-  position: absolute; left: 0; right: 0; top: 18px; text-align: center;
-  font-family: var(--font-pixel); font-size: 64px; font-weight: 700; line-height: 1; color: var(--ink);
-  text-shadow: 4px 4px 0 var(--paper);
+.title { background: linear-gradient(var(--letterbox) 0 26%, var(--vermilion) 78%, var(--wood)); }
+.title__landscape {
+  position: absolute; inset: 130px 0 76px; pointer-events: none;
+  background: linear-gradient(rgba(43, 45, 92, .8), rgba(43, 45, 92, .3)), url('../../../assets/village/background.png') center bottom / 960px 540px;
 }
-.title__pip, .title__nori { position: absolute; top: 96px; animation: title-bob 1.2s steps(1) infinite; }
-.title__pip { left: 64px; }
-.title__nori { left: 768px; animation-delay: .6s; }
-@keyframes title-bob { 50% { transform: translateY(-4px); } }
 
-.title__who { position: absolute; left: 0; right: 0; top: 88px; display: flex; justify-content: center; align-items: center; gap: 14px; }
-.title__who-label { width: 140px; text-align: right; }
-.avatar-choice { flex-direction: column; gap: 0; width: 150px; height: 152px; padding: 0 4px 4px; }
-.avatar-choice__art { position: relative; width: 128px; height: 112px; overflow: hidden; }
-.avatar-choice__art .figure { position: absolute; left: 0; bottom: -6px; }   /* feet in view */
+/* Paper lanterns: hard-edged, nested pixel light, never a blur or a tappable frame. */
+.title__lanterns { position: absolute; inset: 0; pointer-events: none; }
+.title__lantern { --cord: 30px; position: absolute; top: 0; left: 68px; width: 40px; height: 110px; }
+.title__lantern:nth-child(2) { left: 184px; --cord: 52px; }
+.title__lantern:nth-child(3) { left: 736px; --cord: 52px; }
+.title__lantern:nth-child(4) { left: 852px; }
+.title__lantern::before { content: ''; position: absolute; top: 0; left: 19px; width: 2px; height: var(--cord); background: var(--ink); }
+.title__lantern b {
+  position: absolute; top: var(--cord); left: 0; width: 40px; height: 48px;
+  background: repeating-linear-gradient(0deg, transparent 0 9px, rgba(217, 65, 46, .3) 9px 11px), var(--lantern);
+  border: 2px solid var(--ink);
+  box-shadow: inset 6px 0 0 var(--path), inset -6px 0 0 #e0a92f, 0 0 0 6px rgba(255, 201, 74, .16), 0 0 0 14px rgba(255, 201, 74, .07);
+  animation: title-glow 4s steps(2) infinite;
+}
+.title__lantern:nth-child(even) b { animation-delay: -2s; }
+.title__lantern b::before, .title__lantern b::after { content: ''; position: absolute; left: 6px; width: 24px; height: 5px; background: var(--ink); }
+.title__lantern b::before { top: -5px; }
+.title__lantern b::after { bottom: -5px; box-shadow: 10px 8px 0 -1px var(--lantern); }
+@keyframes title-glow { 50% { box-shadow: inset 6px 0 0 var(--path), inset -6px 0 0 #e0a92f, 0 0 0 8px rgba(255, 201, 74, .19), 0 0 0 18px rgba(255, 201, 74, .08); } }
+.title__logo {
+  position: absolute; left: 244px; top: 16px; width: 472px; height: 76px;
+  text-align: center; font-family: var(--font-pixel); font-size: 72px; font-weight: 700; line-height: 1;
+  color: var(--paper); text-shadow: 0 3px 0 var(--lantern), 0 7px 0 var(--ink), 4px 7px 0 var(--ink), -4px 7px 0 var(--ink);
+}
+.title__welcome {
+  position: absolute; left: 244px; top: 98px; width: 472px; height: 30px;
+  color: var(--paper); font-size: var(--text-command); line-height: 1.1; text-align: center;
+}
+
+/* One paper entry panel. Two choice groups, then one primary action. */
+.title__paper { position: absolute; left: 20px; top: 136px; width: 920px; height: 238px; pointer-events: none; }
+.title__paper::after { content: ''; position: absolute; left: 374px; top: 16px; width: 2px; height: 136px; background: var(--paper-shade); }
+.title__who { position: absolute; left: 56px; top: 152px; width: 320px; height: 142px; }
+.title__who-label { position: absolute; left: 0; top: 0; font-size: var(--text-name); line-height: 1.2; }
+.title .avatar-choice { position: absolute; left: 0; top: 38px; width: 154px; height: 104px; padding: 0; gap: 0; }
+.title .avatar-choice[data-avatar="girl"] { left: 166px; }
+.avatar-choice__art { display: flex; flex: none; width: 96px; height: 96px; align-items: center; }
 .avatar-choice__label { font-size: var(--text-command); line-height: 1.1; }
 .avatar-choice__check, .grade-tile__check { position: absolute; top: 2px; right: 2px; display: none; color: var(--finish); }
 .avatar-choice[aria-pressed="true"], .grade-tile[aria-pressed="true"] { --fill: var(--lantern); --light: #ffe08f; --shade: #e0a92f; }
 .avatar-choice[aria-pressed="true"] .avatar-choice__check, .grade-tile[aria-pressed="true"] .grade-tile__check { display: block; }
-
-.title__grade-label { position: absolute; left: 66px; bottom: 286px; z-index: 1; }   /* grows upward, clear of the tiles */
-.title__grades { position: absolute; left: 66px; top: 258px; width: 828px; }
+.title__grade-label { position: absolute; left: 408px; top: 152px; font-size: var(--text-name); line-height: 1.2; }
+.title__grades { position: absolute; left: 408px; top: 190px; width: 496px; }
+/* Shared grade-window geometry stays intact; only title tiles get the compact width. */
 .grade-tiles { display: flex; justify-content: space-between; gap: 8px; }
 .grade-tile { flex-direction: column; gap: 0; width: 128px; height: 96px; padding: 2px 4px; }
 .grade-tile__num { font-family: var(--font-pixel); font-size: 40px; line-height: 1; }
 .grade-tile__word { font-size: var(--text-small); line-height: 1.05; hyphens: manual; }
+.title .grade-tile { flex: none; width: 66px; height: 104px; padding: 2px; }
+.title .grade-tile[data-grade="0"] { width: 126px; }
+.title .grade-tile__word { font-size: 20px; }
+.title .grade-tile__check .icon { width: 20px; height: 20px; }
+.title-start { position: absolute; left: 338px; top: 306px; width: 284px; height: 64px; font-size: 32px; }
+.title .title-fullscreen { position: absolute; left: 56px; top: 306px; width: 232px; height: 64px; }
+.title-credits { position: absolute; right: 56px; top: 306px; width: 232px; height: 64px; }
+/* Secondary actions retain the house frame but sit back against the paper. */
+.title .title-fullscreen, .title .title-credits { --fill: var(--paper-shade); --light: var(--paper); --shade: var(--path); }
 
-.title-start { position: absolute; left: 320px; top: 368px; width: 320px; height: 64px; font-size: 28px; }
-.title-credits { position: absolute; right: 66px; top: 376px; width: 200px; height: 48px; }
-.title__comfort { position: absolute; left: 0; right: 0; top: 458px; display: flex; justify-content: center; gap: 16px; }
-.title__comfort .px-toggle { width: 280px; height: 48px; justify-content: space-between; white-space: nowrap; }
+/* Unmodified reference sprites, with all nine neighbors waiting on the cobblestones. */
+.title__parade { position: absolute; left: 48px; top: 368px; width: 864px; height: 96px; display: flex; pointer-events: none; }
+.title__neighbor { position: relative; display: block; flex: none; width: 96px; height: 96px; }
+.title__neighbor::before { content: ''; position: absolute; left: 27px; top: 82px; width: 42px; height: 8px; background: rgba(31, 33, 71, .4); clip-path: polygon(6px 0, 36px 0, 36px 2px, 42px 2px, 42px 6px, 36px 6px, 36px 8px, 6px 8px, 6px 6px, 0 6px, 0 2px, 6px 2px); }
+.title__neighbor .figure { position: relative; display: block; }
+.title__comfort { position: absolute; left: 40px; top: 466px; width: 880px; height: 64px; display: flex; gap: 20px; }
+.title__comfort::before { content: ''; position: absolute; z-index: -1; left: -40px; right: -40px; top: -6px; bottom: -10px; background: var(--letterbox); border-top: 2px solid var(--ink); }
+.title__comfort .px-toggle { flex: none; width: 280px; height: 64px; justify-content: space-between; white-space: nowrap; padding-inline: 12px; }
+.title__comfort .px-toggle__state { font-size: 20px; }
 
-@media (prefers-reduced-motion: reduce) { .title__pip, .title__nori { animation: none; } }
+/* Explicit title overrides keep phone targets large and every reading label >= 20px. */
+.phone .title .avatar-choice, .phone .title .grade-tile { min-height: 64px; }
+.phone .title .title-start, .phone .title .title-fullscreen, .phone .title .title-credits, .phone .title .px-toggle { min-height: 64px; }
+.large-text .title__logo { font-size: 76px; }
+.large-text .title-start { font-size: 36px; }
+.calm .title__lantern b { animation: none; }
+@media (prefers-reduced-motion: reduce) { .title__lantern b { animation: none; } }

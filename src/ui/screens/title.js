@@ -25,6 +25,8 @@ function dismissTip() {
 }
 
 const AVATARS = [{ id: 'boy', label: 'Boy' }, { id: 'girl', label: 'Girl' }];
+const PARADE = ['pip', 'math', 'science', 'art', 'reading', 'writing', 'community', 'music', 'nori'];
+const paradeMarkup = pose => PARADE.map(id => `<span class="title__neighbor">${figureMarkup(id, { scale: 1.5, pose })}</span>`).join('');
 const ARROWS = new Set(['up', 'down', 'left', 'right']);
 const centerX = el => { const box = el.getBoundingClientRect(); return box.left + box.width / 2; };
 
@@ -89,7 +91,7 @@ export function createTitleScene(ctx) {
     buttons.forEach(button => {
       const on = button.dataset.avatar === chosen;
       button.setAttribute('aria-pressed', String(on));
-      button.querySelector('.avatar-choice__art').innerHTML = figureMarkup(`player-${button.dataset.avatar}`, { scale: 2, pose: on ? 'joy' : 'idle' });
+      button.querySelector('.avatar-choice__art').innerHTML = figureMarkup(`player-${button.dataset.avatar}`, { scale: 1.5, pose: on ? 'joy' : 'idle' });
     });
     setRoving(buttons, buttons.findIndex(button => button.dataset.avatar === chosen));
   }
@@ -124,22 +126,23 @@ export function createTitleScene(ctx) {
       root = document.createElement('div');
       root.className = 'scene title';
       root.innerHTML = `
-        <div class="title__bunting" aria-hidden="true">${'<i></i>'.repeat(20)}</div>
-        <div class="title__ground" aria-hidden="true"></div>
+        <div class="title__landscape" aria-hidden="true"></div>
+        <div class="title__lanterns" aria-hidden="true">${'<i class="title__lantern"><b></b></i>'.repeat(4)}</div>
         <h1 class="title__logo">All Aboard</h1>
-        <span class="title__pip" aria-hidden="true">${figureMarkup('pip', { scale: 2 })}</span>
-        <span class="title__nori" aria-hidden="true">${figureMarkup('nori', { scale: 2 })}</span>
+        <p class="title__welcome">an evening in Hanabi Bay</p>
+        <div class="px-frame title__paper" aria-hidden="true"></div>
         <div class="title__who" role="group" aria-labelledby="title-who">
           <h2 class="px-name title__who-label" id="title-who">Who are you?</h2>
           ${AVATARS.map(a => `<button type="button" class="px-button avatar-choice" data-avatar="${a.id}" aria-pressed="false">
             <span class="avatar-choice__art"></span><span class="avatar-choice__label">${a.label}</span>
             <span class="avatar-choice__check" aria-hidden="true">${icon('check')}</span></button>`).join('')}
         </div>
-        <p class="px-chip title__grade-label" id="title-grade">Your grade</p>
+        <p class="px-name title__grade-label" id="title-grade">Your grade</p>
         <div class="title__grades grade-tiles" role="group" aria-labelledby="title-grade">${gradeTilesMarkup()}</div>
         ${available() ? '<button type="button" class="px-button title-fullscreen" aria-pressed="false"><span>Full screen</span></button>' : ''}
         <button type="button" class="px-button px-button--finish title-start">${icon('play')}<span>${state.hasStarted ? 'Continue' : 'Start'}</span></button>
         <button type="button" class="px-button title-credits">Credits</button>
+        <div class="title__parade" aria-hidden="true">${paradeMarkup('idle')}</div>
         <div class="title__comfort" role="group" aria-label="Comfort">${comfortMarkup()}</div>`;
       syncAvatars();
       syncGradeTiles(root, state);
@@ -151,6 +154,7 @@ export function createTitleScene(ctx) {
         if (tile) {
           ctx.commit(chooseGrade(ctx.getState(), gradeChoices()[Number(tile.dataset.grade)]));
           syncGradeTiles(root, ctx.getState());
+          root.querySelector('.title__parade').innerHTML = paradeMarkup('joy');
           root.querySelector('.title-start span').textContent = ctx.getState().hasStarted ? 'Continue' : 'Start';
         }
       });

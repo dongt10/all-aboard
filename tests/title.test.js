@@ -261,3 +261,129 @@ test('iPhone Safari tip dismissal survives a fresh module and remount through lo
   assert.equal(doc.body.querySelector('.fullscreen-message'), null);
   scene.destroy();
 });
+
+test('the evening parade uses all nine reference sprites and cheers only after a grade choice', t => {
+  const doc = installDocument(t), ctx = titleContext(doc), scene = createTitleScene(ctx);
+  scene.mount();
+  const parade = doc.body.querySelector('.title__parade');
+  assert.equal(parade.getAttribute('aria-hidden'), 'true');
+  assert.equal(parade.querySelectorAll('button').length, 0, 'the lineup is decoration');
+  const ids = ['pip', 'math', 'science', 'art', 'reading', 'writing', 'community', 'music', 'nori'];
+  assert.equal(parade.querySelectorAll('.figure').length, ids.length);
+  for (const id of ids) {
+    const figure = parade.querySelector(`.figure--${id}`);
+    assert.ok(figure);
+    assert.match(figure.getAttribute('style'), new RegExp(`assets/figures/${id}\\.png`));
+    assert.match(figure.getAttribute('style'), /background-position:-96px 0px/);
+  }
+  const girl = doc.body.querySelector('[data-avatar="girl"]');
+  girl.click();
+  assert.equal(ctx.getState().avatar, 'girl');
+  assert.equal(girl.getAttribute('aria-pressed'), 'true');
+  assert.match(girl.querySelector('.figure').getAttribute('style'), /background-position:-288px 0px/);
+  assert.match(parade.querySelector('.figure').getAttribute('style'), /background-position:-96px 0px/);
+  for (const tile of doc.body.querySelectorAll('.grade-tile')) {
+    tile.click();
+    for (const id of ids) assert.match(parade.querySelector(`.figure--${id}`).getAttribute('style'), /background-position:-288px 0px/);
+    assert.equal(ctx.getState().hasStarted, false, 'cheering is not progress');
+  }
+  scene.destroy();
+});
+
+test('title arrows preserve roving choice groups and separate command and comfort Tab stops', t => {
+  const doc = installDocument(t), ctx = titleContext(doc), scene = createTitleScene(ctx);
+  scene.mount();
+  const avatars = doc.body.querySelectorAll('.avatar-choice'), grades = doc.body.querySelectorAll('.grade-tile');
+  assert.equal(doc.activeElement, doc.body.querySelector('.title-start'));
+  avatars[0].focus();
+  assert.equal(scene.handleIntent('right'), true);
+  assert.equal(doc.activeElement, avatars[1]);
+  assert.deepEqual(avatars.map(el => el.tabIndex), [-1, 0]);
+  assert.equal(ctx.getState().avatar, 'boy', 'moving focus does not choose');
+  avatars[1].click();
+  scene.handleIntent('down');
+  assert.equal(doc.activeElement, grades[0]);
+  for (let i = 1; i < grades.length; i++) {
+    scene.handleIntent('right');
+    assert.equal(doc.activeElement, grades[i]);
+    assert.equal(grades.filter(el => el.tabIndex === 0).length, 1);
+  }
+  grades[5].click();
+  assert.equal(ctx.getState().grade, 5);
+  scene.handleIntent('down');
+  assert.equal(doc.activeElement, doc.body.querySelector('.title-start'));
+  scene.handleIntent('right');
+  assert.equal(doc.activeElement, doc.body.querySelector('.title-credits'));
+  scene.handleIntent('down');
+  const comfort = doc.body.querySelectorAll('.comfort-toggle');
+  assert.equal(doc.activeElement, comfort[0]);
+  for (const control of [...comfort, doc.body.querySelector('.title-start'), doc.body.querySelector('.title-credits')]) assert.equal(control.tabIndex, 0);
+  assert.equal(scene.handleIntent('back'), false, 'B/Escape retain their existing handling');
+  assert.equal(scene.handleIntent('confirm'), false, 'native button activation is unchanged');
+  scene.destroy();
+});
+
+test('all three title comfort controls report the saved setting on toggle and remount', t => {
+  const doc = installDocument(t), ctx = titleContext(doc);
+  let scene = createTitleScene(ctx); scene.mount();
+  for (const button of doc.body.querySelectorAll('.comfort-toggle')) {
+    button.click();
+    assert.equal(ctx.getState().settings[button.dataset.setting], true);
+    assert.equal(button.getAttribute('aria-pressed'), 'true');
+    assert.equal(button.querySelector('.px-toggle__state').textContent, 'On');
+  }
+  scene.destroy(); scene = createTitleScene(ctx); scene.mount();
+  for (const button of doc.body.querySelectorAll('.comfort-toggle')) {
+    assert.equal(button.getAttribute('aria-pressed'), 'true');
+    button.click();
+    assert.equal(ctx.getState().settings[button.dataset.setting], false);
+    assert.equal(button.querySelector('.px-toggle__state').textContent, 'Off');
+  }
+  scene.destroy();
+});
+
+import { readFileSync } from 'node:fs';
+import { declarations, controlStyle, resolveVars } from './helpers/css.js';
+import { contrastRatio } from '../src/ui/palette.js';
+const titleCss = readFileSync(new URL('../src/ui/screens/title.css', import.meta.url), 'utf8');
+const titleControlCss = ['tokens', 'kit', 'screens/title', 'phone'].map(name => readFileSync(new URL(`../src/ui/${name}.css`, import.meta.url), 'utf8')).join('\n');
+
+test('title controls keep readable contrast, a 20px text floor and phone target sizes in both text modes', t => {
+  const doc = installDocument(t); doc.documentElement = doc.body;
+  doc.body.requestFullscreen = () => {}; doc.exitFullscreen = () => {};
+  const scene = createTitleScene(titleContext(doc)); scene.mount();
+  for (const phone of [false, true]) for (const large of [false, true]) {
+    doc.body.classList.toggle('phone', phone); doc.body.classList.toggle('large-text', large);
+    for (const control of doc.body.querySelectorAll('button')) {
+      for (const hover of [null, control]) {
+        const style = controlStyle(control, titleControlCss, { hover });
+        assert.ok(contrastRatio(style.color, resolveVars('var(--fill)', style)) >= 4.5, control.className);
+      }
+      const style = controlStyle(control, titleControlCss);
+      assert.ok(parseFloat(style['font-size']) >= 20, control.className);
+      assert.ok(Math.max(parseFloat(style.height) || 0, parseFloat(style['min-height']) || 0) >= (phone ? 64 : 48), control.className);
+    }
+    for (const selector of ['.title__who-label', '.title__grade-label', '.title__welcome', '.avatar-choice__label', '.grade-tile__word', '.px-toggle__state']) {
+      assert.ok(parseFloat(controlStyle(doc.body.querySelector(selector), titleControlCss)['font-size']) >= 20, selector);
+    }
+  }
+  const palette = declarations(titleControlCss, ':root');
+  assert.ok(contrastRatio(palette['--paper'], palette['--letterbox']) >= 4.5);
+  assert.ok(contrastRatio(palette['--ink'], palette['--paper']) >= 4.5);
+  scene.destroy();
+});
+
+test('title choice and footer boxes fit the 960 by 540 stage with room for focus rings', () => {
+  const rule = selector => declarations(titleCss, selector);
+  const grades = rule('.title__grades'), grade = rule('.title .grade-tile'), kinder = rule('.title .grade-tile[data-grade="0"]');
+  assert.equal(parseFloat(kinder.width) + 5 * parseFloat(grade.width) + 5 * parseFloat(rule('.grade-tiles').gap), parseFloat(grades.width));
+  assert.ok(parseFloat(grades.left) + parseFloat(grades.width) + 7 <= 960);
+  const who = rule('.title__who'), avatar = rule('.title .avatar-choice');
+  const choiceBottom = Math.max(parseFloat(who.top) + parseFloat(avatar.top) + parseFloat(avatar.height), parseFloat(grades.top) + parseFloat(grade.height));
+  assert.ok(choiceBottom + 7 < parseFloat(rule('.title-start').top));
+  const comfort = rule('.title__comfort'), toggle = rule('.title__comfort .px-toggle');
+  assert.equal(3 * parseFloat(toggle.width) + 2 * parseFloat(comfort.gap), parseFloat(comfort.width));
+  assert.ok(parseFloat(comfort.top) + parseFloat(toggle.height) + 7 <= 540);
+  assert.match(rule('.calm .title__lantern b').animation, /^none$/);
+  assert.match(titleCss, /@media \(prefers-reduced-motion: reduce\) \{ \.title__lantern b \{ animation: none;/);
+});
