@@ -14,7 +14,7 @@ import {
   SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, nearestNeighbor,
   setRoad, road, loadRoad, clampWalk, roadPath, talkGoal, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, stallSVG, easelRect,
 } from '../village-map.js';
-import { BACKGROUND, STALLS, EASELS, STAGE } from '../village-layout.js';
+import { BACKGROUND, STALLS, EASELS, STAGE, NEAR_LAMPS, LAMP_HEAD_OFFSETS, LAMP_GLOW } from '../village-layout.js';
 
 const SIDE = {
   pip: { name: 'Pip' },
@@ -108,6 +108,12 @@ const now = () => globalThis.performance?.now?.() ?? Date.now();
 const nextFrame = fn => (globalThis.requestAnimationFrame ? globalThis.requestAnimationFrame(fn) : setTimeout(() => fn(now()), 16));
 const cancelFrame = id => (globalThis.cancelAnimationFrame ? globalThis.cancelAnimationFrame(id) : clearTimeout(id));
 
+export const LANTERN_LINES = {
+  offer: 'All seven made! Shall I light the lanterns?',
+  lighting: 'One by one. Slow and steady.',
+  done: 'Lantern night in Hanabi Bay. You made it all.',
+};
+
 // A neighbor's button: the subject badge with its status mark, the figure, and the name chip. Pure, so tests can
 // check that a started stall shows "..." and says "Started. Tap to continue."
 export function neighborMarkup(c, made = {}) {
@@ -192,6 +198,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   const player = { pos: { ...PLAYER_START }, target: null, path: [], tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
   let near = null;
   let timing = null, closeTimer = null, unwatchSpeech = null, welcomeOpen = false, helpWindow = null;
+  let lanternsEarned = false, lanternRunning = false, lanternTimer = null, lanternCount = 0;
   const scope = () => { const s = ctx.getState(); return s.chapter === 1 ? `grade-${s.grade}` : 'kindergarten'; };
   const positionScope = scope();
   const savedPosition = villagePositions.get(ctx.stage)?.get(positionScope);
@@ -205,6 +212,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   const visit = onceAtATime(async id => {
     hush();
     if (id === findTarget) clearFind();
+    if (id === 'nori' && lanternsEarned) { offerLanterns(); return; }
     if (SIDE[id]) { say(id, id === 'pip' ? WELCOME_LINE : SIDE[id].line); return; }
     if (leaving) return;
     leaving = true;
@@ -248,8 +256,9 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     }
   }
   // Both hints and neighbor lines keep the player's sprite clear.
-  function say(id, words, { opening = false, closeAfter = null } = {}) {
+  function say(id, words, { opening = false, closeAfter = null, chips, onChip } = {}) {
     cancelOpening();
+    stopLanterns();
     if (!dialogue || mapFailed) return;
     welcomeOpen = words === WELCOME_LINE;
     if (!welcomeOpen && (opening || closeAfter !== null)) timing = { closeAfter };
@@ -259,9 +268,33 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     host.classList.toggle('village-dialogue--top', box === 'top');
     host.hidden = false;
     dialogue.say(nameOf(id), words);
+    dialogueChips(chips, onChip);
+  }
+  // Shared with Pip's next stop: native buttons keep Tab/Enter/Space and never claim focus.
+  function dialogueChips(chips = [], onChip) {
+    const host = root?.querySelector('.village-dialogue');
+    if (!host) return;
+    const old = host.querySelector('.village-chips');
+    if (old?.contains(document.activeElement)) root.focus({ preventScroll: true });
+    old?.remove();
+    if (!chips.length) return;
+    const row = document.createElement('div');
+    row.className = 'village-chips';
+    row.innerHTML = chips.map(({ act, label }) => `<button type="button" class="px-chip" data-act="${esc(act)}">${esc(label)}</button>`).join('');
+    row.addEventListener('click', event => {
+      const button = event.target.closest('[data-act]');
+      if (!button || !row.contains(button)) return;
+      event.stopPropagation();
+      onChip?.(button.dataset.act);
+      // A handler may replace this line, open a window, or leave the village.
+      if (root?.contains(row)) hush();
+    });
+    host.append(row);
   }
   function hush() {
     cancelOpening();
+    stopLanterns();
+    dialogueChips();
     const host = root?.querySelector('.village-dialogue');
     if (!host || host.hidden || mapFailed) return;
     const held = host.contains(document.activeElement);
@@ -270,8 +303,62 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (held) root.focus({ preventScroll: true });   // focus never falls back to <body>
   }
 
+  function setLanterns(count) {
+    lanternCount = count;
+    root?.querySelectorAll('.village-lamp').forEach((lamp, i) => lamp.classList.toggle('village-lamp--lit', i < count));
+  }
+  function stopLanterns() {
+    if (!lanternRunning) return;
+    clearTimeout(lanternTimer);
+    lanternTimer = null;
+    lanternRunning = false;
+    const nori = actors.get('nori');
+    if (nori) nori.held = false;
+    setLanterns(lanternsEarned ? NEAR_LAMPS.length : 0);
+  }
+  function finishLanterns() {
+    stopLanterns();
+    say('nori', LANTERN_LINES.done, { chips: [{ act: 'lantern-done', label: 'Got it' }] });
+  }
+  function calmLanternPages() {
+    setLanterns(NEAR_LAMPS.length);
+    // Separate, child-paced pages even when both lines would fit normal-size text.
+    say('nori', LANTERN_LINES.lighting, {
+      chips: [{ act: 'lantern-more', label: 'More' }], onChip: finishLanterns,
+    });
+  }
+  function lightLanterns() {
+    if (!lanternsEarned) return;
+    stopLanterns();
+    if (calm()) { calmLanternPages(); return; }
+    say('nori', LANTERN_LINES.lighting, { chips: [{ act: 'lantern-done', label: 'Got it' }] });
+    lanternRunning = true;
+    const nori = actors.get('nori');
+    nori.held = true;
+    nori.target = null; nori.facing = 'front'; nori.step = 0;
+    drawActor(nori);
+    setLanterns(0);
+    const lightNext = () => {
+      lanternTimer = null;
+      if (!alive || !lanternRunning) return;
+      if (paused || document.hidden || ctx.stage?.querySelector('.win-backdrop')) { hush(); return; }
+      if (calm()) { calmLanternPages(); return; }
+      setLanterns(lanternCount + 1);
+      if (lanternCount === NEAR_LAMPS.length) finishLanterns();
+      else lanternTimer = setTimeout(lightNext, 800);
+    };
+    lanternTimer = setTimeout(lightNext, 800);
+  }
+  function offerLanterns() {
+    say('nori', LANTERN_LINES.offer, {
+      chips: [{ act: 'light-lanterns', label: 'Light lanterns' }, { act: 'lantern-not-now', label: 'Not now' }],
+      onChip: act => { if (act === 'light-lanterns') lightLanterns(); },
+    });
+  }
+
   function openHelp() {
     if (helpWindow || ctx.stage?.querySelector('.win-backdrop')) return;
+    if (lanternRunning) hush();
     cancelOpening();
     paused = true;
     player.target = null; player.path = []; player.tapWalk = false; player.visitOnArrive = null;
@@ -309,6 +396,11 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
         <span class="px-chip px-name village-name village-name--side" aria-hidden="true">${SIDE[id].name}</span>
       </button>`;
   }
+  function lampMarkup() {
+    return `<div class="village-lamps" aria-hidden="true" style="--lamp-sheet:url('${LAMP_GLOW.src}');--lamp-width:${LAMP_GLOW.frameWidth}px;--lamp-height:${LAMP_GLOW.frameHeight}px">${NEAR_LAMPS.map((base, i) =>
+      `<span class="village-lamp${lanternsEarned ? ' village-lamp--lit' : ''}" style="left:${base.x}px;top:${base.y}px">${LAMP_HEAD_OFFSETS[i].map(head =>
+        `<span class="village-lamp__head" style="left:${head.x - LAMP_GLOW.anchorX}px;top:${head.y - LAMP_GLOW.anchorY}px"></span>`).join('')}</span>`).join('')}</div>`;
+  }
   function stallMarkup(c, made) {
     const { x, y } = STALLS[c.id];
     const creation = made.creations[c.id], easel = easelRect(c.id);
@@ -332,6 +424,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const s = state();
     const drafts = Object.fromEntries(CHARACTERS.map(c => [c.id, getDraft(s, c.id)]).filter(([, draft]) => draft));
     const made = { creations: getCreations(s), completed: getCompleted(s), drafts };
+    lanternsEarned = CHARACTERS.every(c => Boolean(made.creations[c.id]));
     root = document.createElement('div');
     root.className = 'village';
     root.tabIndex = 0;
@@ -339,6 +432,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     root.setAttribute('aria-label', 'Hanabi Bay. Walk with the arrow keys. Press Enter near a neighbor to talk. Or choose a neighbor.');
     root.innerHTML = `<img class="village-map" src="${BACKGROUND}" alt="" draggable="false" width="960" height="540">
       <div class="village-stalls">${CHARACTERS.map(c => stallMarkup(c, made)).join('')}</div>
+      ${lampMarkup()}
       <div class="village-actors">
         ${CHARACTERS.map(c => neighborMarkup(c, made)).join('')}
         ${Object.keys(SIDE_SPOTS).map(sideMarkup).join('')}
@@ -440,6 +534,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   /* ---------- Motion ---------- */
 
   function shouldHold(a) {
+    if (a.held) return true;
     if (paused || calm() || a.id === findTarget) return true;
     if (player.visitOnArrive === a.id) return true;
     return Math.hypot(player.pos.x - a.pos.x, player.pos.y - a.pos.y) < STOP_RADIUS;
@@ -591,6 +686,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const actor = event.target.closest('.village-actor[data-id]');
     if (actor) { walkTo(actor.dataset.id); return; }
     if (event.target.closest('.village-map')) {   // tap the ground to walk there
+      if (root.querySelector('.village-chips')) hush();
       const box = root.getBoundingClientRect();
       if (!box.width || !ready) return;
       const point = { x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height };
@@ -686,6 +782,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       return false;
     },
     pause() {
+      if (lanternRunning) hush();
       cancelOpening();
       paused = true;
       player.target = null;
@@ -694,6 +791,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       player.visitOnArrive = null;
     },
     destroy() {
+      stopLanterns();
       if (alive && ready) {
         if (!villagePositions.has(ctx.stage)) villagePositions.set(ctx.stage, new Map());
         villagePositions.get(ctx.stage).set(positionScope, { ...player.pos });

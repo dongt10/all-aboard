@@ -162,3 +162,20 @@
 .village-help__mark { display: grid; place-items: center; width: 64px; height: 64px; border: 2px solid var(--ink); background: var(--paper); font-size: 40px; }
 .village-help__text { min-height: 3em; }
 .village-help__buttons { display: flex; justify-content: flex-end; gap: 12px; }
+
+/* ---- lane 8: lantern night ---- */
+.village-lamps { position: absolute; inset: 0; pointer-events: none; }
+.village-lamp, .village-lamp__head { position: absolute; pointer-events: none; }
+.village-lamp__head {
+  width: var(--lamp-width); height: var(--lamp-height); background-image: var(--lamp-sheet);
+  background-position: 0 0; background-repeat: no-repeat; image-rendering: pixelated;
+}
+.village-lamp--lit .village-lamp__head { background-position: calc(-1 * var(--lamp-width)) 0; }
+.village-chips { position: absolute; left: 14px; right: 14px; top: calc(100% - 6px); display: flex; flex-wrap: wrap; gap: 4px; }
+.village-chips .px-chip { min-height: 24px; padding: 0 6px; font-size: var(--text-small); cursor: pointer; }
+/* If a rendered line needs More, the choices sit below that page control. */
+.village-dialogue:has(.dlg__more:not([hidden])) .village-chips { top: calc(100% + 22px); }
+.calm .village-lamp__head { animation: none; transition: none; }
+@media (prefers-reduced-motion: reduce) {
+  .village-lamp__head { animation: none; transition: none; }
+}
