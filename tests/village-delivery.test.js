@@ -246,8 +246,11 @@ test('the opening close timer starts on arrival, with Hear and More still using 
   const readingDelay = 4000 + f.reaction.words.split(/\s+/).length * 500 + 500;
   f.wait(readingDelay - 1);
   assert.equal(f.box.hidden, false);
+  assert.equal(f.box.querySelector('.village-chips'), null);
   f.wait(1);
-  assert.equal(f.box.hidden, true);
+  // The reaction closed on time; Pip's next-stop offer takes its place (lane 2 hooks the reaction's close).
+  assert.equal(f.box.querySelector('.dlg__speaker').textContent, 'Pip');
+  assert.ok(f.box.querySelector('.village-chips [data-act="visit"]'));
 });
 
 test('the normal four-second close timer is measured from arrival, not mount', t => {
@@ -255,8 +258,11 @@ test('the normal four-second close timer is measured from arrival, not mount', t
   arrive(f);
   f.wait(3999);
   assert.equal(f.box.hidden, false);
+  assert.equal(f.box.querySelector('.village-chips'), null);
   f.wait(1);
-  assert.equal(f.box.hidden, true);
+  // Closed on time, then Pip's next-stop offer (lane 2) opens in its place.
+  assert.equal(f.box.querySelector('.dlg__speaker').textContent, 'Pip');
+  assert.ok(f.box.querySelector('.village-chips [data-act="visit"]'));
 });
 
 test('Bigger words, Hear and A retain the reader pages after arrival', t => {

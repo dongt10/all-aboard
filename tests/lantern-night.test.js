@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { CHARACTERS } from '../src/data.js';
 import { createState, publishCreation, saveDraft, getCreations, scopeKey } from '../src/progress.js';
-import { createVillageScene, LANTERN_LINES, WELCOME_LINE } from '../src/ui/screens/village.js';
+import { createVillageScene, LANTERN_LINES, WELCOME_LINE, lampHidden } from '../src/ui/screens/village.js';
 import { NEAR_LAMPS, ROAD_MASK } from '../src/ui/village-layout.js';
 import { createWalkable, maskFromRGBA } from '../src/ui/walkable.js';
 import { keyIntent, routeIntent } from '../src/ui/input.js';
@@ -202,15 +202,21 @@ test('normal motion lights one whole lamp every 800ms, holds Nori, then stays fi
   f.chip('light-lanterns').click();
   assert.equal(f.lit(), 0);
   assert.equal(f.text(), LANTERN_LINES.lighting);
-  for (let count = 1; count <= 11; count++) {
+  // Two glass heads sit behind the top bar: those lamps light with the lamp before them, so no 800 ms step is silent.
+  const steps = [];
+  for (let lit = 0; lit < NEAR_LAMPS.length;) { lit++; while (lit < NEAR_LAMPS.length && lampHidden(lit)) lit++; steps.push(lit); }
+  assert.deepEqual(steps, [1, 2, 5, 6, 7, 8, 9, 10, 11]);
+  let before = 0;
+  for (const count of steps) {
     f.wait(799);
-    assert.equal(f.lit(), count - 1);
+    assert.equal(f.lit(), before);
     f.frame(100);
     assert.deepEqual([nori.style.left, nori.style.top], position);
     f.wait(1);
     assert.equal(f.lit(), count);
     assert.deepEqual(f.root.querySelectorAll('.village-lamp').map(lamp => lamp.classList.contains('village-lamp--lit')),
       NEAR_LAMPS.map((_, i) => i < count));
+    before = count;
   }
   assert.equal(f.text(), LANTERN_LINES.done);
   assert.ok(f.chip('lantern-done'));
@@ -296,16 +302,19 @@ test('destroy cancels lighting and old callbacks cannot touch the next grade', a
   assert.equal(f.root.querySelector('.village-chips'), null);
 });
 
-test('another dialogue clears the row and the original welcome still works', async t => {
+test('another dialogue clears the lantern row, and Pip\'s own offer takes its place at seven of seven', async t => {
   const f = fixture(t);
   await f.visit();
+  assert.ok(f.chip('light-lanterns'));
   await f.visit('pip');
-  assert.equal(f.text(), WELCOME_LINE);
-  assert.equal(f.root.querySelector('.village-chips'), null);
-  const done = f.root.querySelector('[data-act="dismiss-welcome"]');
-  assert.equal(done.hidden, false);
-  done.click();
+  // With every stall made, Pip points at a second request instead of the welcome (Pip's next stop).
+  assert.equal(f.text(), 'Taro has one more request. Want to go?');
+  assert.equal(f.chip('light-lanterns'), null);
+  assert.ok(f.root.querySelector('.village-chips [data-act="visit"]'));
+  assert.equal(f.root.querySelector('[data-act="dismiss-welcome"]').hidden, true);
+  f.scene.handleIntent('b');
   assert.equal(f.host().hidden, true);
+  assert.equal(f.root.querySelector('.village-chips'), null);
 });
 
 test('lamp props sit before actors with no hit target, animation, background tint or dimming layer', t => {

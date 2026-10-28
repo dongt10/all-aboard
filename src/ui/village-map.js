@@ -1,6 +1,8 @@
 // Village furniture and movement on the shared crossroads layout.
 import { VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, HUD_ZONES, EASELS, ROAD_MASK, STAGE } from './village-layout.js';
 import { maskFromRGBA, createWalkable } from './walkable.js';
+import { activityFor } from './registry.js';
+import { encounterRequest } from '../encounters.js';
 export { VILLAGE_SPOTS, SIDE_SPOTS, WANDER, PLAYER_START, HUD_ZONES } from './village-layout.js';
 
 let current = null, playerRoad = null, loading = null, cachedMask = null, cachedSrc = null;
@@ -189,6 +191,22 @@ export function stallState(id, creations = {}, completed = [], drafts = {}) {
   if (creations?.[id]) return 'made';
   if (completed.includes(id)) return 'visited';
   return drafts?.[id] ? 'started' : 'new';
+}
+
+// Pip follows the board order, independent of save insertion order. Old stamps without
+// a creation stay visited; a published draft does not turn a made stall into started work.
+const NEXT_STOP_ORDER = ['math', 'science', 'art', 'reading', 'writing', 'community', 'music'];
+export function nextStop({ creations = {}, completed = [], drafts = {} } = {}) {
+  for (const status of ['started', 'new']) {
+    const id = NEXT_STOP_ORDER.find(id => stallState(id, creations, completed, drafts) === status);
+    if (id) return { id, status };
+  }
+  const id = NEXT_STOP_ORDER.find(id => {
+    const creation = creations?.[id];
+    return creation && encounterRequest(id, creation.request) === 1
+      && typeof activityFor(id, creation.chapter === 0 ? 0 : creation.grade ?? 0)?.another === 'function';
+  });
+  return id ? { id, status: 'another' } : null;
 }
 
 // The badge mark and the words a screen reader hears for every stall state except 'made'
