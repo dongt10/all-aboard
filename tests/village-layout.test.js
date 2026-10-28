@@ -66,7 +66,7 @@ function inPolygon(x, y, polygon) {
 }
 
 test('layout exports the complete plain-data contract with integer coordinates', () => {
-  assert.deepEqual(Object.keys(layout).sort(), ['BACKGROUND', 'ROAD_MASK', 'STAGE', 'HUD_ZONES', 'VILLAGE_SPOTS', 'STALLS', 'EASELS', 'SIDE_SPOTS', 'WANDER', 'PLAYER_START', 'NEAR_LAMPS'].sort());
+  assert.deepEqual(Object.keys(layout).sort(), ['BACKGROUND', 'ROAD_MASK', 'STAGE', 'HUD_ZONES', 'VILLAGE_SPOTS', 'STALLS', 'EASELS', 'SIDE_SPOTS', 'WANDER', 'PLAYER_START', 'NEAR_LAMPS', 'LAMP_HEAD_OFFSETS', 'LAMP_GLOW'].sort());
   assert.equal(BACKGROUND, 'assets/village/background.png');
   assert.equal(ROAD_MASK, 'assets/village/road.png');
   assert.deepEqual(STAGE, { width: 960, height: 540 });
@@ -350,4 +350,35 @@ test('road contains no saturated green vegetation, colored remnants or small com
   let all = 0;
   for (let i = 3; i < road.rgba.length; i += 4) all += Number(road.rgba[i] !== 0);
   assert.equal(count, all, 'no separate component of any size, including <200px remnants');
+});
+
+
+test('measured glass centers and glow frames stay on stage; upper lamps sit behind the HUD', () => {
+  const { LAMP_HEAD_OFFSETS: offsets, LAMP_GLOW: frame } = layout;
+  assert.equal(offsets.length, NEAR_LAMPS.length);
+  const underHud = [];
+  offsets.forEach((heads, i) => {
+    assert.ok(heads.length > 0);
+    for (const offset of heads) {
+      const p = { x: NEAR_LAMPS[i].x + offset.x, y: NEAR_LAMPS[i].y + offset.y };
+      const rect = { x: p.x - frame.anchorX, y: p.y - frame.anchorY, w: frame.frameWidth, h: frame.frameHeight };
+      assert.ok(inside(rect), `lamp ${i} is on stage`);
+      assert.ok(p.y < NEAR_LAMPS[i].y, `lamp ${i} above base`);
+      if (HUD_ZONES.some(zone => overlaps(rect, zone))) underHud.push(i);
+      // Glass is pale in the source; allow anti-aliased/rounded center coordinates.
+      const [r, g, b] = backgroundAt(p.x, p.y);
+      assert.ok(Math.min(r, g, b) > 145 && Math.max(r, g, b) - Math.min(r, g, b) < 40, `lamp ${i} glass at ${p.x},${p.y}`);
+    }
+  });
+  assert.deepEqual([...new Set(underHud)], [3, 4]);
+});
+
+test('lamp sheet contains distinct unlit and lit pixel frames with a stepped halo', () => {
+  const sheet = readPNG(new URL(`../${layout.LAMP_GLOW.src}`, import.meta.url));
+  assert.deepEqual([sheet.width, sheet.height], [32, 16]);
+  const pixel = (x, y) => [...sheet.rgba.slice((y * sheet.width + x) * 4, (y * sheet.width + x) * 4 + 4)];
+  assert.deepEqual(pixel(7, 4), [0, 0, 0, 255]);
+  assert.notDeepEqual(pixel(7, 7), pixel(23, 7));
+  assert.equal(pixel(7, 2)[3], 0);
+  assert.ok(pixel(23, 2)[3] > 0 && pixel(23, 2)[3] < 255);
 });

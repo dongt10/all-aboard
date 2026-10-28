@@ -69,3 +69,22 @@ export const NEAR_LAMPS = [
   { x: 678, y: 472 },
   { x: 885, y: 469 },
 ];
+
+// Glass centers measured in background.png (2 image pixels per stage pixel).
+// Entries correspond to NEAR_LAMPS; clipped or tree-covered heads are omitted.
+export const LAMP_HEAD_OFFSETS = [
+  [{ x: 10, y: -71 }],
+  [{ x: -15, y: -71 }, { x: 13, y: -71 }],
+  [{ x: -14, y: -71 }, { x: 13, y: -71 }],
+  [{ x: -14, y: -72 }, { x: 13, y: -72 }],
+  [{ x: -13, y: -72 }, { x: 14, y: -72 }],
+  [{ x: -13, y: -71 }, { x: 14, y: -71 }],
+  [{ x: -12, y: -71 }, { x: 15, y: -71 }],
+  [{ x: -15, y: -70 }, { x: 13, y: -70 }],
+  [{ x: -14, y: -70 }, { x: 13, y: -70 }],
+  [{ x: -13, y: -70 }, { x: 14, y: -70 }],
+  [{ x: -12, y: -70 }],
+];
+
+// Two horizontal frames: unlit then lit. Anchor is the glass center.
+export const LAMP_GLOW = { src: 'assets/village/lamp-glow.png', frameWidth: 16, frameHeight: 16, anchorX: 8, anchorY: 8 };
