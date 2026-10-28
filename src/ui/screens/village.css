@@ -185,3 +185,6 @@
 @media (prefers-reduced-motion: reduce) {
   .village-lamp__head { animation: none; transition: none; }
 }
+/* ---- lane 7: Pip delivers your sign ---- */
+.village-delivery-sign { position: absolute; left: 4px; top: -29px; width: 64px; height: 40px; pointer-events: none; }
+.village-delivery-sign > .world-sign { position: absolute; left: 50%; top: 50%; width: 240px; max-width: none; max-height: none; overflow: visible; transform: translate(-50%, -50%) scale(var(--sign-scale, .1)); }

@@ -108,6 +108,15 @@ function walkPath(path, from, goal, context, playerClearance = false) {
   return samples;
 }
 
+test('Pip can deliver from home to every reader talk goal and walk the road home', () => {
+  for (const id of Object.keys(cast)) {
+    const goal = talkGoal(id);
+    assert.ok(goal, id);
+    walkPath(roadPath(SIDE_SPOTS.pip, goal, 0), SIDE_SPOTS.pip, goal, `Pip delivers to ${id}`, true);
+    walkPath(roadPath(goal, SIDE_SPOTS.pip, 0), goal, SIDE_SPOTS.pip, `Pip returns from ${id}`, true);
+  }
+});
+
 test('road fuzz: 60,000 keyboard steps with long repeated-key runs', t => {
   const random = seeded(SEED), keys = ['up', 'down', 'left', 'right'];
   let player = { ...PLAYER_START }, intent, remaining = 0, blocked = 0, runs = 0;

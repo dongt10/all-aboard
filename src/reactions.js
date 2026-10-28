@@ -105,12 +105,19 @@ function artLine(s, grade) {
   return `${count} ${capital(list(colors))}. ${design}`;
 }
 
-function signReaction(s, grade) {
-  const scenario = scenarioById(s.scenario, grade);
+export function signReader(s, grade = 0) {
+  if (!object(s) || s.kind !== 'writing' || s.activity !== undefined) return null;
+  const savedGrade = Number.isInteger(s.grade) && s.grade >= 0 && s.grade <= 5 ? s.grade
+    : Number.isInteger(grade) && grade >= 0 && grade <= 5 ? grade : 0;
+  const scenario = scenarioById(s.scenario, savedGrade);
   // Pip and Nori live in the village too. Cricket stays on the music stage.
   const readers = [...CHARACTERS, { id: 'pip', name: 'Pip' }, { id: 'nori', name: 'Nori' }];
-  const reader = readers.find(character => character.name === scenario?.reader
+  return readers.find(character => character.name === scenario?.reader
     || (character.id === 'music' && scenario?.reader === 'Kiko and the band'));
+}
+
+function signReaction(s, grade) {
+  const reader = signReader(s, grade);
   const text = typeof s.text === 'string' ? s.text.replace(/\s+/g, ' ').trim() : '';
   const count = text ? text.split(' ').length : 0;
   // A short sign is read back word for word: the reader noticing the child's own words is the point.
