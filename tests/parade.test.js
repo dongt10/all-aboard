@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { paradeLineup, paradeCommands, paradeStatus, paradeOpening, paradeEnding, PARADE_LINES, PARADE_LAPS, PARADE_ORDER } from '../src/ui/parade-lineup.js';
-import { PAGE_CHARS } from '../src/ui/dialogue.js';
+import { paradeLineup, paradeSideMarchers, paradeCommands, paradeStatus, paradeOpening, paradeEnding, PARADE_LINES, PARADE_LAPS, PARADE_ORDER, PARADE_SPACING, PARADE_LEADER_X, NORI_ARRIVAL_MS } from '../src/ui/parade-lineup.js';
+import { PAGE_CHARS, paginate } from '../src/ui/dialogue.js';
 import { createDefaultBand } from '../src/audio.js';
+import { readFileSync } from 'node:fs';
+import { readPNG } from './helpers/png.js';
 
+const arrived = line => `${line} ${PARADE_LINES.arrived}`;
 const sentences = text => text.split(/(?<=[.!?])\s+/);
 const fitsPage = (text, label = text) => {
   assert.ok(text.length <= PAGE_CHARS.normal, label);
@@ -51,40 +54,56 @@ test('without a band, the status line and the opening say to visit Kiko first', 
   assert.equal(paradeOpening({ hasBand: false }), 'Your parade! Every idea belongs here. Visit Kiko to make a band first.');
   assert.equal(paradeOpening(), paradeOpening({ hasBand: false }));
 });
-test('the parade ends after two laps and stops in a line-up', () => {
+test('the parade ends after two laps and Nori arrives in the line-up', () => {
   assert.equal(PARADE_LAPS, 2);
   assert.deepEqual(paradeEnding({ laps: 0, made: 3 }), { over: false, line: null });
   assert.deepEqual(paradeEnding({ laps: 1, made: 3 }), { over: false, line: null });
-  assert.deepEqual(paradeEnding({ laps: 2, made: 3 }), { over: true, line: 'The parade is over. Make more, and march again!' });
-  assert.equal(paradeEnding({ laps: 5, made: 1 }).over, true);
+  assert.deepEqual(paradeEnding({ laps: 2, noriArrived: true, made: 3 }), { over: true, line: arrived(PARADE_LINES.over) });
+  assert.equal(paradeEnding({ laps: 5, noriArrived: true, made: 1 }).over, true);
   assert.deepEqual(paradeEnding(), { over: false, line: null });
 });
 test('with Calm motion the line-up shows at once with the same line', () => {
-  assert.deepEqual(paradeEnding({ laps: 0, calm: true, made: 2 }), { over: true, line: PARADE_LINES.over });
-  assert.deepEqual(paradeEnding({ laps: 0, calm: true, made: PARADE_ORDER.length }), { over: true, line: PARADE_LINES.complete });
+  assert.deepEqual(paradeEnding({ laps: 0, calm: true, made: 2 }), { over: true, line: arrived(PARADE_LINES.over) });
+  assert.deepEqual(paradeEnding({ laps: 0, calm: true, made: PARADE_ORDER.length }), { over: true, line: arrived(PARADE_LINES.complete) });
 });
 test('without a band, the ending keeps saying why Play band is grayed out', () => {
-  const line = 'The parade is over. Make more, and march again! Visit Kiko to make a band first.';
-  assert.deepEqual(paradeEnding({ laps: 2, made: 2, hasBand: false }), { over: true, line });
+  const line = 'The parade is over. Make more, and march again! Nori made it! Visit Kiko to make a band first.';
+  assert.deepEqual(paradeEnding({ laps: 2, noriArrived: true, made: 2, hasBand: false }), { over: true, line });
   assert.deepEqual(paradeEnding({ laps: 0, calm: true, made: 2, hasBand: false }), { over: true, line });
-  assert.deepEqual(paradeEnding({ laps: 2, made: 2, hasBand: true }), { over: true, line: PARADE_LINES.over });
+  assert.deepEqual(paradeEnding({ laps: 2, noriArrived: true, made: 2, hasBand: true }), { over: true, line: arrived(PARADE_LINES.over) });
   assert.equal(paradeEnding({ laps: 1, made: 2, hasBand: false }).over, false);
   fitsPage(line);
 });
 test('when every subject is made, the ending celebrates the whole festival', () => {
   assert.equal(PARADE_ORDER.length, 7);
-  assert.equal(paradeEnding({ laps: 2, made: 7 }).line, 'Everyone marched! You made the whole festival.');
-  assert.equal(paradeEnding({ laps: 2, made: 6 }).line, PARADE_LINES.over);
+  assert.equal(paradeEnding({ laps: 2, noriArrived: true, made: 7 }).line, 'Everyone marched! You made the whole festival. Nori made it!');
+  assert.equal(paradeEnding({ laps: 2, noriArrived: true, made: 6 }).line, arrived(PARADE_LINES.over));
 });
 test('every parade line fits one dialogue page sentence by sentence, even with Bigger words', () => {
   for (const line of Object.values(PARADE_LINES)) fitsPage(line);
   fitsPage(paradeOpening({ hasBand: false }));
+  for (const made of [0, 1, 6, 7]) for (const hasBand of [true, false]) {
+    const end = paradeEnding({ laps: 2, made, hasBand, noriArrived: true });
+    fitsPage(end.line);
+    for (const limit of Object.values(PAGE_CHARS)) {
+      assert.ok(paginate(end.line, limit).every(page => page.length <= limit));
+    }
+  }
+  fitsPage(`${PARADE_LINES.waiting} ${PARADE_LINES.noBand}`);
+});
+
+test('Nori arrival gates every moving ending, even with all seven creations', () => {
+  for (const made of [0, 1, 6, 7]) for (const hasBand of [true, false]) {
+    assert.deepEqual(paradeEnding({ laps: 2, made, hasBand }), { over: false, line: null });
+    assert.deepEqual(paradeEnding({ laps: 1, made, hasBand, noriArrived: true }), { over: false, line: null });
+    assert.match(paradeEnding({ calm: true, made, hasBand }).line, /Nori made it!/);
+  }
 });
 
 // ---- The scene and the windows, mounted under a tiny fake DOM (the same harness as tests/fixes-behavior.test.js,
 // plus replaceWith, which the Guide header uses). Focus follows browser rules: hidden, inert, disabled or
 // detached elements lose it. ----
-import { Doc, El, Event } from './helpers/dom.js';
+import { Doc, El, Event, Target, pressKey } from './helpers/dom.js';
 
 const doc = new Doc();
 const speech = { cancels: 0, cancel() { this.cancels++; }, speak() {} };
@@ -125,6 +144,7 @@ const slot = (stage, id) => stage.querySelectorAll('.cmd-slot').find(b => b.data
 const withBand = (state = createState()) => publishCreation(state, 'music', createDefaultBand());
 const withArt = (state = createState()) => publishCreation(state, 'art', { kind: 'art', tiles: ['a'] });
 const dialogueText = stage => stage.querySelector('.parade-dialogue .dlg__text').textContent;
+const arrival = stage => stage.querySelector('.parade-side--nori').dispatchEvent(new Event('animationend', { animationName: 'parade-nori-arrive' }));
 const lap = (stage, name = 'parade-march', type = 'animationiteration') =>
   stage.querySelector('.parade-line').dispatchEvent(new Event(type, { animationName: name }));
 
@@ -143,17 +163,17 @@ test('parade scene: band status does not replace the completion message', async 
   const ctx = fakeCtx({ ...state, settings: { reducedMotion: true } });
   const scene = createParadeScene(ctx);
   scene.mount();
-  assert.equal(dialogueText(ctx.stage), PARADE_LINES.complete);
+  assert.equal(dialogueText(ctx.stage), arrived(PARADE_LINES.complete));
   const status = ctx.stage.querySelector('.parade [role="status"]');
   assert.equal(status.hidden, true);
   slot(ctx.stage, 'play').click();
   assert.equal(status.textContent, 'Starting your band…');
   await tick();
-  assert.equal(dialogueText(ctx.stage), PARADE_LINES.complete);
+  assert.equal(dialogueText(ctx.stage), arrived(PARADE_LINES.complete));
   assert.equal(status.hidden, false);
   assert.equal(status.textContent, 'Sound could not start. The parade is still yours.');
   ctx.stage.querySelector('.parade-dialogue').querySelectorAll('.dlg__tab').find(b => b.dataset.act === 'hear').click();
-  assert.equal(ctx.spoken.at(-1), `${PARADE_LINES.complete} ${status.textContent}`);
+  assert.equal(ctx.spoken.at(-1), `${arrived(PARADE_LINES.complete)} ${status.textContent}`);
   scene.destroy();
   assert.equal(ctx.stage.querySelector('.parade'), null);
 });
@@ -185,7 +205,7 @@ test('parade scene: successful playback keeps completion and reads each status',
       assert.equal(status.textContent, expected);
       assert.equal(ctx.spoken.at(-1), expected, 'auto-read announces the status');
       ctx.stage.querySelector('.parade-dialogue').querySelectorAll('.dlg__tab').find(b => b.dataset.act === 'hear').click();
-      assert.equal(ctx.spoken.at(-1), `${PARADE_LINES.complete} ${expected}`);
+      assert.equal(ctx.spoken.at(-1), `${PARADE_LINES.complete} More. Tap to continue. ${expected}`);
     };
     slot(ctx.stage, 'play').click();
     verify('Starting your band…');
@@ -211,11 +231,14 @@ test('parade scene: two laps, then the marchers halt in the line-up and the endi
   assert.equal(dialogueText(ctx.stage), PARADE_LINES.opening, 'still marching');
   lap(ctx.stage, 'parade-last-lap', 'animationend');
   const root = ctx.stage.querySelector('.parade');
+  assert.ok(root.classList.contains('is-settling'));
+  assert.equal(dialogueText(ctx.stage), PARADE_LINES.waiting);
+  arrival(ctx.stage);
   assert.ok(root.classList.contains('is-over') && root.classList.contains('is-still'));
   assert.ok(!line.classList.contains('is-marching') && !line.classList.contains('is-last-lap'));
-  assert.equal(dialogueText(ctx.stage), PARADE_LINES.over);
+  assert.equal(dialogueText(ctx.stage), arrived(PARADE_LINES.over));
   lap(ctx.stage, 'parade-last-lap', 'animationend');   // a stray event after the end changes nothing
-  assert.equal(dialogueText(ctx.stage), PARADE_LINES.over);
+  assert.equal(dialogueText(ctx.stage), arrived(PARADE_LINES.over));
   // March again restarts from the left with the opening line.
   slot(ctx.stage, 'march').click();
   await tick();
@@ -232,7 +255,9 @@ test('parade scene: without a band, Play band stays disabled and the ending stil
   assert.equal(slot(ctx.stage, 'play').disabled, true);
   assert.equal(dialogueText(ctx.stage), paradeOpening({ hasBand: false }));
   lap(ctx.stage); lap(ctx.stage, 'parade-last-lap', 'animationend');
-  assert.equal(dialogueText(ctx.stage), `${PARADE_LINES.over} ${PARADE_LINES.noBand}`);
+  assert.equal(dialogueText(ctx.stage), `${PARADE_LINES.waiting} ${PARADE_LINES.noBand}`);
+  arrival(ctx.stage);
+  assert.equal(dialogueText(ctx.stage), `${arrived(PARADE_LINES.over)} ${PARADE_LINES.noBand}`);
   assert.equal(slot(ctx.stage, 'play').disabled, true);
   scene.destroy();
 });
@@ -245,10 +270,212 @@ test('parade scene: with Calm motion the line-up shows at once, and Help opens t
   const root = ctx.stage.querySelector('.parade');
   assert.ok(root.classList.contains('is-over') && root.classList.contains('is-still'));
   assert.ok(!root.querySelector('.parade-line').classList.contains('is-marching'));
-  assert.equal(dialogueText(ctx.stage), `${PARADE_LINES.over} ${PARADE_LINES.noBand}`);
+  assert.equal(dialogueText(ctx.stage), `${arrived(PARADE_LINES.over)} ${PARADE_LINES.noBand}`);
   ctx.stage.querySelector('.parade-dialogue').querySelectorAll('.dlg__tab').find(b => b.dataset.act === 'help').click();
   assert.deepEqual(ctx.opened, [['Parade', HELP_STEPS]]);
   scene.destroy();
+});
+
+// Lane 3: real scene events drive the two laps and Nori's separate CSS arrival.
+const paradeCSS = readFileSync(new URL('../src/ui/screens/parade.css', import.meta.url), 'utf8');
+const paradeFixture = (t, state = withBand(withArt())) => {
+  const ctx = fakeCtx(state), scene = createParadeScene(ctx);
+  t.after(() => scene.destroy());
+  scene.mount();
+  return { ctx, scene, root: ctx.stage.querySelector('.parade') };
+};
+const frameStyle = (root, id) => root.querySelector(`.figure--${id}`).getAttribute('style');
+const allMade = count => PARADE_ORDER.slice(0, count).reduce((state, id) => publishCreation(state, id, id === 'music' ? createDefaultBand() : { kind: id }), createState());
+const pxStyle = (el, prop) => Number(el.getAttribute('style').match(new RegExp(`(?:^|;)${prop}:(-?[\\d.]+)px`))[1]);
+
+for (let count = 0; count <= 7; count++) test(`Pip and Nori share the end slots with ${count} creations, above the dialogue tabs`, t => {
+  const { root, ctx } = paradeFixture(t, allMade(count));
+  const line = root.querySelector('.parade-line');
+  const width = pxStyle(line, 'width'), lineX = pxStyle(line, '--line-x');
+  assert.equal(width, (count + 1) * 112);
+  assert.ok(width <= 896);
+  assert.equal(root.querySelectorAll('.parade-marcher').length, count + 1);
+  assert.deepEqual(paradeSideMarchers(count).map(side => side.id), ['pip', 'nori']);
+  assert.ok(!PARADE_ORDER.includes('pip') && !PARADE_ORDER.includes('nori'));
+  const player = root.querySelector('.parade-marcher--leader');
+  const leaderFeet = pxStyle(player, 'left') + pxStyle(player.querySelector('.parade-figure'), 'left') + 32;
+  const pip = root.querySelector('.parade-side--pip'), nori = root.querySelector('.parade-side--nori');
+  assert.equal(pxStyle(pip, 'left') + 32 - leaderFeet, 40);
+  assert.ok(pxStyle(pip, 'left') >= count * PARADE_SPACING);
+  assert.ok(pxStyle(pip, 'left') + 64 <= width, 'Pip fits inside the leader slot');
+  const lastFeet = count ? PARADE_SPACING / 2 : PARADE_LEADER_X;
+  assert.equal(lastFeet - (pxStyle(nori, 'left') + 32 + pxStyle(nori, '--trail-x')), 48);
+  for (const side of [pip, nori]) {
+    for (const offset of [0, pxStyle(side, '--trail-x')]) {
+      const x = lineX + pxStyle(side, 'left') + offset;
+      assert.ok(x >= 0 && x + 64 <= 960, 'entire sprite stays on the stage during arrival');
+    }
+    const top = pxStyle(side, 'top');
+    const id = side === pip ? 'pip' : 'nori';
+    const png = readPNG(new URL(`../assets/figures/${id}.png`, import.meta.url));
+    // Check the actual pixels of every walking frame and the front joy frame.
+    for (const [row, col] of [[2, 0], [2, 1], [2, 2], [0, 3]]) {
+      for (let y = 0; y < 64; y++) for (let x = 0; x < 64; x++) {
+        if (png.rgba[((row * 64 + y) * png.width + col * 64 + x) * 4 + 3]) assert.ok(top + y < 360);
+      }
+    }
+  }
+  assert.match(root.querySelector('.parade-street').getAttribute('aria-label'), /Pip and Nori march too\./);
+  assert.equal(ctx.stage.querySelectorAll('.parade-float').length, count, 'no extra progress or creations');
+});
+
+test('Pip walks at 160ms, Nori at 320ms; only Nori walks during the final two seconds', t => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const { root, ctx } = paradeFixture(t);
+  assert.match(frameStyle(root, 'pip'), /background-position:0px -128px/);
+  assert.match(frameStyle(root, 'nori'), /background-position:0px -128px/);
+  t.mock.timers.tick(160);
+  assert.match(frameStyle(root, 'pip'), /background-position:-64px -128px/);
+  assert.match(frameStyle(root, 'nori'), /background-position:0px -128px/);
+  t.mock.timers.tick(160);
+  assert.match(frameStyle(root, 'pip'), /background-position:-128px -128px/);
+  assert.match(frameStyle(root, 'nori'), /background-position:-64px -128px/);
+  lap(ctx.stage); lap(ctx.stage, 'parade-last-lap', 'animationend');
+  assert.match(frameStyle(root, 'pip'), /background-position:-192px 0px/);
+  assert.match(frameStyle(root, 'art'), /background-position:-64px 0px/);
+  assert.match(frameStyle(root, 'nori'), /background-position:-64px -128px/);
+  const pip = frameStyle(root, 'pip');
+  t.mock.timers.tick(320);
+  assert.equal(frameStyle(root, 'pip'), pip);
+  assert.match(frameStyle(root, 'nori'), /background-position:-128px -128px/);
+  assert.equal(dialogueText(ctx.stage), PARADE_LINES.waiting);
+  assert.equal(NORI_ARRIVAL_MS, 2000);
+  assert.match(root.querySelector('.parade-side--nori').getAttribute('style'), /--arrival-ms:2000ms/);
+  assert.match(paradeCSS, /animation: parade-nori-arrive var\(--arrival-ms\) linear 1 forwards/);
+  t.mock.timers.tick(2000);
+  assert.ok(!dialogueText(ctx.stage).includes(PARADE_LINES.arrived), 'time alone cannot claim arrival');
+  arrival(ctx.stage);
+  assert.match(frameStyle(root, 'nori'), /background-position:-192px 0px/);
+  assert.equal(dialogueText(ctx.stage), arrived(PARADE_LINES.over));
+  const nori = frameStyle(root, 'nori');
+  t.mock.timers.tick(10000);
+  assert.equal(frameStyle(root, 'nori'), nori, 'finished sprites never resume walking');
+});
+
+test('the arrival layers Nori in front, stays level and has explicit calm overrides', () => {
+  assert.match(paradeCSS, /\.parade-side--nori\s*\{\s*z-index: 2;/);
+  const keyframes = paradeCSS.slice(paradeCSS.indexOf('@keyframes parade-nori-arrive')).split('\n}')[0];
+  assert.match(keyframes, /from \{ transform: translateX\(var\(--trail-x\)\); \}/);
+  assert.match(keyframes, /to \{ transform: translateX\(0\); \}/);
+  assert.doesNotMatch(keyframes, /translateY|scale|rotate/);
+  const additions = paradeCSS.slice(paradeCSS.indexOf('/* ---- lane 3:'));
+  assert.match(additions, /\.calm \.parade-side--nori \{ animation: none; transform: none; \}/);
+  assert.match(additions, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none; transform: none;/);
+});
+
+test('descendant, out-of-order and duplicate animation events cannot finish the parade early', t => {
+  const { root, ctx } = paradeFixture(t);
+  arrival(ctx.stage);
+  lap(ctx.stage, 'parade-last-lap', 'animationend');
+  root.querySelector('.parade-side--pip').dispatchEvent(new Event('animationiteration', { animationName: 'parade-march' }));
+  assert.ok(root.querySelector('.parade-line').classList.contains('is-marching'));
+  lap(ctx.stage);
+  lap(ctx.stage); // duplicate first lap
+  assert.ok(root.querySelector('.parade-line').classList.contains('is-last-lap'));
+  lap(ctx.stage, 'parade-last-lap', 'animationend');
+  lap(ctx.stage, 'parade-nori-arrive', 'animationend');
+  root.querySelector('.parade-side--nori .figure').dispatchEvent(new Event('animationend', { animationName: 'parade-nori-arrive' }));
+  assert.equal(dialogueText(ctx.stage), PARADE_LINES.waiting);
+  arrival(ctx.stage);
+  arrival(ctx.stage);
+  assert.equal(dialogueText(ctx.stage), arrived(PARADE_LINES.over));
+});
+
+test('March again replays both laps and Nori arrival using pointer or keyboard, including mid-arrival', async t => {
+  const { root, ctx } = paradeFixture(t);
+  for (const key of [null, 'Enter', ' ']) {
+    lap(ctx.stage); lap(ctx.stage, 'parade-last-lap', 'animationend');
+    if (key !== 'Enter') arrival(ctx.stage);
+    const march = slot(ctx.stage, 'march');
+    march.focus();
+    if (key) { pressKey(march, 'keydown', key); pressKey(march, 'keyup', key); }
+    else march.click();
+    await tick();
+    assert.equal(dialogueText(ctx.stage), PARADE_LINES.opening);
+    assert.ok(!root.classList.contains('is-over') && !root.classList.contains('is-settling'));
+    assert.ok(root.querySelector('.parade-line').classList.contains('is-marching'));
+    assert.match(frameStyle(root, 'nori'), /background-position:0px -128px/);
+    arrival(ctx.stage); // an obsolete arrival after restart cannot close the new march
+    assert.equal(dialogueText(ctx.stage), PARADE_LINES.opening);
+  }
+  lap(ctx.stage); lap(ctx.stage, 'parade-last-lap', 'animationend'); arrival(ctx.stage);
+  assert.equal(dialogueText(ctx.stage), arrived(PARADE_LINES.over));
+});
+
+for (const source of ['setting', 'class', 'system']) for (const phase of ['mount', 'march', 'arrival']) {
+  test(`Calm motion from ${source} immediately settles Pip and Nori during ${phase}`, t => {
+    t.mock.timers.enable({ apis: ['setInterval'] });
+    const media = new Target(); media.matches = source === 'system' && phase === 'mount';
+    const oldMedia = globalThis.matchMedia, oldObserver = globalThis.MutationObserver, observers = [];
+    globalThis.matchMedia = () => media;
+    globalThis.MutationObserver = class {
+      constructor(callback) { this.callback = callback; observers.push(this); }
+      observe() {} disconnect() { this.disconnected = true; }
+    };
+    t.after(() => { globalThis.matchMedia = oldMedia; globalThis.MutationObserver = oldObserver; });
+    const state = { ...withBand(withArt()), settings: { reducedMotion: source === 'setting' && phase === 'mount' } };
+    const ctx = fakeCtx(state);
+    if (source === 'class' && phase === 'mount') ctx.stage.classList.add('calm');
+    const scene = createParadeScene(ctx);
+    t.after(() => scene.destroy());
+    scene.mount();
+    if (phase === 'arrival') { lap(ctx.stage); lap(ctx.stage, 'parade-last-lap', 'animationend'); }
+    if (phase !== 'mount') {
+      if (source === 'setting') { state.settings.reducedMotion = true; t.mock.timers.tick(160); }
+      if (source === 'class') { ctx.stage.classList.add('calm'); observers.forEach(o => o.callback()); }
+      if (source === 'system') { media.matches = true; media.fire(new Event('change')); }
+    }
+    const root = ctx.stage.querySelector('.parade');
+    assert.ok(root.classList.contains('is-over') && root.classList.contains('is-still'));
+    assert.ok(!root.classList.contains('is-settling'));
+    for (const id of ['pip', 'nori']) assert.match(frameStyle(root, id), /background-position:-192px 0px/);
+    assert.equal(dialogueText(ctx.stage), arrived(PARADE_LINES.over));
+    slot(ctx.stage, 'march').click();
+    assert.equal(dialogueText(ctx.stage), arrived(PARADE_LINES.over), 'calm replay has no delayed arrival');
+    scene.destroy();
+    assert.ok(observers.every(o => o.disconnected));
+    assert.equal(media.listeners.change.length, 0);
+  });
+}
+
+for (const largeText of [false, true]) test(`all seven creations keep the ending and arrival readable with Bigger words ${largeText}`, t => {
+  const { root, ctx, scene } = paradeFixture(t, { ...allMade(7), settings: { largeText, autoRead: true } });
+  lap(ctx.stage); lap(ctx.stage, 'parade-last-lap', 'animationend');
+  assert.ok(ctx.spoken.every(text => !text.includes(PARADE_LINES.arrived)));
+  arrival(ctx.stage);
+  const pages = [];
+  while (true) {
+    const text = dialogueText(ctx.stage);
+    pages.push(text);
+    assert.ok(text.length <= (largeText ? 56 : 96));
+    root.querySelector('[data-act="hear"]').click();
+    assert.ok(ctx.spoken.at(-1).startsWith(text));
+    if (root.querySelector('.dlg__more').hidden) break;
+    assert.ok(scene.handleIntent('a'));
+  }
+  assert.equal(pages.join(' '), arrived(PARADE_LINES.complete));
+  assert.equal(getCreations(ctx.getState()).music.kind, 'music');
+  assert.equal(Object.keys(getCreations(ctx.getState())).length, 7);
+});
+
+test('destroy during Nori arrival removes animation listeners and stops the stride clock', t => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
+  const { root, ctx, scene } = paradeFixture(t);
+  lap(ctx.stage); lap(ctx.stage, 'parade-last-lap', 'animationend');
+  const nori = root.querySelector('.parade-side--nori'), markup = nori.innerHTML;
+  scene.destroy();
+  const spoken = ctx.spoken.length;
+  nori.dispatchEvent(new Event('animationend', { animationName: 'parade-nori-arrive' }));
+  t.mock.timers.tick(10000);
+  assert.equal(nori.innerHTML, markup);
+  assert.equal(ctx.spoken.length, spoken);
+  assert.equal(root.listeners.animationend.length, 0);
+  assert.equal(root.listeners.animationiteration.length, 0);
 });
 
 test('pause window: Keep playing closes it, Title screen closes it and goes to the title scene', async () => {
