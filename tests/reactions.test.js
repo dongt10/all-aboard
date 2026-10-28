@@ -5,6 +5,7 @@ import { cleanCreation } from '../src/progress.js';
 import { encounterReady } from '../src/encounters.js';
 import { expectedAt, stampPosition } from '../src/banner-rules.js';
 import { TALE_DECKS } from '../src/tales.js';
+import { CARD_WORDS } from '../src/chain.js';
 import { helpSetFor } from '../src/helpday.js';
 import { SIGN_SCENARIOS } from '../src/sign-scenarios.js';
 import { defaultBandFor, lessonDone } from '../src/ui/band.js';
@@ -103,10 +104,12 @@ test('reactions describe facts in each saved activity', () => {
       for (const n of creation('science', grade).energy) assert.ok(science.includes(String(n)));
       assert.match(science, grade === 4 ? /koi/i : /otter/i);
     }
-    const reading = say('reading');
+    const readingReply = reactionLine('reading', creation('reading', grade), grade);
+    assert.equal(readingReply.id, grade === 4 ? 'pip' : grade === 5 ? 'nori' : 'reading');
+    const reading = readingReply.words;
     if (grade < 2) for (const word of ['key', 'umbrella', 'book']) assert.match(reading, new RegExp(word, 'i'));
     else if (grade === 2) assert.match(reading, /steady/i);
-    else for (const name of [['Momo', 'Taro', 'Kiko'], ['Hana', 'Pip', 'Yuki'], ['Fumi', 'Nori', 'Sora']][grade - 3]) assert.ok(reading.includes(name));
+    else for (const name of [['Momo', 'Taro', 'Kiko'], ['Hana', 'Yuki'], ['Fumi', 'Sora']][grade - 3]) assert.ok(reading.includes(name));
     const art = say('art');
     assert.match(art, new RegExp(`\\b${creation('art', grade).stamps.length} stamps?\\b`, 'i'));
     assert.match(art, /coral/i);
@@ -118,10 +121,12 @@ test('reactions describe facts in each saved activity', () => {
     if (signText.length <= 40) assert.ok(reply.words.includes(`It says: ${signText}`), reply.words);
     else assert.match(reply.words, new RegExp(`\\b${signText.split(' ').length} words?\\b`));
     assert.equal(reply.id, grade <= 2 ? 'science' : 'art');
-    const community = say('community');
+    const communityReply = reactionLine('community', creation('community', grade), grade);
+    assert.equal(communityReply.id, grade === 3 || grade === 5 ? 'nori' : 'community');
+    const community = communityReply.words;
     if (grade < 2) { assert.match(community, /bench/i); if (grade) assert.match(community, /garden/i); }
     else if (grade === 2) for (const word of ['flour', 'drum', 'lantern']) assert.match(community, new RegExp(word, 'i'));
-    else for (const name of grade === 4 ? ['Momo', 'Sora', 'Yuki', 'Fumi'] : ['Kiko', 'Taro', 'Nori', 'Pip']) assert.ok(community.includes(name));
+    else for (const name of grade === 4 ? ['Momo', 'Sora', 'Yuki', 'Fumi'] : ['Pip']) assert.ok(community.includes(name));
     const music = say('music');
     assert.match(music, /Sora/i);
     assert.match(music, /fast/i);
@@ -226,5 +231,72 @@ test('unknown nested fields cannot crash or produce made-up details', () => {
     const original = structuredClone(saved);
     assert.deepEqual(reactionLine(id, { ...saved, ui: { ready: true }, request: { id: 2 } }, 5), reactionLine(id, saved, 5));
     assert.deepEqual(saved, original, 'reactions do not mutate saved work');
+  }
+});
+
+
+test('compass cameo requires the saved second request and every errand', () => {
+  const saved = { kind: 'community', activity: 'compass', request: 2, done: ['east', 'south', 'north'] };
+  const result = reactionLine('community', saved, 2);
+  assert.deepEqual(result, { id: 'pip', words: 'I carried your lantern east and flour south and north. Thank you!' });
+  check(result);
+  for (const partial of [['east', 'south'], ['east', 'south', 'east'], [], null]) {
+    const reply = reactionLine('community', { ...saved, done: partial }, 2);
+    assert.equal(reply.id, 'community'); check(reply);
+  }
+  assert.equal(reactionLine('community', { ...saved, request: 1 }, 2).id, 'community');
+});
+
+test('Help Day cameo requires the complete fitting set A crew', () => {
+  const crew = Object.entries(helpSetFor(3).fits).map(([job, helper]) => ({ job, helper }));
+  const saved = { kind: 'community', activity: 'helpday', crew };
+  const result = reactionLine('community', saved, 3);
+  assert.deepEqual(result, { id: 'nori', words: 'I greet at the gate all day. Pip takes the mail. Thank you!' });
+  check(result);
+  for (const partial of [crew.slice(0, 3), [crew[2], crew[3]], [...crew.slice(0, 3), { job: 'mail', helper: 'nori' }], [null], null]) {
+    const reply = reactionLine('community', { ...saved, crew: partial }, 3);
+    assert.equal(reply.id, 'community'); check(reply);
+  }
+  const other = Object.entries(helpSetFor(4).fits).map(([job, helper]) => ({ job, helper }));
+  assert.equal(reactionLine('community', { ...saved, crew: other }, 4).id, 'community');
+});
+
+test('tale cameos name only other solved tales in the current valid deck', () => {
+  for (const [deck, own, speaker, opening, others] of [
+    [1, 'pip-letters', 'pip', 'Webbed feet, that was me!', ['Hana', 'Yuki']],
+    [2, 'nori-lanterns', 'nori', 'A hard shell, that was me!', ['Fumi', 'Sora']],
+  ]) {
+    const saved = { kind: 'reading', activity: 'tales', deck, solved: [own] };
+    assert.deepEqual(reactionLine('reading', saved, 5), { id: speaker, words: opening });
+    const first = TALE_DECKS[deck][0].id;
+    const partial = reactionLine('reading', { ...saved, solved: [own, first, 'unknown'] }, 5);
+    assert.equal(partial.id, speaker); assert.ok(partial.words.includes(others[0])); assert.ok(!partial.words.includes(others[1])); check(partial);
+    const full = reactionLine('reading', { ...saved, solved: TALE_DECKS[deck].map(t => t.id) }, 5);
+    assert.equal(full.words, `${opening} You named ${others.join(' and ')} too.`); check(full);
+    assert.equal(reactionLine('reading', { ...saved, deck: 0 }, 5).id, 'reading');
+    assert.equal(reactionLine('reading', { ...saved, deck: 99 }, 5).id, 'reading');
+    assert.equal(reactionLine('reading', { ...saved, solved: null }, 5).id, 'reading');
+  }
+});
+
+
+test('plain reaction strings retain the subject speaker and invalid lines fall back', () => {
+  const ordinary = reactionLine('reading', { kind: 'reading', found: ['key'] }, 0);
+  assert.equal(ordinary.id, 'reading');
+  assert.match(ordinary.words, /key/i);
+  check(ordinary);
+  assert.deepEqual(reactionLine('reading', { kind: 'reading', found: [] }, 0), reactionLine('reading', null, 0));
+});
+
+
+test('the length guard falls back when a generated sentence exceeds its limit', () => {
+  const card = CARD_WORDS.otter;
+  const original = card.word;
+  try {
+    card.word = 'x'.repeat(60);
+    const saved = { kind: 'science', activity: 'chain', chain: ['plant', 'fish', 'otter'], energy: [1000, 100, 10] };
+    assert.deepEqual(reactionLine('science', saved, 3), reactionLine('science', null, 3));
+  } finally {
+    card.word = original;
   }
 });
