@@ -2,6 +2,12 @@
 
 Changes to All Aboard, grouped by release.
 
+## Unreleased
+
+### Changed
+
+- The start screen opens Hanabi Bay at dusk: an evening sky, four paper lanterns with a stepped pixel glow, the village painting behind the whole cast waiting on the cobblestones (they cheer when a grade is picked), the lit logo over "an evening in Hanabi Bay", one paper panel with Who are you? and Your grade, then Full screen, one green Start / Continue and Credits, with the comfort toggles in a quieter footer. Boy and Girl stand above their names, every tile word sits on one bottom line at 20 px and the K and 1 to 5 numbers share one top line. Calm motion and the device's reduce-motion setting stop the lantern glow; phones keep 64 px controls.
+
 ## 2026-10-27 · v0.3.0
 
 ### Added

@@ -2,7 +2,7 @@
 .scene { position: absolute; inset: 0; isolation: isolate; }
 .title { background: linear-gradient(var(--letterbox) 0 26%, var(--vermilion) 78%, var(--wood)); }
 .title__landscape {
-  position: absolute; inset: 130px 0 76px; pointer-events: none;
+  position: absolute; inset: 130px 0 80px; pointer-events: none;   /* ends where the comfort band's ink edge begins */
   background: linear-gradient(rgba(43, 45, 92, .8), rgba(43, 45, 92, .3)), url('../../../assets/village/background.png') center bottom / 960px 540px;
 }
 
@@ -37,26 +37,29 @@
 
 /* One paper entry panel. Two choice groups, then one primary action. */
 .title__paper { position: absolute; left: 20px; top: 136px; width: 920px; height: 238px; pointer-events: none; }
-.title__paper::after { content: ''; position: absolute; left: 374px; top: 16px; width: 2px; height: 136px; background: var(--paper-shade); }
-.title__who { position: absolute; left: 56px; top: 152px; width: 320px; height: 142px; }
+.title__paper::after { content: ''; position: absolute; left: 374px; top: 12px; width: 2px; height: 146px; background: var(--paper-shade); }
+.title__who { position: absolute; left: 56px; top: 148px; width: 320px; height: 146px; }
 .title__who-label { position: absolute; left: 0; top: 0; font-size: var(--text-name); line-height: 1.2; }
-.title .avatar-choice { position: absolute; left: 0; top: 38px; width: 154px; height: 104px; padding: 0; gap: 0; }
+/* Figure above, name below, like the grade tiles: picture or number on top, one 20px word at the bottom. */
+.title .avatar-choice { position: absolute; left: 0; top: 34px; width: 154px; height: 112px; padding: 0; gap: 0; flex-direction: column; }
 .title .avatar-choice[data-avatar="girl"] { left: 166px; }
-.avatar-choice__art { display: flex; flex: none; width: 96px; height: 96px; align-items: center; }
-.avatar-choice__label { font-size: var(--text-command); line-height: 1.1; }
+.avatar-choice__art { position: relative; flex: none; width: 96px; height: 82px; overflow: hidden; }
+.avatar-choice__art .figure { position: absolute; left: 0; top: -6px; }   /* the frame's empty top rows; feet stay in view */
+.avatar-choice__label { font-size: 20px; line-height: 1.1; }
 .avatar-choice__check, .grade-tile__check { position: absolute; top: 2px; right: 2px; display: none; color: var(--finish); }
 .avatar-choice[aria-pressed="true"], .grade-tile[aria-pressed="true"] { --fill: var(--lantern); --light: #ffe08f; --shade: #e0a92f; }
 .avatar-choice[aria-pressed="true"] .avatar-choice__check, .grade-tile[aria-pressed="true"] .grade-tile__check { display: block; }
-.title__grade-label { position: absolute; left: 408px; top: 152px; font-size: var(--text-name); line-height: 1.2; }
-.title__grades { position: absolute; left: 408px; top: 190px; width: 496px; }
+.title__grade-label { position: absolute; left: 408px; top: 148px; font-size: var(--text-name); line-height: 1.2; }
+.title__grades { position: absolute; left: 408px; top: 182px; width: 496px; }
 /* Shared grade-window geometry stays intact; only title tiles get the compact width. */
 .grade-tiles { display: flex; justify-content: space-between; gap: 8px; }
 .grade-tile { flex-direction: column; gap: 0; width: 128px; height: 96px; padding: 2px 4px; }
 .grade-tile__num { font-family: var(--font-pixel); font-size: 40px; line-height: 1; }
 .grade-tile__word { font-size: var(--text-small); line-height: 1.05; hyphens: manual; }
-.title .grade-tile { flex: none; width: 66px; height: 104px; padding: 2px; }
+/* Numbers share one top line and every word ends on the tiles' bottom line, with Boy and Girl. */
+.title .grade-tile { flex: none; justify-content: flex-start; width: 66px; height: 112px; padding: 18px 2px 0; }
 .title .grade-tile[data-grade="0"] { width: 126px; }
-.title .grade-tile__word { font-size: 20px; }
+.title .grade-tile__word { margin-top: auto; font-size: 20px; }
 .title .grade-tile__check .icon { width: 20px; height: 20px; }
 .title-start { position: absolute; left: 338px; top: 306px; width: 284px; height: 64px; font-size: 32px; }
 .title .title-fullscreen { position: absolute; left: 56px; top: 306px; width: 232px; height: 64px; }
