@@ -113,3 +113,17 @@
 .creation.world-score i { position: relative; flex: 0 0 5px; width: 5px; border: 1px solid var(--ink);
   box-shadow: inset 1px 1px #7278a3, inset -1px -1px var(--letterbox); }
 .creation.world-score i.world-note-on { box-shadow: inset 1px 1px #ffe8a3, inset -1px -1px #ca9231; }
+
+/* ---- lane 3: Pip and Nori join the parade ---- */
+.parade-side { z-index: 1; pointer-events: none; }
+.parade-side--nori { z-index: 2; transform: translateX(var(--trail-x)); }
+.parade.is-settling .parade-side--nori { animation: parade-nori-arrive var(--arrival-ms) linear 1 forwards; }
+@keyframes parade-nori-arrive {
+  from { transform: translateX(var(--trail-x)); }
+  to { transform: translateX(0); }
+}
+.parade.is-over .parade-side--nori, .parade.is-still .parade-side--nori,
+.calm .parade-side--nori { animation: none; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .parade.is-settling .parade-side--nori, .parade-side--nori { animation: none; transform: none; }
+}

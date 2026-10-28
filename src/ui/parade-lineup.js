@@ -3,12 +3,17 @@ import { bandPlaybackMessage } from '../music.js';
 
 export const PARADE_ORDER = ['math', 'science', 'art', 'reading', 'writing', 'community', 'music'];
 export const PARADE_LAPS = 2;   // one full crossing, then a second pass stops in a line-up
+export const PARADE_SPACING = 112;
+export const PARADE_LEADER_X = 40; // leaves room for Pip in the same slot
+export const NORI_ARRIVAL_MS = 2000;
 
 export const PARADE_LINES = {
   opening: 'Your parade! Every idea belongs here.',
   noBand: 'Visit Kiko to make a band first.',
   over: 'The parade is over. Make more, and march again!',
   complete: 'Everyone marched! You made the whole festival.',
+  waiting: 'Nori is on the way.',
+  arrived: 'Nori made it!',
 };
 
 // creations: getCreations(state), subject id → snapshot. Legacy completions without a creation are
@@ -16,6 +21,17 @@ export const PARADE_LINES = {
 export function paradeLineup(creations = {}) {
   const made = creations ?? {};
   return PARADE_ORDER.filter(id => made[id]).map(id => ({ id, creation: made[id] }));
+}
+
+// Side marchers share the first and last slots; they never count as made subjects.
+// x is the resting feet position in the line. Nori walks 48px behind the last
+// marcher, then tucks into the front of that slot, with no wider line-up.
+export function paradeSideMarchers(made = 0) {
+  const lastX = made ? PARADE_SPACING / 2 : PARADE_LEADER_X;
+  return [
+    { id: 'pip', x: made * PARADE_SPACING + PARADE_LEADER_X + 40, offset: 0, stepMs: 160 },
+    { id: 'nori', x: 32, offset: lastX - 48 - 32, stepMs: 320 },
+  ];
 }
 
 // The first line of the parade. Without a band, it says why Play band is grayed out.
@@ -27,11 +43,12 @@ export function paradeOpening({ hasBand = false } = {}) {
 // calm: Calm motion (the setting or the system preference), which shows the line-up at once;
 // made: how many creations march. Every subject made means the whole festival is done.
 // hasBand: without a band the line keeps saying why Play band is grayed out (the opening is gone by then).
-export function paradeEnding({ laps = 0, calm = false, made = 0, hasBand = true } = {}) {
-  const over = Boolean(calm) || laps >= PARADE_LAPS;
+// noriArrived: the final arrival animation ended. Calm motion places Nori at once.
+export function paradeEnding({ laps = 0, calm = false, made = 0, hasBand = true, noriArrived = false } = {}) {
+  const over = Boolean(calm) || (laps >= PARADE_LAPS && noriArrived);
   if (!over) return { over: false, line: null };
-  if (made >= PARADE_ORDER.length) return { over: true, line: PARADE_LINES.complete };   // the band is one of the seven
-  return { over: true, line: hasBand ? PARADE_LINES.over : `${PARADE_LINES.over} ${PARADE_LINES.noBand}` };
+  const line = made >= PARADE_ORDER.length ? PARADE_LINES.complete : PARADE_LINES.over;
+  return { over: true, line: `${line} ${PARADE_LINES.arrived}${hasBand || made >= PARADE_ORDER.length ? '' : ` ${PARADE_LINES.noBand}`}` };
 }
 
 // playing: the band is starting or playing (the playback controller is active).
