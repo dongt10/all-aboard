@@ -268,7 +268,7 @@ test('the opening close timer starts on arrival, with Hear and More still using 
   assert.equal(f.box.hidden, false);
   assert.equal(f.box.querySelector('.village-chips'), null);
   f.wait(1);
-  // The reaction closed on time; Pip's next-stop offer takes its place (lane 2 hooks the reaction's close).
+  // The reaction closed on time; Pip's next-stop offer takes its place (the next-stop offer hooks the reaction's close).
   assert.equal(f.box.querySelector('.dlg__speaker').textContent, 'Pip');
   assert.ok(f.box.querySelector('.village-chips [data-act="visit"]'));
 });
@@ -280,7 +280,7 @@ test('the normal four-second close timer is measured from arrival, not mount', t
   assert.equal(f.box.hidden, false);
   assert.equal(f.box.querySelector('.village-chips'), null);
   f.wait(1);
-  // Closed on time, then Pip's next-stop offer (lane 2) opens in its place.
+  // Closed on time, then Pip's next-stop offer opens in its place.
   assert.equal(f.box.querySelector('.dlg__speaker').textContent, 'Pip');
   assert.ok(f.box.querySelector('.village-chips [data-act="visit"]'));
 });
@@ -389,7 +389,7 @@ test('destroy removes all pending delivery callbacks and frames', t => {
 });
 
 test('delivery token uses easel sizing and adds no animation or new sprite drawing', () => {
-  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8').split('/* ---- lane 7: Pip delivers your sign ---- */')[1];
+  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8').split('/* ---- Pip delivers your sign ---- */')[1];
   assert.match(css, /width: 64px; height: 40px/);
   assert.match(css, /scale\(var\(--sign-scale, \.1\)\)/);
   assert.match(css, /pointer-events: none/);

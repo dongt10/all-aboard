@@ -114,7 +114,7 @@
   box-shadow: inset 1px 1px #7278a3, inset -1px -1px var(--letterbox); }
 .creation.world-score i.world-note-on { box-shadow: inset 1px 1px #ffe8a3, inset -1px -1px #ca9231; }
 
-/* ---- lane 3: Pip and Nori join the parade ---- */
+/* ---- Pip and Nori join the parade ---- */
 .parade-side { z-index: 1; pointer-events: none; }
 .parade-side--nori { z-index: 2; transform: translateX(var(--trail-x)); }
 .parade.is-settling .parade-side--nori { animation: parade-nori-arrive var(--arrival-ms) linear 1 forwards; }

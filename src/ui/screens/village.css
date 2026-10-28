@@ -163,13 +163,13 @@
 .village-help__text { min-height: 3em; }
 .village-help__buttons { display: flex; justify-content: flex-end; gap: 12px; }
 
-/* ---- lane 5: their own jobs, said at the stall ---- */
+/* ---- their own jobs, said at the stall ---- */
 .village-easel {
   appearance: none; -webkit-appearance: none; margin: 0; border-radius: 0; font: inherit; color: var(--ink); text-align: center;
   cursor: pointer; pointer-events: auto; z-index: 950; min-width: 56px; min-height: 56px;
 }
 .village-easel:focus-visible { outline: 4px solid var(--ink); outline-offset: 3px; box-shadow: 0 0 0 3px var(--paper); }
-/* ---- lane 8: lantern night ---- */
+/* ---- lantern night ---- */
 .village-lamps { position: absolute; inset: 0; pointer-events: none; }
 .village-lamp, .village-lamp__head { position: absolute; pointer-events: none; }
 .village-lamp__head {
@@ -181,10 +181,10 @@
 @media (prefers-reduced-motion: reduce) {
   .village-lamp__head { animation: none; transition: none; }
 }
-/* ---- lane 7: Pip delivers your sign ---- */
+/* ---- Pip delivers your sign ---- */
 .village-delivery-sign { position: absolute; left: 4px; top: -29px; width: 64px; height: 40px; pointer-events: none; }
 .village-delivery-sign > .world-sign { position: absolute; left: 50%; top: 50%; width: 240px; max-width: none; max-height: none; overflow: visible; transform: translate(-50%, -50%) scale(var(--sign-scale, .1)); }
-/* ---- lane 2 and lane 8: the chip row under a two-choice line ---- */
+/* ---- the chip row under a two-choice line ---- */
 /* Leave the More chip's 18px overhang clear, including on phones. */
 .village-chips { position: absolute; top: calc(100% + 24px); left: 0; width: 100%; display: flex; gap: 6px; }
 .village-chips > .px-chip { flex: 1; min-width: 0; min-height: 44px; justify-content: center; padding: 4px 6px; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.1; cursor: pointer; }

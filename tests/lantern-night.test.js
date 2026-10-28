@@ -322,7 +322,7 @@ test('lamp props sit before actors with no hit target, animation, background tin
   assert.equal(overlay.getAttribute('aria-hidden'), 'true');
   assert.ok(f.root.children.indexOf(overlay) < f.root.children.indexOf(f.root.querySelector('.village-actors')));
   assert.equal(overlay.querySelector('button'), null);
-  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8').split('/* ---- lane 8: lantern night ---- */')[1];
+  const css = readFileSync(new URL('../src/ui/screens/village.css', import.meta.url), 'utf8').split('/* ---- lantern night ---- */')[1];
   assert.match(css, /\.village-lamps\s*\{[^}]*pointer-events:\s*none/);
   assert.doesNotMatch(css, /filter:|mix-blend|@keyframes|animation:(?! none)|transition:(?! none)/);
   assert.match(css, /\.calm \.village-lamp__head/);

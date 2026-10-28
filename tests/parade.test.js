@@ -276,7 +276,7 @@ test('parade scene: with Calm motion the line-up shows at once, and Help opens t
   scene.destroy();
 });
 
-// Lane 3: real scene events drive the two laps and Nori's separate CSS arrival.
+// The parade additions: real scene events drive the two laps and Nori's separate CSS arrival.
 const paradeCSS = readFileSync(new URL('../src/ui/screens/parade.css', import.meta.url), 'utf8');
 const paradeFixture = (t, state = withBand(withArt())) => {
   const ctx = fakeCtx(state), scene = createParadeScene(ctx);
@@ -363,7 +363,7 @@ test('the arrival layers Nori in front, stays level and has explicit calm overri
   assert.match(keyframes, /from \{ transform: translateX\(var\(--trail-x\)\); \}/);
   assert.match(keyframes, /to \{ transform: translateX\(0\); \}/);
   assert.doesNotMatch(keyframes, /translateY|scale|rotate/);
-  const additions = paradeCSS.slice(paradeCSS.indexOf('/* ---- lane 3:'));
+  const additions = paradeCSS.slice(paradeCSS.indexOf('/* ---- Pip and Nori join the parade ---- */'));
   assert.match(additions, /\.calm \.parade-side--nori \{ animation: none; transform: none; \}/);
   assert.match(additions, /@media \(prefers-reduced-motion: reduce\)[\s\S]*animation: none; transform: none;/);
 });
