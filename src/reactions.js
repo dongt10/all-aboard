@@ -75,7 +75,14 @@ function readingLine(s) {
   if (s.activity === 'tales') {
     const deck = Number.isInteger(s.deck) ? TALE_DECKS[s.deck] : null;
     if (!deck || !Array.isArray(s.solved)) return null;
-    const names = deck.filter(tale => s.solved.includes(tale.id)).map(tale => TALE_CAST[tale.who].name);
+    const solved = deck.filter(tale => s.solved.includes(tale.id));
+    const cameo = solved.find(tale => ['pip-letters', 'nori-lanterns'].includes(tale.id));
+    if (cameo) {
+      const others = solved.filter(tale => tale !== cameo).map(tale => TALE_CAST[tale.who].name);
+      const opening = cameo.who === 'pip' ? 'Webbed feet, that was me!' : 'A hard shell, that was me!';
+      return { id: cameo.who, words: others.length ? `${opening} You named ${list(others)} too.` : opening };
+    }
+    const names = solved.map(tale => TALE_CAST[tale.who].name);
     return names.length ? `You named ${list(names)} in the tales. Thank you!` : null;
   }
   if (s.activity !== undefined || !Array.isArray(s.found)) return null;
@@ -122,6 +129,9 @@ function communityLine(s) {
   if (s.activity === 'compass') {
     if (!Array.isArray(s.done)) return null;
     const errands = errandsFor(s).map(errand => errand.id).filter(id => s.done.includes(id));
+    if (s.request === 2 && ['east', 'south', 'north'].every(id => errands.includes(id))) {
+      return { id: 'pip', words: 'I carried your lantern east and flour south and north. Thank you!' };
+    }
     const names = { north: 'flour', west: 'drum', lantern: 'lantern', east: 'lantern', south: 'flour' };
     const things = [...new Set(errands.map(id => names[id]).filter(Boolean))];
     return errands.length && things.length ? `${capital(list(things))} delivered! ${errands.length} ${errands.length === 1 ? 'errand' : 'errands'} done. Thank you!` : null;
@@ -130,6 +140,9 @@ function communityLine(s) {
     if (!Array.isArray(s.crew)) return null;
     const set = helpSetOfCrew(s.crew);
     const matched = s.crew.filter(pair => object(pair) && typeof pair.job === 'string' && Object.hasOwn(set.fits, pair.job) && set.fits[pair.job] === pair.helper);
+    if (['lanterns', 'drum', 'gate', 'mail'].every(job => matched.some(pair => pair.job === job))) {
+      return { id: 'nori', words: 'I greet at the gate all day. Pip takes the mail. Thank you!' };
+    }
     const names = [...new Set(matched.map(pair => helperById(pair.helper).name))];
     return names.length ? `${list(names)} ${names.length === 1 ? 'fits the job' : 'fit their jobs'}. Thank you for matching our crew!` : null;
   }
@@ -177,9 +190,10 @@ export function reactionLine(id, creation, grade) {
   const savedGrade = Number.isInteger(s.grade) && s.grade >= 0 && s.grade <= 5 ? s.grade
     : Number.isInteger(grade) && grade >= 0 && grade <= 5 ? grade : 0;
   if (id === 'writing' && s.activity === undefined) return signReaction(s, savedGrade);
-  const words = id === 'math' ? mathLine(s) : id === 'science' ? scienceLine(s)
+  const line = id === 'math' ? mathLine(s) : id === 'science' ? scienceLine(s)
     : id === 'reading' ? readingLine(s) : id === 'art' ? artLine(s, savedGrade)
       : id === 'community' ? communityLine(s) : id === 'music' ? musicLine(s) : null;
   // Never cut a sentence in half to fit; future content still has a safe reply.
-  return fits(words) ? { id, words } : fallback;
+  const reaction = typeof line === 'string' ? { id, words: line } : line;
+  return object(reaction) && typeof reaction.id === 'string' && fits(reaction.words) ? reaction : fallback;
 }

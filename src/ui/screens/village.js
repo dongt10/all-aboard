@@ -312,8 +312,10 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   function stallMarkup(c, made) {
     const { x, y } = STALLS[c.id];
     const creation = made.creations[c.id], easel = easelRect(c.id);
+    const reaction = creation && reactionLine(c.id, creation, state().chapter === 0 ? 0 : state().grade);
+    const label = creationLabel(c.id, creation).replace(/^your /i, '').toLowerCase();
     return `<div class="village-stall" data-id="${c.id}" style="left:${x}px;top:${y}px">${stallSVG(c.id)}<span class="village-sparkle" aria-hidden="true"></span></div>
-      ${creation ? `<div class="village-easel" data-id="${c.id}" style="left:${easel.x}px;top:${easel.y}px">${creationMarkup(c.id, creation)}</div>` : ''}`;
+      ${creation ? `<button type="button" class="village-easel" data-id="${c.id}" data-easel="${c.id}" aria-label="${esc(`Your ${label}. Tap to hear ${nameOf(reaction.id)} again.`)}" style="left:${easel.x}px;top:${easel.y}px">${creationMarkup(c.id, creation)}</button>` : ''}`;
   }
   function boardMarkup(made) {
     const count = Object.keys(made.creations).length;
@@ -588,6 +590,13 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     if (act && ['grade', 'guide', 'comfort', 'pause'].includes(act)) { cancelOpening(); paused = true; ctx.open?.[act]?.(); return; }
     if (event.target.closest('.village-parade')) { if (canStartParade(state())) ctx.go('parade'); return; }
     if (event.target.closest('.village-talk')) { if (near) { player.facing = 'back'; visit(near); } return; }
+    const easel = event.target.closest('[data-easel]');
+    if (easel) {
+      const s = state(), id = easel.dataset.easel;
+      const reaction = reactionLine(id, getCreations(s)[id], s.chapter === 0 ? 0 : s.grade);
+      if (reaction) say(reaction.id, reaction.words, { closeAfter: 4000 });
+      return;
+    }
     const actor = event.target.closest('.village-actor[data-id]');
     if (actor) { walkTo(actor.dataset.id); return; }
     if (event.target.closest('.village-map')) {   // tap the ground to walk there
