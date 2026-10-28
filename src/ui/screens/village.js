@@ -655,7 +655,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   }
   function skipDelivery({ silent = false } = {}) {
     const pip = actors.get('pip');
-    return pip?.delivery ? finishDelivery(pip, { home: true, silent }) : false;
+    // Only the trip out can be skipped; walking home is ordinary movement and finishes on its own.
+    return pip?.delivery && pip.delivery.phase !== 'home' ? finishDelivery(pip, { home: true, silent }) : false;
   }
   function tickDelivery(a, dt) {
     const d = a.delivery;
