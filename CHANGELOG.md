@@ -2,7 +2,7 @@
 
 Changes to All Aboard, grouped by release.
 
-## Unreleased
+## 2026-10-28 · v0.4.0
 
 ### Added
 
