@@ -612,7 +612,8 @@ for (const large of [false, true]) test(`a rebuilt village's creation celebratio
   clock.advance((large ? 6000 : 4000) - 1);
   assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
   clock.advance(1);
-  assert.equal(f.root.querySelector('.village-dialogue').hidden, true);
+  assert.equal(f.root.querySelector('.village-dialogue').hidden, false);
+  assert.equal(f.root.querySelector('.dlg__speaker').textContent, 'Pip');
   f.tick();
   const kiko = f.root.querySelector('.village-actor[data-id="music"]');
   assert.equal(kiko.classList.contains('village-actor--near'), false);
@@ -881,7 +882,7 @@ for (const [key, label] of A_KEY_CASES.slice(0, 2)) for (const act of ['grade', 
   test(`${act} keeps native ${label} activation`, t => {
     const state = publishCreation(readAloudState(), 'art', { kind: 'art' });
     const f = villageFixture(t, { calm: true, large: true, state });
-    f.tap(...Object.values(talkPoint('pip'))); f.tick();
+    f.tap(...Object.values(talkPoint('nori'))); f.tick();
     f.scene.handleIntent('a');
     const text = f.root.querySelector('.dlg__text'), before = text.textContent;
     assert.equal(f.root.querySelector('.dlg__more').hidden, false);

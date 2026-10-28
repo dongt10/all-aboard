@@ -12,7 +12,7 @@ import { onceAtATime } from '../scenes.js';
 import { creationMarkup, creationLabel, fitSignPreviews } from '../creations.js';
 import {
   SIDE_SPOTS, PLAYER_START, STEP, homeSpot, hotspotRect, nearestNeighbor,
-  setRoad, road, loadRoad, clampWalk, roadPath, talkGoal, stepPlayer, stallState, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, stallSVG, easelRect,
+  setRoad, road, loadRoad, clampWalk, roadPath, talkGoal, stepPlayer, stallState, nextStop, stallBadge, boardLabel, wanderTarget, stepToward, guideArrow, stallSVG, easelRect,
 } from '../village-map.js';
 import { BACKGROUND, STALLS, EASELS, STAGE } from '../village-layout.js';
 
@@ -192,6 +192,7 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   const player = { pos: { ...PLAYER_START }, target: null, path: [], tapWalk: false, facing: 'back', step: 0, clock: 0, visitOnArrive: null, speed: PLAYER_SPEED, drawn: '' };
   let near = null;
   let timing = null, closeTimer = null, unwatchSpeech = null, welcomeOpen = false, helpWindow = null;
+  let offered = false, offerEligible = Boolean(celebrate), pendingOffer = false, pipTarget = null;
   const scope = () => { const s = ctx.getState(); return s.chapter === 1 ? `grade-${s.grade}` : 'kindergarten'; };
   const positionScope = scope();
   const savedPosition = villagePositions.get(ctx.stage)?.get(positionScope);
@@ -205,12 +206,57 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   const visit = onceAtATime(async id => {
     hush();
     if (id === findTarget) clearFind();
-    if (SIDE[id]) { say(id, id === 'pip' ? WELCOME_LINE : SIDE[id].line); return; }
+    if (id === 'pip') { offerNextStop(); return; }
+    if (SIDE[id]) { say(id, SIDE[id].line); return; }
     if (leaving) return;
     leaving = true;
     const went = await (id === 'music' ? ctx.go('music') : ctx.go('encounter', { id }));
     if (went === false) leaving = false;   // the scene manager was busy; stay and let them try again
   });
+
+  // Kept separate so the seventh-creation offer can later point to Nori's lanterns.
+  function festivalOffer(allMade) {
+    return { words: allMade ? 'All seven made! Watch the parade?' : 'You can choose a neighbor or watch the parade.',
+      chips: [{ act: 'parade', label: 'Parade' }, { act: 'not-now', label: 'Not now' }] };
+  }
+  function offerNextStop(afterReaction = false) {
+    if (!alive || paused || leaving || mapFailed || ctx.stage?.querySelector('.win-backdrop')) return;
+    if (afterReaction && offered) return;
+    if (afterReaction && !ready) { pendingOffer = true; return; }
+    pendingOffer = false;
+    offered = true;
+    const s = state(), creations = getCreations(s);
+    if (!Object.keys(creations).length) { say('pip', WELCOME_LINE); return; }
+    const stop = nextStop({ creations, completed: getCompleted(s),
+      drafts: Object.fromEntries(CHARACTERS.map(c => [c.id, getDraft(s, c.id)])) });
+    const allMade = CHARACTERS.every(c => creations[c.id]);
+    const name = stop && nameOf(stop.id);
+    const offer = (afterReaction && allMade) || !stop ? festivalOffer(allMade) : {
+      words: stop.status === 'another' ? `${name} has one more request. Want to go?`
+        : stop.status === 'started' ? `${name} has something to finish. Try ${name}?`
+        : `${afterReaction && ctx.saveOk === true ? 'Saved! ' : ''}${name} has something new to make. Try ${name}?`,
+      chips: [{ act: 'visit', label: `Visit ${name}` }, { act: 'not-now', label: 'Not now' }],
+    };
+    say('pip', offer.words, { chips: ready ? offer.chips : undefined, onChip: act => {
+      if (act === 'visit') walkTo(stop.id);
+      if (act === 'parade' && canStartParade(state())) ctx.go('parade');
+    } });
+    if (offer.chips[0].act === 'visit') {
+      pipTarget = stop.id;
+      faceNextStop();
+      drawActor(actors.get('pip'));
+    }
+  }
+  function faceNextStop() {
+    if (!pipTarget) return;
+    const pip = actors.get('pip'), stall = STALLS[pipTarget];
+    pip.target = null; pip.step = 0; pip.waitUntil = Infinity;
+    pip.facing = stall.x + stall.w / 2 < pip.pos.x ? 'left' : 'right';
+  }
+  function releasePip() {
+    if (pipTarget) actors.get('pip').waitUntil = now() + 1500;
+    pipTarget = null;
+  }
 
   function clearCloseTimer() {
     clearTimeout(closeTimer);
@@ -218,8 +264,10 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     unwatchSpeech?.();
     unwatchSpeech = null;
   }
-  function cancelOpening() {
+  function cancelOpening(interrupted = true) {
     timing = null;
+    pendingOffer = false;
+    if (interrupted) offerEligible = false;
     clearCloseTimer();
   }
   function onPage({ text, hasMore, speech }) {
@@ -229,7 +277,9 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const close = () => {
       // Windows can open between frames, before pause() reaches this scene.
       if (ctx.stage?.querySelector('.win-backdrop')) { cancelOpening(); return; }
+      const then = timing?.then;
       hush();
+      then?.();
     };
     // Allow 500ms per word plus 500ms to start when the voice supplies no end event.
     const estimate = speech ? (String(speech.text ?? text).split(/\s+/).length * 500 + 500) : 0;
@@ -247,13 +297,37 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
       };
     }
   }
+  // Shared by side-character offers. Native buttons keep Tab, Enter and Space; replacing
+  // the row never steals focus, and a handler may replace the dialogue or open a window.
+  function setChips(chips, onChip) {
+    const host = root?.querySelector('.village-dialogue');
+    if (!host) return;
+    const previous = host.querySelector('.village-chips');
+    if (previous?.contains(document.activeElement)) root.focus({ preventScroll: true });
+    previous?.remove();
+    if (!chips?.length || mapFailed) return;
+    const row = document.createElement('div');
+    row.className = 'village-chips';
+    row.innerHTML = chips.map(({ act, label }) => `<button type="button" class="px-chip" data-act="${esc(act)}">${esc(label)}</button>`).join('');
+    row.addEventListener('click', event => {
+      const button = event.target.closest('button[data-act]');
+      if (!button || !row.contains(button) || host.hidden || host.querySelector('.village-chips') !== row) return;
+      event.stopPropagation();
+      onChip?.(button.dataset.act);
+      if (root?.querySelector('.village-chips') === row && !ctx.stage?.querySelector('.win-backdrop')) hush();
+    });
+    host.append(row);
+  }
   // Both hints and neighbor lines keep the player's sprite clear.
-  function say(id, words, { opening = false, closeAfter = null } = {}) {
-    cancelOpening();
+  function say(id, words, { opening = false, closeAfter = null, chips, onChip } = {}) {
+    cancelOpening(!opening);
+    releasePip();
     if (!dialogue || mapFailed) return;
     welcomeOpen = words === WELCOME_LINE;
-    if (!welcomeOpen && (opening || closeAfter !== null)) timing = { closeAfter };
+    if (!welcomeOpen && (opening || closeAfter !== null)) timing = { closeAfter,
+      then: opening && offerEligible && !offered ? () => offerNextStop(true) : null };
     root.querySelector('[data-act="dismiss-welcome"]').hidden = !welcomeOpen;
+    setChips(chips, onChip);
     const host = root.querySelector('.village-dialogue');
     const box = dialogueBox(player.pos, words);
     host.classList.toggle('village-dialogue--top', box === 'top');
@@ -262,6 +336,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
   }
   function hush() {
     cancelOpening();
+    releasePip();
+    setChips();
     const host = root?.querySelector('.village-dialogue');
     if (!host || host.hidden || mapFailed) return;
     const held = host.contains(document.activeElement);
@@ -500,7 +576,8 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const dt = Math.min(100, last ? t - last : 16);
     last = t;
     if (paused && !ctx.stage?.querySelector('.win-backdrop')) paused = false;   // the window closed
-    for (const a of actors.values()) { tickActor(a, dt, t); drawActor(a); }
+    if (pendingOffer && ready) offerNextStop(true);
+    for (const a of actors.values()) { tickActor(a, dt, t); if (a.id === 'pip') faceNextStop(); drawActor(a); }
     tickPlayer(dt);
     drawPlayer();
     drawTalk();
@@ -591,12 +668,12 @@ export function createVillageScene(ctx, { focus, celebrate, guide } = {}) {
     const actor = event.target.closest('.village-actor[data-id]');
     if (actor) { walkTo(actor.dataset.id); return; }
     if (event.target.closest('.village-map')) {   // tap the ground to walk there
+      if (!welcomeOpen) hush();
       const box = root.getBoundingClientRect();
       if (!box.width || !ready) return;
       const point = { x: (event.clientX - box.left) * 960 / box.width, y: (event.clientY - box.top) * 540 / box.height };
       const path = roadPath(player.pos, point);
       if (!path) return;
-      if (!welcomeOpen) hush();
       player.visitOnArrive = null;
       player.speed = PLAYER_SPEED * 1.5;
       player.clock = 0;

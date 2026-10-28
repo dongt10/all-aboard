@@ -162,3 +162,8 @@
 .village-help__mark { display: grid; place-items: center; width: 64px; height: 64px; border: 2px solid var(--ink); background: var(--paper); font-size: 40px; }
 .village-help__text { min-height: 3em; }
 .village-help__buttons { display: flex; justify-content: flex-end; gap: 12px; }
+
+/* ---- lane 2: Pip's next stop ---- */
+/* Leave the More chip's 18px overhang clear, including on phones. */
+.village-chips { position: absolute; top: calc(100% + 24px); left: 0; width: 100%; display: flex; gap: 6px; }
+.village-chips > .px-chip { flex: 1; min-width: 0; min-height: 44px; justify-content: center; padding: 4px 6px; white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.1; cursor: pointer; }
